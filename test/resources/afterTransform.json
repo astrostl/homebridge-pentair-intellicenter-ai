@@ -240,6 +240,22 @@
         "objectType": "PUMP",
         "type": "SPEED"
       }
+    ],
+    "sensors": [
+      {
+        "id": "SSW11",
+        "name": "Water Sensor 1",
+        "objectType": "SENSE",
+        "probe": 85,
+        "type": "POOL"
+      },
+      {
+        "id": "_A135",
+        "name": "Air Sensor",
+        "objectType": "SENSE",
+        "probe": 70,
+        "type": "AIR"
+      }
     ]
   }
 ]

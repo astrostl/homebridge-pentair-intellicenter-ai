@@ -10,6 +10,8 @@
 > [upgrade your IntelliCenter firmware](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html).
 > If you prefer to remain on older IntelliCenter firmware, you should install the latest 1.x version of this plugin. 
 
+Note - This is a fork of dustindclark/homebridge-pentair-intellicenter
+
 # Homebridge Pentair IntelliCenter Plugin
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![NPM Version](https://img.shields.io/npm/v/homebridge-pentair-intellicenter.svg)](https://www.npmjs.com/package/homebridge-rinnai-controlr)

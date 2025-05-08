@@ -53,6 +53,11 @@ export enum CircuitType {
   Generic = 'GENERIC'
 }
 
+export enum TemperatureSensorType {
+  Air = 'AIR',
+  Pool = 'POOL',
+}
+
 export enum BodyType {
   Pool = 'POOL',
   Spa = 'SPA',
@@ -84,6 +89,14 @@ export type PumpCircuit = {
   circuitId: string;
   speed: number;
   speedType: string;
+} & BaseCircuit;
+
+export type Sensor = {
+  id: string;
+  name: string;
+  objectType: ObjectType;
+  type: TemperatureSensorType;
+  probe: number;
 } & BaseCircuit;
 
 export enum CircuitStatus {
@@ -126,6 +139,7 @@ export type Panel = {
   modules: ReadonlyArray<Module>;
   features: ReadonlyArray<Circuit>;
   pumps: ReadonlyArray<Pump>;
+  sensors: ReadonlyArray<Sensor>;
 };
 
 export enum ObjectType {
@@ -140,6 +154,7 @@ export enum ObjectType {
 }
 
 export const CircuitTypes = new Set([ObjectType.Circuit, ObjectType.Body]) as ReadonlySet<ObjectType>;
+export const SensorTypes = new Set([ObjectType.Sensor]) as ReadonlySet<ObjectType>;
 
 export enum TemperatureUnits {
   C = 'C',
