@@ -78,13 +78,17 @@ export class CircuitAccessory {
       .onSet(this.setOn.bind(this))
       .onGet(this.getOn.bind(this));
 
-    if (this.pumpCircuit) {
-      this.service = this.accessory.getService(this.platform.Service.Fan)
-        || this.accessory.addService(this.platform.Service.Fan);
+    const fanService = this.accessory.getService(this.platform.Service.Fan);
+
+    if (this.pumpCircuit && this.platform.getConfig().supportVSP) {
+      this.service = fanService || this.accessory.addService(this.platform.Service.Fan);
       this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
         .onSet(this.setSpeed.bind(this))
         .onGet(this.getSpeed.bind(this))
         .updateValue(this.convertSpeedToPowerLevel());
+    } else if (fanService) {
+      this.platform.log.info(`Removing VSP Fan service from ${this.circuit.name} due to config`);
+      this.accessory.removeService(fanService);
     }
   }
 

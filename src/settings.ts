@@ -6,6 +6,6 @@ export const PLATFORM_NAME = 'PentairIntelliCenter';
 /**
  * This must match the name of your plugin as defined the package.json
  */
-export const PLUGIN_NAME = 'homebridge-pentair-intellicenter';
+export const PLUGIN_NAME = 'homebridge-intellicenter';
 
 export const MANUFACTURER = 'Pentair';

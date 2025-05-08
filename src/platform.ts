@@ -20,6 +20,9 @@ import {
   ObjectType,
   Panel,
   PumpCircuit,
+  Sensor,
+  SensorTypes,
+  TemperatureSensorType,
   TemperatureUnits,
 } from './types';
 import {v4 as uuidv4} from 'uuid';
@@ -31,12 +34,14 @@ import {
   HEATER_KEY,
   LAST_TEMP_KEY,
   MODE_KEY,
+  PROBE_KEY,
   SELECT_KEY,
   SPEED_KEY,
   STATUS_KEY,
 } from './constants';
 import {HeaterAccessory} from './heaterAccessory';
 import EventEmitter from 'events';
+import { TemperatureAccessory } from './temperatureAccessory';
 
 type PentairConfig = {
   ipAddress: string;
@@ -46,6 +51,8 @@ type PentairConfig = {
   temperatureUnits: TemperatureUnits;
   minimumTemperature: number;
   maximumTemperature: number;
+  supportVSP: boolean;
+  airTemp: boolean;
 } & PlatformConfig;
 
 /**
@@ -193,10 +200,24 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   configureAccessory(accessory: PlatformAccessory) {
     this.log.debug('Loading accessory from cache:', accessory.displayName);
 
+    // const config = this.getConfig();
+    // const sensor = accessory.context.sensor;
+    const heater = accessory.context.heater;
+
+    // if (sensor) {
+    //   const isAirSensor = sensor.type === TemperatureSensorType.Air;
+
+    //   if (isAirSensor && !config.airTemp) {
+    //     this.log.info(`Removing cached air temperature sensor due to config: ${accessory.displayName}`);
+    //     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    //     return;
+    //   }
+    // }
+
     // add the restored accessory to the accessories cache so we can track if it has already been registered
     this.accessoryMap.set(accessory.UUID, accessory);
-    if (accessory.context.heater) {
-      this.heaters.set(accessory.UUID, accessory.context.heater);
+    if (heater) {
+      this.heaters.set(accessory.UUID, heater);
     }
   }
 
@@ -235,6 +256,9 @@ export class PentairPlatform implements DynamicPlatformPlugin {
                 if (CircuitTypes.has(existingAccessory.context.circuit?.objectType)) {
                   this.log.debug(`Object is a circuit. Updating circuit: ${change.objnam}`);
                   this.updateCircuit(existingAccessory, change.params);
+                } if (SensorTypes.has(existingAccessory.context.sensor?.objectType)) {
+                  this.log.debug(`Object is a sensor. Updating sensor: ${change.objnam}`);
+                  this.updateSensor(existingAccessory, change.params);
                 } else {
                   this.log.warn(`Unhandled object type on accessory: ${JSON.stringify(existingAccessory.context)}`);
                 }
@@ -268,6 +292,21 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
+  }
+
+  updateSensor(accessory: PlatformAccessory, params: never) {
+    if (accessory.context.sensor) {
+      const sensor = accessory.context.sensor;
+      if (sensor.objectType === ObjectType.Sensor) {
+        this.log.debug(`Updating temperature sensor ${sensor.name}`);
+        if (params[PROBE_KEY]) {
+          const probeValue = parseFloat(params[PROBE_KEY]);
+          sensor.probe = probeValue;
+          new TemperatureAccessory(this, accessory).updateTemperature(probeValue);
+        }
+      }
+    }
+    this.api.updatePlatformAccessories([accessory]);
   }
 
   updateHeaterStatuses(body: Body) {
@@ -331,6 +370,9 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const bodyIdMap = new Map<string, Body>();
     let heaters = [] as ReadonlyArray<Heater>;
     for (const panel of panels) {
+      for (const sensor of panel.sensors) {
+        this.discoverTemperatureSensor(panel, null, sensor);
+      }
       for (const pump of panel.pumps) {
         for (const pumpCircuit of pump.circuits as ReadonlyArray<PumpCircuit>) {
           circuitIdPumpMap.set(pumpCircuit.circuitId, pumpCircuit);
@@ -417,6 +459,53 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     if (pumpCircuit) {
       this.pumpIdToCircuitMap.set(pumpCircuit.id, circuit);
     }
+  }
+
+  discoverTemperatureSensor(panel: Panel, module: Module | null, sensor: Sensor) {
+    const uuid = this.api.hap.uuid.generate(sensor.id);
+
+    const hasHeater = panel.modules.some(m => m.heaters.length > 0);
+    const existingAccessory = this.accessoryMap.get(uuid);
+    let remove = false;
+    this.log.debug(`Config ${this.json(this.getConfig())}`);
+    if (!this.getConfig().airTemp && sensor.type === TemperatureSensorType.Air) {
+      this.log.debug(`Skipping air temperature sensor ${sensor.name} because air temperature is disabled in config`);
+      remove = true;
+    }
+
+    if (sensor.type === TemperatureSensorType.Pool && hasHeater) {
+      this.log.debug(`Skipping water temperature sensor ${sensor.name} because a heater is installed`);
+      remove = true;
+    }
+
+    if (remove) {
+      if (existingAccessory) {
+        this.accessoryMap.delete(uuid);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
+      }
+      return;
+    }
+
+    if (existingAccessory) {
+      this.log.debug(`Restoring existing temperature sensor from cache: ${existingAccessory.displayName}`);
+      existingAccessory.context.sensor = sensor;
+      existingAccessory.context.module = module;
+      existingAccessory.context.panel = panel;
+      this.api.updatePlatformAccessories([existingAccessory]);
+
+      new TemperatureAccessory(this, existingAccessory);
+    } else {
+      this.log.debug(`Adding new temperature sensor: ${sensor.name} of type ${sensor.type}`);
+      const accessory = new this.api.platformAccessory(sensor.name, uuid);
+      accessory.context.sensor = sensor;
+      accessory.context.module = module;
+      accessory.context.panel = panel;
+      new TemperatureAccessory(this, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessoryMap.set(accessory.UUID, accessory);
+    }
+
+    this.subscribeForUpdates(sensor, [PROBE_KEY]);
   }
 
   subscribeForUpdates(circuit: BaseCircuit, keys: ReadonlyArray<string>) {

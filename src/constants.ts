@@ -20,6 +20,7 @@ export const LOW_TEMP_KEY = 'LOTMP';
 export const SPEED_KEY = 'SPEED';
 export const SELECT_KEY = 'SELECT';
 export const PARENT_KEY = 'PARENT';
+export const PROBE_KEY = 'PROBE';
 
 export const THERMOSTAT_STEP_VALUE = 0.5;
 export const NO_HEATER_ID = '00000';

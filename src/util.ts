@@ -1,4 +1,18 @@
-import {BaseCircuit, Body, Circuit, Color, Heater, Module, ObjectType, Panel, Pump, PumpCircuit} from './types';
+import {
+  BaseCircuit,
+  Body,
+  Circuit,
+  CircuitType,
+  Color,
+  Heater,
+  Module,
+  ObjectType,
+  Panel,
+  Pump,
+  PumpCircuit,
+  Sensor,
+  TemperatureSensorType,
+} from './types';
 import {
   CIRCUIT_KEY,
   CIRCUITS_KEY,
@@ -112,9 +126,18 @@ const transformFeatures = (circuits: never[]): ReadonlyArray<Circuit> => {
   if (!circuits) {
     return [];
   }
+
   return circuits.filter(featureObj => {
-    return featureObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Circuit && featureObj[PARAMS_KEY]['FEATR'] === 'ON'
-      && (featureObj[PARAMS_KEY][OBJ_SUBTYPE_KEY] as string)?.toUpperCase() !== 'LEGACY';
+    const params = featureObj[PARAMS_KEY];
+    const subtype = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
+
+    const isCircuit = params[OBJ_TYPE_KEY] === ObjectType.Circuit;
+    const isFeature = params['FEATR'] === 'ON';
+    // IntelliBrite is not required to be a feature.
+    const isIntelliBrite = subtype === CircuitType.IntelliBrite;
+    const isLegacy = subtype === 'LEGACY';
+
+    return isCircuit && !isLegacy && (isFeature || isIntelliBrite);
   }).map(featureObj => {
     const params = featureObj[PARAMS_KEY];
     return {
@@ -152,6 +175,30 @@ const transformPumps = (pumps: never[]): ReadonlyArray<Pump> => {
       circuits: circuits,
     };
   });
+};
+
+const transformTempSensors = (sensors: never[]): ReadonlyArray<Sensor> => {
+  if (!sensors) {
+    return [];
+  }
+  return sensors
+    .filter(sensorObj => {
+      const params = sensorObj[PARAMS_KEY];
+      return (
+        sensorObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Sensor &&
+      Object.values(TemperatureSensorType).includes(params[OBJ_SUBTYPE_KEY])
+      );
+    })
+    .map(sensorObj => {
+      const params = sensorObj[PARAMS_KEY];
+      return {
+        id: sensorObj[OBJ_ID_KEY],
+        name: params[OBJ_NAME_KEY],
+        objectType: ObjectType.Sensor,
+        type: (params[OBJ_SUBTYPE_KEY] as string).toUpperCase(),
+        probe: +params['PROBE'],
+      } as Sensor;
+    });
 };
 
 const transformPumpCircuits = (pump: Pump, pumpObjList: never[]): ReadonlyArray<PumpCircuit> => {
@@ -194,6 +241,7 @@ export const transformPanels = (response: never | never[]): ReadonlyArray<Panel>
       modules: transformModules(objList),
       features: transformFeatures(objList), // Some features are directly on panel.
       pumps: transformPumps(objList),
+      sensors: transformTempSensors(objList),
     } as Panel;
   });
 };

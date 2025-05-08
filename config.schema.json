@@ -22,7 +22,8 @@
         "title": "Password",
         "type": "string",
         "required": true,
-        "default": "*****"
+        "default": "*****",
+        "description": "Password for the Pentair Intellicenter account. Warning: This is stored in the plugin in plaintext"
       },
       "temperatureUnits": {
         "title": "Temperature Units",
@@ -48,6 +49,20 @@
         "type": "number",
         "required": true,
         "default": "104"
+      },
+      "supportVSP": {
+        "title": "Show Variable Speed Pumps (VSPs)",
+        "description": "Enable this option if your system has variable speed pump control on its circuits and if you want them visible in HomeKit.",
+        "type": "boolean",
+        "required": true,
+        "default": false
+      },
+      "airTemp": {
+        "title": "Show the outside Air Temperature",
+        "description": "Display the outside air temperature as a sensor in HomeKit.",
+        "type": "boolean",
+        "required": true,
+        "default": true
       }
     }
   }
