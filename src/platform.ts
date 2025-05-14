@@ -75,6 +75,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private buffer = '';
   private readonly pumpIdToCircuitMap: Map<string, Circuit>;
 
+  // Telnet connection status
+  private lastMessageReceived = Date.now();
+  private isSocketAlive = false;
+  // Used by "maybereconnect" logic
+  private reconnecting = false;
+  private lastReconnectTime = 0;
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -101,12 +108,19 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     // to start discovery of new accessories.
     this.api.on('didFinishLaunching', async () => {
       await this.connectToIntellicenter();
-      try {
-        this.discoverDevices();
-      } catch (error) {
-        this.log.error('IntelliCenter device discovery failed.', error);
-      }
     });
+
+    setInterval(() => {
+      const now = Date.now();
+      const silence = now - this.lastMessageReceived;
+
+      if (this.isSocketAlive && silence > 60 * 60 * 1000) {
+        this.log.warn(`No data from IntelliCenter in ${silence / 1000}s. Closing socket.`);
+        this.connection.destroy();
+        this.isSocketAlive = false;
+        this.maybeReconnect();
+      }
+    }, 60000);
   }
 
   async connectToIntellicenter() {
@@ -131,6 +145,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     EventEmitter.defaultMaxListeners = 50;
     this.connection.on('data', async (chunk) => {
       if (chunk.length > 0 && chunk[chunk.length - 1] === 10) {
+        this.lastMessageReceived = Date.now();
         const bufferedData = this.buffer + chunk;
         this.buffer = '';
         const lines = bufferedData.split(/\n/);
@@ -154,37 +169,44 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     });
 
     this.connection.on('connect', () => {
+      this.isSocketAlive = true;
       this.log.debug('IntelliCenter socket connection has been established.');
+      this.discoverCommandsSent.length = 0;
+      this.discoveryBuffer = undefined;
+      try {
+        this.discoverDevices();
+      } catch (error) {
+        this.log.error('IntelliCenter device discovery failed.', error);
+      }
     });
 
     this.connection.on('ready', () => {
+      this.isSocketAlive = true;
       this.log.debug('IntelliCenter socket connection is ready.');
+
     });
 
     this.connection.on('failedlogin', (data) => {
+      this.isSocketAlive = false;
       this.log.error(`IntelliCenter login failed. Check configured username/password. ${data}`);
     });
 
     this.connection.on('close', () => {
+      this.isSocketAlive = false;
       this.log.error('IntelliCenter socket has been closed. Waiting 30 seconds and attempting to reconnect...');
-      this.delay(30000).then(() => {
+      this.delay(30000).then(async () => {
         this.log.info('Finished waiting. Attempting reconnect...');
-        this.connectToIntellicenter()
-          .then(() => {
-            this.discoverDevices();
-          })
-          .catch((error) => {
-            this.log.error('Failed to reconnect after socket closure. IntelliCenter will become unresponsive.' +
-              'Try restarting Homebridge.', error);
-          });
+        await this.maybeReconnect();
       });
     });
 
     this.connection.on('error', (data) => {
+      this.isSocketAlive = false;
       this.log.error(`IntelliCenter socket error has been detected. Socket will be closed. ${data}`);
     });
 
     this.connection.on('end', (data) => {
+      this.isSocketAlive = false;
       this.log.error(`IntelliCenter socket connection has ended. ${data}`);
     });
 
@@ -256,7 +278,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
                 if (CircuitTypes.has(existingAccessory.context.circuit?.objectType)) {
                   this.log.debug(`Object is a circuit. Updating circuit: ${change.objnam}`);
                   this.updateCircuit(existingAccessory, change.params);
-                } if (SensorTypes.has(existingAccessory.context.sensor?.objectType)) {
+                } else if (SensorTypes.has(existingAccessory.context.sensor?.objectType)) {
                   this.log.debug(`Object is a sensor. Updating sensor: ${change.objnam}`);
                   this.updateSensor(existingAccessory, change.params);
                 } else {
@@ -532,14 +554,49 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   sendCommandNoWait(command: IntelliCenterRequest): void {
+    if (!this.isSocketAlive) {
+      this.log.warn(`Cannot send command, socket is not alive: ${this.json(command)}`);
+      this.maybeReconnect();
+      return;
+    }
+
     const commandString = JSON.stringify(command);
     this.log.debug(`Sending fire and forget command to IntelliCenter: ${commandString}`);
     this.connection.send(commandString).catch((error) => {
       this.log.error(`Caught error in sendCommandNoWait for command ${this.json(command)}`, error);
+      this.maybeReconnect();
     });
   }
 
   delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async maybeReconnect() {
+    const now = Date.now();
+
+    if (this.reconnecting) {
+      this.log.warn('Reconnect already in progress. Skipping.');
+      return;
+    }
+
+    if (now - this.lastReconnectTime < 30 * 1000) {
+      this.log.warn('Reconnect suppressed: too soon after last one.');
+      return;
+    }
+
+    this.reconnecting = true;
+    this.lastReconnectTime = now;
+
+    try {
+      this.log.warn('Attempting reconnect to IntelliCenter...');
+      this.connection.destroy();
+      await this.connectToIntellicenter();
+      this.log.info('Reconnect requested.');
+    } catch (error) {
+      this.log.error('Reconnect failed.', error);
+    } finally {
+      this.reconnecting = false;
+    }
   }
 }
