@@ -114,11 +114,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       const now = Date.now();
       const silence = now - this.lastMessageReceived;
 
-      if (this.isSocketAlive && silence > 60 * 60 * 1000) {
-        this.log.warn(`No data from IntelliCenter in ${silence / 1000}s. Closing socket.`);
+      if (this.isSocketAlive && silence > 4 * 60 * 60 * 1000 /* 4 hours */) {
+        this.log.warn('No data from IntelliCenter in over 4 hours. Closing and restarting connection.');
         this.connection.destroy();
         this.isSocketAlive = false;
-        this.maybeReconnect();
+        this.delay(30 * 1000).then(async () => {
+          await this.maybeReconnect();
+        });
       }
     }, 60000);
   }
@@ -225,16 +227,6 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     // const config = this.getConfig();
     // const sensor = accessory.context.sensor;
     const heater = accessory.context.heater;
-
-    // if (sensor) {
-    //   const isAirSensor = sensor.type === TemperatureSensorType.Air;
-
-    //   if (isAirSensor && !config.airTemp) {
-    //     this.log.info(`Removing cached air temperature sensor due to config: ${accessory.displayName}`);
-    //     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    //     return;
-    //   }
-    // }
 
     // add the restored accessory to the accessories cache so we can track if it has already been registered
     this.accessoryMap.set(accessory.UUID, accessory);
