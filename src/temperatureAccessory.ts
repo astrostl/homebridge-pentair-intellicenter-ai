@@ -34,19 +34,28 @@ export class TemperatureAccessory {
 
   async getCurrentTemperature(): Promise<CharacteristicValue> {
     const isFahrenheit = this.platform.getConfig().temperatureUnits === TemperatureUnits.F;
-    const temp = this.accessory.context.probe;
-    const celsius = isFahrenheit ? fahrenheitToCelsius(temp) : temp;
+    const temp = this.accessory.context.sensor?.probe;
 
-    return celsius ?? 0;
+    if (temp === undefined || temp === null || isNaN(temp)) {
+      this.platform.log.warn(`[${this.name}] Invalid temperature value: ${temp}, returning 0`);
+      return 0;
+    }
+
+    const celsius = isFahrenheit ? fahrenheitToCelsius(temp) : temp;
+    return celsius;
   }
 
   updateTemperature(value: number) {
-    const isFahrenheit = this.platform.getConfig().temperatureUnits === TemperatureUnits.F;
-    const temp = this.accessory.context.probe;
-    const celsius = isFahrenheit ? fahrenheitToCelsius(temp) : temp;
+    if (value === undefined || value === null || isNaN(value)) {
+      this.platform.log.warn(`[${this.name}] Invalid temperature update value: ${value}, skipping update`);
+      return;
+    }
 
-    this.accessory.context.probe = value;
+    const isFahrenheit = this.platform.getConfig().temperatureUnits === TemperatureUnits.F;
+    const celsius = isFahrenheit ? fahrenheitToCelsius(value) : value;
+
+    this.accessory.context.sensor.probe = value;
     this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, celsius);
-    this.platform.log.debug(`[${this.name}] Updated temperature: ${value}F or ${celsius}C`);
+    this.platform.log.debug(`[${this.name}] Updated temperature: ${value}${isFahrenheit ? 'F' : 'C'} -> ${celsius}C`);
   }
 }

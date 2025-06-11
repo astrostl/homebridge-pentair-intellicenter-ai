@@ -13,6 +13,7 @@ import {
   Sensor,
   TemperatureSensorType,
 } from './types';
+import { Logger } from 'homebridge';
 import {
   CIRCUIT_KEY,
   CIRCUITS_KEY,
@@ -122,7 +123,7 @@ export const findBodyCircuit = (body: Body, circuits: never[]): BaseCircuit | un
   return undefined;
 };
 
-const transformFeatures = (circuits: never[]): ReadonlyArray<Circuit> => {
+const transformFeatures = (circuits: never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Circuit> => {
   if (!circuits) {
     return [];
   }
@@ -130,14 +131,28 @@ const transformFeatures = (circuits: never[]): ReadonlyArray<Circuit> => {
   return circuits.filter(featureObj => {
     const params = featureObj[PARAMS_KEY];
     const subtype = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
+    const objId = featureObj[OBJ_ID_KEY];
+    const name = params[OBJ_NAME_KEY];
 
     const isCircuit = params[OBJ_TYPE_KEY] === ObjectType.Circuit;
-    const isFeature = params['FEATR'] === 'ON';
+    const isFeature = params['FEATR'] === 'ON' || params['FEATR'] === 'FEATR';
     // IntelliBrite is not required to be a feature.
     const isIntelliBrite = subtype === CircuitType.IntelliBrite;
     const isLegacy = subtype === 'LEGACY';
 
-    return isCircuit && !isLegacy && (isFeature || isIntelliBrite);
+    const shouldInclude = isCircuit && !isLegacy && (
+      includeAllCircuits || isFeature || isIntelliBrite
+    );
+
+    // Log circuits that are filtered out for debugging
+    if (isCircuit && !isLegacy && !shouldInclude && logger) {
+      logger.debug(`Circuit filtered out - ID: ${objId}, Name: ${name}, ` +
+        `SubType: ${subtype}, Feature: ${params['FEATR']}, Will send updates but not be accessible in HomeKit`);
+    } else if (isCircuit && !isLegacy && includeAllCircuits && !isFeature && !isIntelliBrite && logger) {
+      logger.info(`Non-feature circuit included due to includeAllCircuits - ID: ${objId}, Name: ${name}`);
+    }
+
+    return shouldInclude;
   }).map(featureObj => {
     const params = featureObj[PARAMS_KEY];
     return {
@@ -149,13 +164,29 @@ const transformFeatures = (circuits: never[]): ReadonlyArray<Circuit> => {
   });
 };
 
-const transformPumps = (pumps: never[]): ReadonlyArray<Pump> => {
+const transformPumps = (pumps: never[], logger?: Logger): ReadonlyArray<Pump> => {
   if (!pumps) {
     return [];
   }
   return pumps.filter(pumpObj => {
-    return pumpObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Pump
-      && VARIABLE_SPEED_PUMP_SUBTYPES.has((pumpObj[PARAMS_KEY][OBJ_SUBTYPE_KEY] as string)?.toUpperCase());
+    const params = pumpObj[PARAMS_KEY];
+    const objId = pumpObj[OBJ_ID_KEY];
+    const objType = params[OBJ_TYPE_KEY];
+    const subType = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
+    const isPump = objType === ObjectType.Pump;
+    const isVariableSpeed = VARIABLE_SPEED_PUMP_SUBTYPES.has(subType);
+
+    // Debug pump discovery
+    if (isPump && logger) {
+      if (isVariableSpeed) {
+        logger.debug(`Variable speed pump discovered - ID: ${objId}, SubType: ${subType}, Name: ${params[OBJ_NAME_KEY]}`);
+      } else {
+        logger.debug(`Pump filtered out - ID: ${objId}, SubType: ${subType}, Name: ${params[OBJ_NAME_KEY]} ` +
+          `(not in VARIABLE_SPEED_PUMP_SUBTYPES: ${Array.from(VARIABLE_SPEED_PUMP_SUBTYPES).join(', ')})`);
+      }
+    }
+
+    return isPump && isVariableSpeed;
   }).map(pumpObj => {
     const params = pumpObj[PARAMS_KEY];
     const pump = {
@@ -191,12 +222,13 @@ const transformTempSensors = (sensors: never[]): ReadonlyArray<Sensor> => {
     })
     .map(sensorObj => {
       const params = sensorObj[PARAMS_KEY];
+      const probeValue = +params['PROBE'];
       return {
         id: sensorObj[OBJ_ID_KEY],
         name: params[OBJ_NAME_KEY],
         objectType: ObjectType.Sensor,
         type: (params[OBJ_SUBTYPE_KEY] as string).toUpperCase(),
-        probe: +params['PROBE'],
+        probe: isNaN(probeValue) ? 0 : probeValue,
       } as Sensor;
     });
 };
@@ -216,7 +248,7 @@ const transformPumpCircuits = (pump: Pump, pumpObjList: never[]): ReadonlyArray<
   });
 };
 
-const transformModules = (modules: never[]): ReadonlyArray<Module> => {
+const transformModules = (modules: never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Module> => {
   if (!modules) {
     return [];
   }
@@ -225,7 +257,7 @@ const transformModules = (modules: never[]): ReadonlyArray<Module> => {
     const circuits = params[CIRCUITS_KEY];
     return {
       id: moduleObj[OBJ_ID_KEY],
-      features: transformFeatures(circuits),
+      features: transformFeatures(circuits, includeAllCircuits, logger),
       bodies: transformBodies(circuits),
       heaters: transformHeaters(circuits),
       type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
@@ -233,14 +265,14 @@ const transformModules = (modules: never[]): ReadonlyArray<Module> => {
   });
 };
 
-export const transformPanels = (response: never | never[]): ReadonlyArray<Panel> => {
+export const transformPanels = (response: never | never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Panel> => {
   return response.filter(moduleObj => moduleObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Panel).map(panelObj => {
     const objList = panelObj[PARAMS_KEY][OBJ_LIST_KEY];
     return {
       id: panelObj[OBJ_ID_KEY],
-      modules: transformModules(objList),
-      features: transformFeatures(objList), // Some features are directly on panel.
-      pumps: transformPumps(objList),
+      modules: transformModules(objList, includeAllCircuits, logger),
+      features: transformFeatures(objList, includeAllCircuits, logger), // Some features are directly on panel.
+      pumps: transformPumps(objList, logger),
       sensors: transformTempSensors(objList),
     } as Panel;
   });
