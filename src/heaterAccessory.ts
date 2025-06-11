@@ -175,7 +175,22 @@ export class HeaterAccessory {
         ? this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
         : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS);
     this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState,
-      this.platform.Characteristic.CurrentHeatingCoolingState.HEAT);
+      this.getCurrentHeatingCoolingState());
+  }
+
+  getCurrentHeatingCoolingState(): CharacteristicValue {
+    // If the heater is not selected for this body, it's OFF
+    if (this.body.heaterId !== this.heater.id) {
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+    
+    // If temperature hasn't reached target, it's heating
+    if (this.temperature && this.lowTemperature && this.temperature < this.lowTemperature) {
+      return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+    }
+    
+    // Otherwise it's OFF (at temperature or idle)
+    return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
   }
 
   async setTargetTemperature(value: CharacteristicValue) {
