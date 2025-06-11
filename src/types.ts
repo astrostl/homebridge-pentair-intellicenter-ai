@@ -11,7 +11,8 @@ export enum IntelliCenterRequestCommand {
 export enum IntelliCenterResponseCommand {
   SendQuery = 'SendQuery',
   NotifyList = 'NotifyList',
-  WriteParamList = 'WriteParamList'
+  WriteParamList = 'WriteParamList',
+  Error = 'Error'
 }
 
 export enum IntelliCenterQueryName {

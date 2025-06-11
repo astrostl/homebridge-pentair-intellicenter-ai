@@ -63,6 +63,13 @@
         "type": "boolean",
         "required": true,
         "default": true
+      },
+      "includeAllCircuits": {
+        "title": "Include All Circuits (Advanced)",
+        "description": "Include circuits that are not marked as 'Features' in IntelliCenter. Warning: This may expose internal system circuits that shouldn't be controlled directly.",
+        "type": "boolean",
+        "required": false,
+        "default": false
       }
     }
   }
