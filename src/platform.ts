@@ -452,12 +452,18 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const panels = transformPanels(this.discoveryBuffer, this.getConfig().includeAllCircuits, this.log);
     this.log.debug(`Transformed panels from IntelliCenter: ${this.json(panels)}`);
 
+    // Track current circuits to clean up orphaned accessories
+    const currentCircuitIds = new Set<string>();
+    const currentSensorIds = new Set<string>();
+    const currentHeaterIds = new Set<string>();
+
     this.pumpIdToCircuitMap.clear();
     const circuitIdPumpMap = new Map<string, PumpCircuit>();
     const bodyIdMap = new Map<string, Body>();
     let heaters = [] as ReadonlyArray<Heater>;
     for (const panel of panels) {
       for (const sensor of panel.sensors) {
+        currentSensorIds.add(sensor.id);
         this.discoverTemperatureSensor(panel, null, sensor);
       }
       for (const pump of panel.pumps) {
@@ -471,23 +477,76 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       }
       for (const module of panel.modules) {
         for (const body of module.bodies) {
+          currentCircuitIds.add(body.id);
           this.discoverCircuit(panel, module, body, circuitIdPumpMap.get(body.circuit?.id as string));
           this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, MODE_KEY]);
           bodyIdMap.set(body.id, body);
         }
         for (const feature of module.features) {
+          currentCircuitIds.add(feature.id);
           this.discoverCircuit(panel, module, feature, circuitIdPumpMap.get(feature.id));
           this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
         }
         heaters = heaters.concat(module.heaters);
       }
       for (const feature of panel.features) {
+        currentCircuitIds.add(feature.id);
         this.discoverCircuit(panel, null, feature, circuitIdPumpMap.get(feature.id));
         this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
       }
     }
     for (const heater of heaters) {
+      heater.bodyIds.forEach((bodyId) => {
+        currentHeaterIds.add(`${heater.id}.${bodyId}`);
+      });
       this.discoverHeater(heater, bodyIdMap);
+    }
+
+    // Clean up orphaned accessories
+    this.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+  }
+
+  cleanupOrphanedAccessories(currentCircuitIds: Set<string>, currentSensorIds: Set<string>, currentHeaterIds: Set<string>) {
+    const accessoriesToRemove: PlatformAccessory[] = [];
+    
+    this.accessoryMap.forEach((accessory, uuid) => {
+      let shouldRemove = false;
+      
+      // Check if it's a circuit accessory
+      if (accessory.context.circuit) {
+        const circuitId = accessory.context.circuit.id;
+        if (!currentCircuitIds.has(circuitId)) {
+          this.log.info(`Removing orphaned circuit accessory: ${accessory.displayName} (${circuitId})`);
+          shouldRemove = true;
+        }
+      }
+      // Check if it's a sensor accessory
+      else if (accessory.context.sensor) {
+        const sensorId = accessory.context.sensor.id;
+        if (!currentSensorIds.has(sensorId)) {
+          this.log.info(`Removing orphaned sensor accessory: ${accessory.displayName} (${sensorId})`);
+          shouldRemove = true;
+        }
+      }
+      // Check if it's a heater accessory
+      else if (accessory.context.heater && accessory.context.body) {
+        const heaterId = `${accessory.context.heater.id}.${accessory.context.body.id}`;
+        if (!currentHeaterIds.has(heaterId)) {
+          this.log.info(`Removing orphaned heater accessory: ${accessory.displayName} (${heaterId})`);
+          shouldRemove = true;
+        }
+      }
+      
+      if (shouldRemove) {
+        accessoriesToRemove.push(accessory);
+        this.accessoryMap.delete(uuid);
+        this.heaters.delete(uuid);
+      }
+    });
+    
+    if (accessoriesToRemove.length > 0) {
+      this.log.info(`Cleaning up ${accessoriesToRemove.length} orphaned accessories`);
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);
     }
   }
 

@@ -135,7 +135,7 @@ const transformFeatures = (circuits: never[], includeAllCircuits = false, logger
     const name = params[OBJ_NAME_KEY];
 
     const isCircuit = params[OBJ_TYPE_KEY] === ObjectType.Circuit;
-    const isFeature = params['FEATR'] === 'ON' || params['FEATR'] === 'FEATR';
+    const isFeature = params['FEATR'] === 'ON' || (includeAllCircuits && params['FEATR'] === 'FEATR');
     // IntelliBrite is not required to be a feature.
     const isIntelliBrite = subtype === CircuitType.IntelliBrite;
     const isLegacy = subtype === 'LEGACY';

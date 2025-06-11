@@ -68,7 +68,7 @@
         "title": "Include All Circuits (Advanced)",
         "description": "Include circuits that are not marked as 'Features' in IntelliCenter. Warning: This may expose internal system circuits that shouldn't be controlled directly.",
         "type": "boolean",
-        "required": false,
+        "required": true,
         "default": false
       }
     }
