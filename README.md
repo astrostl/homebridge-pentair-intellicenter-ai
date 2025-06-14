@@ -7,14 +7,21 @@ This is a fork of Windscar/homebridge-pentair-intellicenter, which itself is a f
 
 Critically: I am using AI (currently Claude Code) to generate all changes. If running stuff off of the internet scared you, this should horrify you. I am testing the changes locally and dogfooding it with my own setup, but provide zero warranty or guarantee for any of it.
 
-# Homebridge Pentair IntelliCenter Plugin
-[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
-[![NPM Version](https://img.shields.io/npm/v/homebridge-pentair-intellicenter.svg)](https://www.npmjs.com/package/homebridge-rinnai-controlr)
+# Homebridge Pentair IntelliCenter AI Plugin
+[![NPM Version](https://img.shields.io/npm/v/homebridge-pentair-intellicenter-ai.svg)](https://www.npmjs.com/package/homebridge-pentair-intellicenter-ai)
 
 This plugin integrates with the Pentair IntelliCenter panel to expose its features to HomeKit/Siri.
 It connects directly to your IntelliCenter panel, so using a separate pool controller (i.e. nodejs-poolController)
 is not required. By design, only the "Bodies", heaters, and circuits that are marked as "Features" in IntelliCenter
 will be exposed as switches in HomeKit. This avoids unnecessary/redundant HomeKit configuration.
+
+## Installation
+
+Install this plugin using the Homebridge UI or via npm:
+
+```bash
+npm install -g homebridge-pentair-intellicenter-ai
+```
 
 As of version 2.1.0, pump speed can be controlled like a Fan controller. This requires that circuits or bodies
 be attached to a pump setting in IntelliCenter. The rotation speed maps to IntelliCenter's min/max speed or
