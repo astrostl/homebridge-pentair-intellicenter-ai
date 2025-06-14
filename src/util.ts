@@ -327,7 +327,7 @@ export const mergeResponseArray = (target: never[], responseToAdd: never[]): voi
 
 export const mergeResponse = (target: never | never[], responseToAdd: never): void => {
   for (const key in responseToAdd as Record<string, unknown>) {
-    if (Object.prototype.hasOwnProperty.call(responseToAdd, key)) {
+    if (Object.prototype.hasOwnProperty.call(responseToAdd, key) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
       if (target[key] && isObject(target[key]) && isObject(responseToAdd[key])) {
         if (Array.isArray(target[key]) && Array.isArray(responseToAdd[key])) {
           mergeResponseArray(target[key], responseToAdd[key]);
