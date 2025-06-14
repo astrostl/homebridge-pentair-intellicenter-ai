@@ -2,7 +2,7 @@ import {API, Characteristic, DynamicPlatformPlugin, Logger, PlatformAccessory, P
 
 import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
 import {CircuitAccessory} from './circuitAccessory';
-import Telnet from 'telnet-client';
+import { Telnet } from 'telnet-client';
 import {
   BaseCircuit,
   Body,
@@ -72,7 +72,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private readonly connection: Telnet;
   private readonly maxBufferSize: number;
   private readonly discoverCommandsSent: Array<string>;
-  private discoveryBuffer: never | never[] | undefined;
+  private discoveryBuffer: any;
   private buffer = '';
   private readonly pumpIdToCircuitMap: Map<string, Circuit>;
 

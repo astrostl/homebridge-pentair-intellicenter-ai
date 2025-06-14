@@ -314,7 +314,13 @@ export const isObject = (object: Record<string, unknown>) => {
   return false;
 };
 
-export const mergeResponseArray = (target: never[], responseToAdd: never[]): void => {
+/**
+ * Utility functions for merging dynamic JSON responses from IntelliCenter hardware.
+ * Uses 'any' type because the API returns unpredictable nested JSON structures
+ * that would be impractical to type strictly.
+ */
+
+export const mergeResponseArray = (target: any[], responseToAdd: any[]): void => {
   responseToAdd.forEach((itemToAdd) => {
     const targetObject = target.find(targetItem => targetItem[OBJ_ID_KEY] === itemToAdd[OBJ_ID_KEY]);
     if (targetObject) {
@@ -325,7 +331,7 @@ export const mergeResponseArray = (target: never[], responseToAdd: never[]): voi
   });
 };
 
-export const mergeResponse = (target: never | never[], responseToAdd: never): void => {
+export const mergeResponse = (target: any, responseToAdd: any): void => {
   for (const key in responseToAdd as Record<string, unknown>) {
     if (Object.prototype.hasOwnProperty.call(responseToAdd, key) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
       if (target[key] && isObject(target[key]) && isObject(responseToAdd[key])) {
