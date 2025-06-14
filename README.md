@@ -33,7 +33,7 @@ will map as follows:
 
 > :warning: **Your installer may have configured you min RPMs too low for flow**
 > It is highly recommended that you check double check your pump configuration to avoid pump damage.
-> :warning: adjusting RPMs using the fan setting may overwrite your previous RPM settings
+> Adjusting RPMs using the fan setting may also overwrite your previous RPM settings.
 
 Also, along with the [Homebridge Alexa plugin](https://github.com/NorthernMan54/homebridge-alexa), this plugin can be used to expose your IntelliCenter circuits to Alexa. As far as I know, this is currently the only Alexa integration as the Alexa skill for IntelliCenter is no longer available.
 
