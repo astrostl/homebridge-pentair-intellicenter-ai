@@ -6,7 +6,7 @@
 
 This is a fork of Windscar/homebridge-pentair-intellicenter, which itself is a fork of dustindclark/homebridge-pentair-intellicenter. dustindclark's original seems to have not been actively maintained since 2023. Windscar forked it and made a few updates, but has Issues disabled and hasn't promptly accepted my Pull Requests. With great gratitude to both of them, I'm breaking this out into a repository that "I" can actively maintain. I've enabled all of the security doodads GitHub offers and resolve all of them.
 
-Critically: I am using AI (currently Claude Code) to generate all changes. If running stuff off of the internet scared you, this should horrify you. I am testing the changes locally and dogfooding it with my own IntelliCenter/Homebridge/Homekit setup, but provide zero warranty or guarantee for any of it.
+Critically: I am using AI (currently Claude Code) to generate all changes. If running stuff off of the internet scared you, this should horrify you. I am testing the changes locally and dogfooding it with my own setup, but provide zero warranty or guarantee for any of it.
 
 # Homebridge Pentair IntelliCenter Plugin
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
