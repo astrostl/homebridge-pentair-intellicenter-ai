@@ -2,10 +2,16 @@
   "pluginAlias": "PentairIntelliCenter",
   "pluginType": "platform",
   "singular": true,
+  "name": "PentairIntelliCenter",
   "schema": {
-    "name": "PentairIntelliCenter",
     "type": "object",
     "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "required": true,
+        "default": "PentairIntelliCenter"
+      },
       "ipAddress": {
         "title": "IP Address",
         "type": "string",
