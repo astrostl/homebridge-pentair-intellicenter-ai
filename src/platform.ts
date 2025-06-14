@@ -508,10 +508,10 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
   cleanupOrphanedAccessories(currentCircuitIds: Set<string>, currentSensorIds: Set<string>, currentHeaterIds: Set<string>) {
     const accessoriesToRemove: PlatformAccessory[] = [];
-    
+
     this.accessoryMap.forEach((accessory, uuid) => {
       let shouldRemove = false;
-      
+
       // Check if it's a circuit accessory
       if (accessory.context.circuit) {
         const circuitId = accessory.context.circuit.id;
@@ -519,31 +519,29 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           this.log.info(`Removing orphaned circuit accessory: ${accessory.displayName} (${circuitId})`);
           shouldRemove = true;
         }
-      }
-      // Check if it's a sensor accessory
-      else if (accessory.context.sensor) {
+      } else if (accessory.context.sensor) {
+        // Check if it's a sensor accessory
         const sensorId = accessory.context.sensor.id;
         if (!currentSensorIds.has(sensorId)) {
           this.log.info(`Removing orphaned sensor accessory: ${accessory.displayName} (${sensorId})`);
           shouldRemove = true;
         }
-      }
-      // Check if it's a heater accessory
-      else if (accessory.context.heater && accessory.context.body) {
+      } else if (accessory.context.heater && accessory.context.body) {
+        // Check if it's a heater accessory
         const heaterId = `${accessory.context.heater.id}.${accessory.context.body.id}`;
         if (!currentHeaterIds.has(heaterId)) {
           this.log.info(`Removing orphaned heater accessory: ${accessory.displayName} (${heaterId})`);
           shouldRemove = true;
         }
       }
-      
+
       if (shouldRemove) {
         accessoriesToRemove.push(accessory);
         this.accessoryMap.delete(uuid);
         this.heaters.delete(uuid);
       }
     });
-    
+
     if (accessoriesToRemove.length > 0) {
       this.log.info(`Cleaning up ${accessoriesToRemove.length} orphaned accessories`);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);

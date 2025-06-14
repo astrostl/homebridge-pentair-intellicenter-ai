@@ -1,15 +1,15 @@
 {
-  "displayName": "Homebridge IntelliCenter",
-  "name": "homebridge-intellicenter",
-  "version": "2.2.2",
-  "description": "Homebridge plugin for integrating Pentair IntelliCenter into HomeKit.",
+  "displayName": "Homebridge Pentair IntelliCenter AI",
+  "name": "homebridge-pentair-intellicenter-ai",
+  "version": "1.0.0",
+  "description": "AI-enhanced Homebridge plugin for integrating Pentair IntelliCenter into HomeKit.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git://github.com/Windscar/homebridge-pentair-intellicenter.git"
+    "url": "git://github.com/astrostl/homebridge-pentair-intellicenter-ai.git"
   },
   "bugs": {
-    "url": "https://github.com/Windscar/homebridge-pentair-intellicenter/issues"
+    "url": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai/issues"
   },
   "engines": {
     "homebridge": "^1.6.0 || ^2.0.0-beta.0",
@@ -30,7 +30,9 @@
     "homebridge pentair",
     "homebridge intellicenter",
     "homekit pentair intelli center",
-    "homekit intelli center"
+    "homekit intelli center",
+    "ai-enhanced",
+    "pentair pool automation"
   ],
   "dependencies": {
     "telnet-client": "^1.4.11",
@@ -50,5 +52,5 @@
     "ts-node": "^10.9.1",
     "typescript": "^4.9.4"
   },
-  "homepage": "https://github.com/Windscar/homebridge-pentair-intellicenter#readme"
+  "homepage": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai#readme"
 }

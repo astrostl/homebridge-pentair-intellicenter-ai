@@ -183,12 +183,12 @@ export class HeaterAccessory {
     if (this.body.heaterId !== this.heater.id) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
-    
+
     // If temperature hasn't reached target, it's heating
     if (this.temperature && this.lowTemperature && this.temperature < this.lowTemperature) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
     }
-    
+
     // Otherwise it's OFF (at temperature or idle)
     return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
   }
