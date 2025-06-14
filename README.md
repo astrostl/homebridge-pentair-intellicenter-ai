@@ -1,18 +1,17 @@
-
-> :warning: **This plugin only works with IntelliCenter version 1.064 and higher.**
-> My setup came with version 1.064 and I [upgraded it directly to 3.004 via USB](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html) without a hitch. All testing is done on 3.004+.
-
-This is a fork of Windscar/homebridge-pentair-intellicenter, which itself is a fork of dustindclark/homebridge-pentair-intellicenter. dustindclark's original seems to have not been actively maintained since 2023. Windscar forked it and made a few updates, but has Issues disabled and hasn't promptly accepted my Pull Requests. With great gratitude to both of them, I'm breaking this out into a repository that "I" can actively maintain. I've enabled all of the security doodads GitHub offers and resolve all of them.
-
-Critically: I am using AI (currently Claude Code) to generate all changes. If running stuff off of the internet scared you, this should horrify you. I am testing the changes locally and dogfooding it with my own setup, but provide zero warranty or guarantee for any of it.
-
-# Homebridge Pentair IntelliCenter AI Plugin
+# Homebridge Pentair Intellicenter
 [![NPM Version](https://img.shields.io/npm/v/homebridge-pentair-intellicenter-ai.svg)](https://www.npmjs.com/package/homebridge-pentair-intellicenter-ai)
 
-This plugin integrates with the Pentair IntelliCenter panel to expose its features to HomeKit/Siri.
-It connects directly to your IntelliCenter panel, so using a separate pool controller (i.e. nodejs-poolController)
-is not required. By design, only the "Bodies", heaters, and circuits that are marked as "Features" in IntelliCenter
-will be exposed as switches in HomeKit. This avoids unnecessary/redundant HomeKit configuration.
+This is a plugin to integrate your Pentair IntelliCenter [1.064+](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html)setup with Homebridge (in order to integrate it with Apple Home and Siri via Apple HomeKit). It exposes bodies, heaters, and circuits *marked as features* by default.
+
+## Development and Testing
+
+This is a fork of Windscar/homebridge-pentair-intellicenter, which itself is a fork of dustindclark/homebridge-pentair-intellicenter. dustindclark's original seems to have not been actively maintained since 2023. Windscar forked it and made a few updates, but has issues disabled and didn't promptly accepted my pull requests. With great gratitude to both of them, I'm breaking this out into a repository that "I" can actively maintain.
+
+**All code is AI-generated (currently Claude Code) and directed, overseen, and tested by me. If running stuff from the internet scared you, this might horrify you.**
+
+I have all of the security doodads GitHub offers (dependency updates, code scans, etc.) enabled. I've cleared all issues, and aim to keep them clear.
+
+I have a dual-body setup with a pool (IntelliFlo VSF pump, cleaner pump, heat pump, lights, and fountain feature) and spa (IntelliFlo VS pump, air blower, gas heater, lights). All testing is done on that using firmware 3.004+.
 
 ## Installation
 
