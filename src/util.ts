@@ -35,7 +35,7 @@ const transformHeaters = (heaters: never[]): ReadonlyArray<Heater> => {
   if (!heaters) {
     return [];
   }
-  return heaters.filter(featureObj => featureObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Heater).map(heaterObj => {
+  return heaters.filter(featureObj => featureObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Heater).map(heaterObj => {
     const params = heaterObj[PARAMS_KEY];
     return {
       id: heaterObj[OBJ_ID_KEY],
@@ -94,7 +94,7 @@ const transformBodies = (circuits: never[]): ReadonlyArray<Body> => {
   if (!circuits) {
     return [];
   }
-  return circuits.filter(circuitObj => circuitObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Body).map(bodyObj => {
+  return circuits.filter(circuitObj => circuitObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Body).map(bodyObj => {
     const params = bodyObj[PARAMS_KEY];
     const body = {
       id: bodyObj[OBJ_ID_KEY],
@@ -129,7 +129,10 @@ const transformFeatures = (circuits: never[], includeAllCircuits = false, logger
   }
 
   return circuits.filter(featureObj => {
-    const params = featureObj[PARAMS_KEY];
+    const params = featureObj?.[PARAMS_KEY];
+    if (!params) {
+      return false;
+    }
     const subtype = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
     const objId = featureObj[OBJ_ID_KEY];
     const name = params[OBJ_NAME_KEY];
@@ -169,7 +172,10 @@ const transformPumps = (pumps: never[], logger?: Logger): ReadonlyArray<Pump> =>
     return [];
   }
   return pumps.filter(pumpObj => {
-    const params = pumpObj[PARAMS_KEY];
+    const params = pumpObj?.[PARAMS_KEY];
+    if (!params) {
+      return false;
+    }
     const objId = pumpObj[OBJ_ID_KEY];
     const objType = params[OBJ_TYPE_KEY];
     const subType = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
@@ -214,10 +220,11 @@ const transformTempSensors = (sensors: never[]): ReadonlyArray<Sensor> => {
   }
   return sensors
     .filter(sensorObj => {
-      const params = sensorObj[PARAMS_KEY];
+      const params = sensorObj?.[PARAMS_KEY];
       return (
-        sensorObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Sensor &&
-      Object.values(TemperatureSensorType).includes(params[OBJ_SUBTYPE_KEY])
+        params &&
+        params[OBJ_TYPE_KEY] === ObjectType.Sensor &&
+        Object.values(TemperatureSensorType).includes(params[OBJ_SUBTYPE_KEY])
       );
     })
     .map(sensorObj => {
@@ -252,7 +259,7 @@ const transformModules = (modules: never[], includeAllCircuits = false, logger?:
   if (!modules) {
     return [];
   }
-  return modules.filter(moduleObj => moduleObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Module).map(moduleObj => {
+  return modules.filter(moduleObj => moduleObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Module).map(moduleObj => {
     const params = moduleObj[PARAMS_KEY];
     const circuits = params[CIRCUITS_KEY];
     return {
@@ -266,7 +273,10 @@ const transformModules = (modules: never[], includeAllCircuits = false, logger?:
 };
 
 export const transformPanels = (response: never | never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Panel> => {
-  return response.filter(moduleObj => moduleObj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Panel).map(panelObj => {
+  if (!response || !Array.isArray(response)) {
+    return [];
+  }
+  return response.filter(moduleObj => moduleObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Panel).map(panelObj => {
     const objList = panelObj[PARAMS_KEY][OBJ_LIST_KEY];
     return {
       id: panelObj[OBJ_ID_KEY],

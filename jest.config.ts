@@ -20,4 +20,11 @@ export default {
     },
   },
   preset: 'ts-jest',
+  testEnvironment: 'node',
+  testMatch: [
+    '<rootDir>/test/**/*.spec.ts',
+    '<rootDir>/test/**/*.test.ts',
+  ],
+  testTimeout: 30000,
+  verbose: true,
 };
