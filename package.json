@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Pentair IntelliCenter AI",
   "name": "homebridge-pentair-intellicenter-ai",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Homebridge plugin for the Pentair IntelliCenter pool control system (maintained with AI assistance)",
   "license": "Apache-2.0",
   "repository": {
