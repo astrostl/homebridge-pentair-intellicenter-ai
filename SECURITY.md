@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-No formal support is offered for any versions
+No support, warranty, or guarantee is offered for any versions
 
 ## Reporting a Vulnerability
 
