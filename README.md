@@ -1,7 +1,7 @@
 # Homebridge Pentair Intellicenter
 [![NPM Version](https://img.shields.io/npm/v/homebridge-pentair-intellicenter-ai.svg)](https://www.npmjs.com/package/homebridge-pentair-intellicenter-ai)
 
-This is a plugin to integrate your Pentair IntelliCenter [1.064+](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html)setup with Homebridge (in order to integrate it with Apple Home and Siri via Apple HomeKit). It exposes bodies, heaters, and circuits *marked as features* by default.
+This is a plugin to integrate your Pentair IntelliCenter [1.064+](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html) setup with Homebridge (in order to integrate it with Apple Home and Siri via Apple HomeKit). It exposes bodies, heaters, and circuits *marked as features* by default.
 
 ## Development and Testing
 
