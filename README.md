@@ -22,8 +22,8 @@ Install this plugin using the Homebridge UI or via npm:
 npm install -g homebridge-pentair-intellicenter-ai
 ```
 
-As of version 2.1.0, pump speed can be controlled like a Fan controller. This requires that circuits or bodies
-be attached to a pump setting in IntelliCenter. The rotation speed maps to IntelliCenter's min/max speed or
+Pump speed can be optionally controlled like a Fan controller. This requires that circuits or bodies
+be attached to a pump setting in IntelliCenter and for the configuration option to be enabled. The rotation speed maps to IntelliCenter's min/max speed or
 flow settings. For example, if IntelliCenter's min RPM is 1,000 and the max is 3,400, the circuits speed settings
 will map as follows:
 
@@ -33,6 +33,7 @@ will map as follows:
 
 > :warning: **Your installer may have configured you min RPMs too low for flow**
 > It is highly recommended that you check double check your pump configuration to avoid pump damage.
+> :warning: adjusting RPMs using the fan setting may overwrite your previous RPM settings
 
 Also, along with the [Homebridge Alexa plugin](https://github.com/NorthernMan54/homebridge-alexa), this plugin can be used to expose your IntelliCenter circuits to Alexa. As far as I know, this is currently the only Alexa integration as the Alexa skill for IntelliCenter is no longer available.
 
