@@ -3,6 +3,7 @@
   "pluginType": "platform",
   "singular": true,
   "schema": {
+    "name": "PentairIntelliCenter",
     "type": "object",
     "properties": {
       "ipAddress": {
