@@ -1,7 +1,7 @@
 
-> :warning: **Current versions of this plugin only works with IntelliCenter version 1.064 and higher.**
+> :warning: **This plugin only works with IntelliCenter version 1.064 and higher.**
 > If you are on an older version of IntelliCenter firmware, it is recommended that you
-> [upgrade your IntelliCenter firmware](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html) (provided that you accept the risks).
+> [upgrade your IntelliCenter firmware](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html) (provided that you accept the risks). My setup came with version 1.064 and I upgraded it directly to 3.004 via USB without a hitch.
 
 This is a fork of Windscar/homebridge-pentair-intellicenter, which itself is a fork of dustindclark/homebridge-pentair-intellicenter. dustindclark's original seems to have not been actively maintained since 2023. Windscar forked it and made a few updates, but has Issues disabled and hasn't promptly accepted my Pull Requests. With great gratitude to both of them, I'm breaking this out into a repository that "I" can actively maintain. I've enabled all of the security doodads GitHub offers and resolve all of them.
 
