@@ -4,6 +4,7 @@ export default {
   collectCoverageFrom: [
     'src/**',
     '!src/settings.ts',
+    '!src/index.ts', // Entry point, mainly exports
   ],
   coverageDirectory: 'coverage',
   coverageProvider: 'v8',
@@ -13,11 +14,33 @@ export default {
   ],
   coverageThreshold: {
     global: {
-      branches: 0,
-      functions: 0,
-      lines: 0,
-      statements: 0,
+      branches: 60,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+    // Per-file thresholds for critical accessory classes
+    'src/circuitAccessory.ts': {
+      functions: 80,
+      lines: 80,
+    },
+    'src/heaterAccessory.ts': {
+      functions: 80,
+      lines: 80,
+    },
+    'src/temperatureAccessory.ts': {
+      functions: 90,
+      lines: 90,
     },
   },
   preset: 'ts-jest',
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+  testMatch: [
+    '<rootDir>/test/**/*.spec.ts',
+    '<rootDir>/test/**/*.test.ts',
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+  ],
 };
