@@ -5,6 +5,7 @@ import {
   CircuitType,
   Color,
   Heater,
+  IntelliCenterParams,
   Module,
   ObjectType,
   Panel,
@@ -14,6 +15,21 @@ import {
   TemperatureSensorType,
 } from './types';
 import { Logger } from 'homebridge';
+
+// Type guards and helper types for transformation functions
+type IntelliCenterObject = {
+  [OBJ_ID_KEY]: string;
+  [PARAMS_KEY]: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+function isIntelliCenterObject(obj: unknown): obj is IntelliCenterObject {
+  return typeof obj === 'object' &&
+         obj !== null &&
+         typeof (obj as Record<string, unknown>)[OBJ_ID_KEY] === 'string' &&
+         typeof (obj as Record<string, unknown>)[PARAMS_KEY] === 'object';
+}
+
 import {
   CIRCUIT_KEY,
   CIRCUITS_KEY,
@@ -31,14 +47,20 @@ import {
   VARIABLE_SPEED_PUMP_SUBTYPES,
 } from './constants';
 
-const transformHeaters = (heaters: never[]): ReadonlyArray<Heater> => {
+const transformHeaters = (heaters: unknown[]): ReadonlyArray<Heater> => {
   if (!heaters) {
     return [];
   }
-  return heaters.filter(featureObj => featureObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Heater).map(heaterObj => {
-    const params = heaterObj[PARAMS_KEY];
+  return heaters.filter(obj => {
+    if (!isIntelliCenterObject(obj)) {
+      return false;
+    }
+    return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Heater;
+  }).map(heaterObj => {
+    const obj = heaterObj as IntelliCenterObject;
+    const params = obj[PARAMS_KEY];
     return {
-      id: heaterObj[OBJ_ID_KEY],
+      id: obj[OBJ_ID_KEY],
       name: params[OBJ_NAME_KEY],
       objectType: ObjectType.Heater,
       type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
@@ -65,7 +87,7 @@ const pumpParams = new Map([
   ['speed', SPEED_KEY],
 ]) as ReadonlyMap<string, string>;
 
-export const updateCircuit = (circuit: Body, params: never): void => {
+export const updateCircuit = (circuit: Body, params: IntelliCenterParams): void => {
   circuitParams.forEach((value, key) => {
     if (params[value]) {
       circuit[key] = params[value];
@@ -73,7 +95,7 @@ export const updateCircuit = (circuit: Body, params: never): void => {
   });
 };
 
-export const updateBody = (body: Body, params: never): void => {
+export const updateBody = (body: Body, params: IntelliCenterParams): void => {
   bodyParams.forEach((value, key) => {
     if (params[value]) {
       body[key] = params[value];
@@ -81,7 +103,7 @@ export const updateBody = (body: Body, params: never): void => {
   });
 };
 
-export const updatePump = (pump: Pump, params: never): void => {
+export const updatePump = (pump: Pump, params: IntelliCenterParams): void => {
   pumpParams.forEach((value, key) => {
     if (params[value]) {
       pump[key] = params[value];
@@ -90,19 +112,25 @@ export const updatePump = (pump: Pump, params: never): void => {
 };
 
 
-const transformBodies = (circuits: never[]): ReadonlyArray<Body> => {
+const transformBodies = (circuits: unknown[]): ReadonlyArray<Body> => {
   if (!circuits) {
     return [];
   }
-  return circuits.filter(circuitObj => circuitObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Body).map(bodyObj => {
-    const params = bodyObj[PARAMS_KEY];
+  return circuits.filter(obj => {
+    if (!isIntelliCenterObject(obj)) {
+      return false;
+    }
+    return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Body;
+  }).map(bodyObj => {
+    const obj = bodyObj as IntelliCenterObject;
+    const params = obj[PARAMS_KEY];
     const body = {
-      id: bodyObj[OBJ_ID_KEY],
+      id: obj[OBJ_ID_KEY],
       name: params[OBJ_NAME_KEY],
       objectType: ObjectType.Body,
       type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
     } as Body;
-    updateBody(body, params);
+    updateBody(body, params as IntelliCenterParams);
     return {
       ...body,
       circuit: findBodyCircuit(body, circuits),
@@ -110,8 +138,11 @@ const transformBodies = (circuits: never[]): ReadonlyArray<Body> => {
   });
 };
 
-export const findBodyCircuit = (body: Body, circuits: never[]): BaseCircuit | undefined => {
+export const findBodyCircuit = (body: Body, circuits: unknown[]): BaseCircuit | undefined => {
   for (const circuit of circuits) {
+    if (!isIntelliCenterObject(circuit)) {
+      continue;
+    }
     const params = circuit[PARAMS_KEY];
     if (params[OBJ_TYPE_KEY] === ObjectType.Circuit && body.type === params[OBJ_SUBTYPE_KEY]
       && body.name === params[OBJ_NAME_KEY]) {
@@ -123,13 +154,16 @@ export const findBodyCircuit = (body: Body, circuits: never[]): BaseCircuit | un
   return undefined;
 };
 
-const transformFeatures = (circuits: never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Circuit> => {
+const transformFeatures = (circuits: unknown[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Circuit> => {
   if (!circuits) {
     return [];
   }
 
   return circuits.filter(featureObj => {
-    const params = featureObj?.[PARAMS_KEY];
+    if (!isIntelliCenterObject(featureObj)) {
+      return false;
+    }
+    const params = featureObj[PARAMS_KEY];
     if (!params) {
       return false;
     }
@@ -157,9 +191,10 @@ const transformFeatures = (circuits: never[], includeAllCircuits = false, logger
 
     return shouldInclude;
   }).map(featureObj => {
-    const params = featureObj[PARAMS_KEY];
+    const obj = featureObj as IntelliCenterObject;
+    const params = obj[PARAMS_KEY];
     return {
-      id: featureObj[OBJ_ID_KEY],
+      id: obj[OBJ_ID_KEY],
       name: params[OBJ_NAME_KEY],
       objectType: ObjectType.Circuit,
       type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
@@ -167,12 +202,15 @@ const transformFeatures = (circuits: never[], includeAllCircuits = false, logger
   });
 };
 
-const transformPumps = (pumps: never[], logger?: Logger): ReadonlyArray<Pump> => {
+const transformPumps = (pumps: unknown[], logger?: Logger): ReadonlyArray<Pump> => {
   if (!pumps) {
     return [];
   }
   return pumps.filter(pumpObj => {
-    const params = pumpObj?.[PARAMS_KEY];
+    if (!isIntelliCenterObject(pumpObj)) {
+      return false;
+    }
+    const params = pumpObj[PARAMS_KEY];
     if (!params) {
       return false;
     }
@@ -194,18 +232,19 @@ const transformPumps = (pumps: never[], logger?: Logger): ReadonlyArray<Pump> =>
 
     return isPump && isVariableSpeed;
   }).map(pumpObj => {
-    const params = pumpObj[PARAMS_KEY];
+    const obj = pumpObj as IntelliCenterObject;
+    const params = obj[PARAMS_KEY];
     const pump = {
-      id: pumpObj[OBJ_ID_KEY],
+      id: obj[OBJ_ID_KEY],
       name: params[OBJ_NAME_KEY],
       objectType: ObjectType.Pump,
       type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
-      minRpm: +params[OBJ_MIN_KEY],
-      maxRpm: +params[OBJ_MAX_KEY],
-      minFlow: +params[OBJ_MIN_FLOW_KEY],
-      maxFlow: +params[OBJ_MAX_FLOW_KEY],
+      minRpm: +(params[OBJ_MIN_KEY] as string || '0'),
+      maxRpm: +(params[OBJ_MAX_KEY] as string || '0'),
+      minFlow: +(params[OBJ_MIN_FLOW_KEY] as string || '0'),
+      maxFlow: +(params[OBJ_MAX_FLOW_KEY] as string || '0'),
     } as Pump;
-    const circuits = transformPumpCircuits(pump, params[OBJ_LIST_KEY]);
+    const circuits = Array.isArray(params[OBJ_LIST_KEY]) ? transformPumpCircuits(pump, params[OBJ_LIST_KEY] as unknown[]) : [];
 
     return {
       ...pump,
@@ -214,24 +253,28 @@ const transformPumps = (pumps: never[], logger?: Logger): ReadonlyArray<Pump> =>
   });
 };
 
-const transformTempSensors = (sensors: never[]): ReadonlyArray<Sensor> => {
+const transformTempSensors = (sensors: unknown[]): ReadonlyArray<Sensor> => {
   if (!sensors) {
     return [];
   }
   return sensors
     .filter(sensorObj => {
-      const params = sensorObj?.[PARAMS_KEY];
+      if (!isIntelliCenterObject(sensorObj)) {
+        return false;
+      }
+      const params = sensorObj[PARAMS_KEY];
       return (
         params &&
         params[OBJ_TYPE_KEY] === ObjectType.Sensor &&
-        Object.values(TemperatureSensorType).includes(params[OBJ_SUBTYPE_KEY])
+        Object.values(TemperatureSensorType).includes(params[OBJ_SUBTYPE_KEY] as TemperatureSensorType)
       );
     })
     .map(sensorObj => {
-      const params = sensorObj[PARAMS_KEY];
-      const probeValue = +params['PROBE'];
+      const obj = sensorObj as IntelliCenterObject;
+      const params = obj[PARAMS_KEY];
+      const probeValue = +(params['PROBE'] as string || '0');
       return {
-        id: sensorObj[OBJ_ID_KEY],
+        id: obj[OBJ_ID_KEY],
         name: params[OBJ_NAME_KEY],
         objectType: ObjectType.Sensor,
         type: (params[OBJ_SUBTYPE_KEY] as string).toUpperCase(),
@@ -240,30 +283,36 @@ const transformTempSensors = (sensors: never[]): ReadonlyArray<Sensor> => {
     });
 };
 
-const transformPumpCircuits = (pump: Pump, pumpObjList: never[]): ReadonlyArray<PumpCircuit> => {
+const transformPumpCircuits = (pump: Pump, pumpObjList: unknown[]): ReadonlyArray<PumpCircuit> => {
   if (!pumpObjList) {
     return [];
   }
-  return pumpObjList.map(pumpObj => {
+  return pumpObjList.filter(isIntelliCenterObject).map(pumpObj => {
     return {
       id: pumpObj[OBJ_ID_KEY],
       pump: pump,
-      circuitId: pumpObj[PARAMS_KEY][CIRCUIT_KEY],
-      speed: +pumpObj[PARAMS_KEY][SPEED_KEY],
+      circuitId: pumpObj[PARAMS_KEY][CIRCUIT_KEY] as string,
+      speed: +(pumpObj[PARAMS_KEY][SPEED_KEY] as string || '0'),
       speedType: (pumpObj[PARAMS_KEY][SELECT_KEY] as string)?.toUpperCase(),
     } as PumpCircuit;
   });
 };
 
-const transformModules = (modules: never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Module> => {
+const transformModules = (modules: unknown[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Module> => {
   if (!modules) {
     return [];
   }
-  return modules.filter(moduleObj => moduleObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Module).map(moduleObj => {
-    const params = moduleObj[PARAMS_KEY];
-    const circuits = params[CIRCUITS_KEY];
+  return modules.filter(obj => {
+    if (!isIntelliCenterObject(obj)) {
+      return false;
+    }
+    return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Module;
+  }).map(moduleObj => {
+    const obj = moduleObj as IntelliCenterObject;
+    const params = obj[PARAMS_KEY];
+    const circuits = Array.isArray(params[CIRCUITS_KEY]) ? params[CIRCUITS_KEY] as unknown[] : [];
     return {
-      id: moduleObj[OBJ_ID_KEY],
+      id: obj[OBJ_ID_KEY],
       features: transformFeatures(circuits, includeAllCircuits, logger),
       bodies: transformBodies(circuits),
       heaters: transformHeaters(circuits),
@@ -272,14 +321,30 @@ const transformModules = (modules: never[], includeAllCircuits = false, logger?:
   });
 };
 
-export const transformPanels = (response: never | never[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Panel> => {
-  if (!response || !Array.isArray(response)) {
+export const transformPanels = (
+  response: Record<string, unknown> | null,
+  includeAllCircuits = false,
+  logger?: Logger,
+): ReadonlyArray<Panel> => {
+  if (!response) {
     return [];
   }
-  return response.filter(moduleObj => moduleObj?.[PARAMS_KEY]?.[OBJ_TYPE_KEY] === ObjectType.Panel).map(panelObj => {
-    const objList = panelObj[PARAMS_KEY][OBJ_LIST_KEY];
+
+  // Handle response format - could be array or object with array property
+  const responseArray = Array.isArray(response) ? response : (response.panels as unknown[] | undefined);
+  if (!responseArray || !Array.isArray(responseArray)) {
+    return [];
+  }
+  return responseArray.filter(obj => {
+    if (!isIntelliCenterObject(obj)) {
+      return false;
+    }
+    return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Panel;
+  }).map(panelObj => {
+    const obj = panelObj as IntelliCenterObject;
+    const objList = Array.isArray(obj[PARAMS_KEY][OBJ_LIST_KEY]) ? obj[PARAMS_KEY][OBJ_LIST_KEY] as unknown[] : [];
     return {
-      id: panelObj[OBJ_ID_KEY],
+      id: obj[OBJ_ID_KEY],
       modules: transformModules(objList, includeAllCircuits, logger),
       features: transformFeatures(objList, includeAllCircuits, logger), // Some features are directly on panel.
       pumps: transformPumps(objList, logger),
@@ -326,11 +391,14 @@ export const isObject = (object: Record<string, unknown>) => {
 
 /**
  * Utility functions for merging dynamic JSON responses from IntelliCenter hardware.
- * Uses 'any' type because the API returns unpredictable nested JSON structures
- * that would be impractical to type strictly.
+ * Uses Record<string, unknown> to handle the unpredictable nested JSON structures
+ * from the IntelliCenter API while maintaining type safety.
  */
 
-export const mergeResponseArray = (target: any[], responseToAdd: any[]): void => {
+type MergeableObject = Record<string, unknown>;
+type MergeableArray = MergeableObject[];
+
+export const mergeResponseArray = (target: MergeableArray, responseToAdd: MergeableArray): void => {
   responseToAdd.forEach((itemToAdd) => {
     const targetObject = target.find(targetItem => targetItem[OBJ_ID_KEY] === itemToAdd[OBJ_ID_KEY]);
     if (targetObject) {
@@ -341,14 +409,14 @@ export const mergeResponseArray = (target: any[], responseToAdd: any[]): void =>
   });
 };
 
-export const mergeResponse = (target: any, responseToAdd: any): void => {
-  for (const key in responseToAdd as Record<string, unknown>) {
+export const mergeResponse = (target: MergeableObject, responseToAdd: MergeableObject): void => {
+  for (const key in responseToAdd) {
     if (Object.prototype.hasOwnProperty.call(responseToAdd, key) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
-      if (target[key] && isObject(target[key]) && isObject(responseToAdd[key])) {
+      if (target[key] && isObject(target[key] as Record<string, unknown>) && isObject(responseToAdd[key] as Record<string, unknown>)) {
         if (Array.isArray(target[key]) && Array.isArray(responseToAdd[key])) {
-          mergeResponseArray(target[key], responseToAdd[key]);
+          mergeResponseArray(target[key] as MergeableArray, responseToAdd[key] as MergeableArray);
         } else {
-          mergeResponse(target[key], responseToAdd[key]);
+          mergeResponse(target[key] as MergeableObject, responseToAdd[key] as MergeableObject);
         }
       } else {
         target[key] = responseToAdd[key];
@@ -356,3 +424,21 @@ export const mergeResponse = (target: any, responseToAdd: any): void => {
     }
   }
 };
+
+// Test-only exports for achieving 100% coverage
+/* istanbul ignore else */
+// eslint-disable-next-line no-undef
+if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
+  /* eslint-disable no-undef */
+  module.exports = {
+    ...module.exports,
+    transformHeaters,
+    transformBodies,
+    transformFeatures,
+    transformPumps,
+    transformTempSensors,
+    transformPumpCircuits,
+    transformModules,
+  };
+  /* eslint-enable no-undef */
+}

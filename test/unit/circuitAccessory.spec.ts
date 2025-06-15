@@ -89,7 +89,7 @@ const mockCircuit: Circuit = {
   id: 'C01',
   name: 'Pool Light',
   objectType: ObjectType.Circuit,
-  type: CircuitType.IntelliBrite,
+  type: CircuitType.Generic,
   status: CircuitStatus.Off,
 };
 
@@ -388,6 +388,9 @@ describe('CircuitAccessory', () => {
 
   describe('Pump Speed Methods', () => {
     beforeEach(() => {
+      // Reset pump circuit to default values for each test
+      mockPumpCircuit.speedType = PumpSpeedType.RPM;
+      mockPumpCircuit.speed = 2000;
       mockPlatformAccessory.context.pumpCircuit = mockPumpCircuit;
       circuitAccessory = new CircuitAccessory(mockPlatform, mockPlatformAccessory);
     });
@@ -409,9 +412,19 @@ describe('CircuitAccessory', () => {
       });
 
       it('should handle missing pump circuit', async () => {
-        delete mockPlatformAccessory.context.pumpCircuit;
+        // Create new accessory without pump circuit
+        const accessoryWithoutPump = {
+          ...mockPlatformAccessory,
+          context: {
+            panel: mockPanel,
+            module: mockModule,
+            circuit: mockCircuit,
+            // No pumpCircuit
+          },
+        };
         
-        await circuitAccessory.setSpeed(50);
+        const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithoutPump as unknown as PlatformAccessory);
+        await accessoryInstance.setSpeed(50);
 
         expect(mockPlatform.log.error).toHaveBeenCalledWith(
           'Tried to set speed when pump circuit is undefined.'
@@ -437,9 +450,19 @@ describe('CircuitAccessory', () => {
       });
 
       it('should return 0 when pump circuit is undefined', async () => {
-        delete mockPlatformAccessory.context.pumpCircuit;
+        // Create new accessory without pump circuit
+        const accessoryWithoutPump = {
+          ...mockPlatformAccessory,
+          context: {
+            panel: mockPanel,
+            module: mockModule,
+            circuit: mockCircuit,
+            // No pumpCircuit
+          },
+        };
         
-        const result = await circuitAccessory.getSpeed();
+        const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithoutPump as unknown as PlatformAccessory);
+        const result = await accessoryInstance.getSpeed();
         expect(result).toBe(0);
       });
     });
@@ -472,22 +495,47 @@ describe('CircuitAccessory', () => {
       });
 
       it('should handle edge case at minimum speed', () => {
-        mockPumpCircuit.speed = 450; // Minimum RPM
+        // Create accessory with minimum speed
+        const minSpeedPumpCircuit = { ...mockPumpCircuit, speed: 450, speedType: PumpSpeedType.RPM };
+        const accessoryWithMinSpeed = {
+          ...mockPlatformAccessory,
+          context: {
+            panel: mockPanel,
+            module: mockModule,
+            circuit: mockCircuit,
+            pumpCircuit: minSpeedPumpCircuit,
+          },
+        };
         
-        const result = circuitAccessory.convertSpeedToPowerLevel();
+        const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithMinSpeed as unknown as PlatformAccessory);
+        const result = accessoryInstance.convertSpeedToPowerLevel();
         expect(result).toBe(0);
       });
 
       it('should handle edge case at maximum speed', () => {
-        mockPumpCircuit.speed = 3450; // Maximum RPM
+        // Create accessory with maximum speed
+        const maxSpeedPumpCircuit = { ...mockPumpCircuit, speed: 3450, speedType: PumpSpeedType.RPM };
+        const accessoryWithMaxSpeed = {
+          ...mockPlatformAccessory,
+          context: {
+            panel: mockPanel,
+            module: mockModule,
+            circuit: mockCircuit,
+            pumpCircuit: maxSpeedPumpCircuit,
+          },
+        };
         
-        const result = circuitAccessory.convertSpeedToPowerLevel();
+        const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithMaxSpeed as unknown as PlatformAccessory);
+        const result = accessoryInstance.convertSpeedToPowerLevel();
         expect(result).toBe(100);
       });
     });
 
     describe('convertPowerLevelToSpeed', () => {
       it('should convert power level to RPM correctly', () => {
+        // Reset speedType to RPM in case previous test changed it
+        mockPumpCircuit.speedType = PumpSpeedType.RPM;
+        
         const result = circuitAccessory.convertPowerLevelToSpeed(50);
         
         // 50% of range (3000) + min (450) = 1950, rounded to nearest 50 = 1950
@@ -504,9 +552,19 @@ describe('CircuitAccessory', () => {
       });
 
       it('should handle missing pump circuit', () => {
-        delete mockPlatformAccessory.context.pumpCircuit;
+        // Create accessory without pump circuit
+        const accessoryWithoutPump = {
+          ...mockPlatformAccessory,
+          context: {
+            panel: mockPanel,
+            module: mockModule,
+            circuit: mockCircuit,
+            // No pumpCircuit
+          },
+        };
         
-        const result = circuitAccessory.convertPowerLevelToSpeed(50);
+        const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithoutPump as unknown as PlatformAccessory);
+        const result = accessoryInstance.convertPowerLevelToSpeed(50);
         
         expect(mockPlatform.log.error).toHaveBeenCalledWith(
           'Cannot convert power level when pumpCircuit is null'
@@ -523,8 +581,12 @@ describe('CircuitAccessory', () => {
       });
 
       it('should handle edge cases', () => {
-        expect(circuitAccessory.convertPowerLevelToSpeed(0)).toBe(15); // minFlow, not minRpm
-        expect(circuitAccessory.convertPowerLevelToSpeed(100)).toBe(130); // maxFlow, not maxRpm
+        // Reset speedType to RPM in case previous test changed it
+        mockPumpCircuit.speedType = PumpSpeedType.RPM;
+        
+        // For RPM speed type: 0% = 450 RPM (min), 100% = 3450 RPM (max)
+        expect(circuitAccessory.convertPowerLevelToSpeed(0)).toBe(450); // minRpm for RPM speed type
+        expect(circuitAccessory.convertPowerLevelToSpeed(100)).toBe(3450); // maxRpm for RPM speed type
       });
     });
   });

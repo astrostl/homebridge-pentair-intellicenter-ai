@@ -24,9 +24,44 @@ type CircuitStatusSubscribeRequest = {
   keys: ReadonlyArray<string>;
 };
 
+// Define specific parameter types for different objects
+export type CircuitParams = {
+  STATUS?: string;
+  SPEED?: number;
+  [key: string]: string | number | boolean | undefined;
+};
+
+export type BodyParams = {
+  HEAT_MODE?: number;
+  HEAT_SETPOINT?: number;
+  HEAT_SOURCE?: string;
+  LAST_TEMP?: number;
+  [key: string]: string | number | boolean | undefined;
+};
+
+export type SensorParams = {
+  LAST_TEMP?: number;
+  PROBE?: number;
+  [key: string]: string | number | boolean | undefined;
+};
+
+export type PumpParams = {
+  STATUS?: string;
+  SPEED?: number;
+  RPM?: number;
+  GPM?: number;
+  [key: string]: string | number | boolean | undefined;
+};
+
+export type GenericParams = {
+  [key: string]: string | number | boolean | undefined;
+};
+
+export type IntelliCenterParams = CircuitParams | BodyParams | SensorParams | PumpParams | GenericParams;
+
 export type CircuitStatusMessage = {
   objnam?: string;
-  params?: never;
+  params?: IntelliCenterParams;
   changes?: ReadonlyArray<CircuitStatusMessage>;
 };
 
@@ -41,11 +76,28 @@ export type IntelliCenterRequest = {
   objectList?: ReadonlyArray<CircuitStatusSubscribeRequest | CircuitStatusMessage>;
 } & IntelliCenterMessage;
 
+// Define specific answer types for discovery responses
+export type HardwareDefinitionAnswer = {
+  [panelId: string]: {
+    [moduleId: string]: {
+      [objectId: string]: {
+        OBJNAM: string;
+        OBJTYP: string;
+        SUBTYP?: string;
+        HNAME?: string;
+        [key: string]: string | number | boolean | undefined;
+      };
+    };
+  };
+};
+
+export type DiscoveryAnswer = HardwareDefinitionAnswer | Record<string, unknown>;
+
 export type IntelliCenterResponse = {
   command: IntelliCenterResponseCommand;
   description: string;
   response: IntelliCenterResponseStatus;
-  answer: never;
+  answer?: DiscoveryAnswer;
   objectList?: ReadonlyArray<CircuitStatusMessage>;
 } & IntelliCenterMessage;
 
@@ -82,6 +134,7 @@ export type Pump = {
   minFlow: number;
   maxFlow: number;
   circuits?: ReadonlyArray<PumpCircuit>;
+  [key: string]: unknown;
 } & Circuit;
 
 export type PumpCircuit = {
@@ -122,6 +175,7 @@ export type Body = {
   heaterId?: string;
   heatMode?: HeatMode;
   circuit?: BaseCircuit;
+  [key: string]: unknown;
 } & Circuit;
 
 export type Heater = {
