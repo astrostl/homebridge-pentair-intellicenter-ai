@@ -25,59 +25,59 @@ describe('Utility Integration Tests', () => {
       const panels = transformPanels(circuitResponse as any, false, mockLogger);
 
       expect(panels).toHaveLength(1);
-      expect(panels[0].id).toBe('PNL01');
-      expect(panels[0].modules.length).toBeGreaterThan(0);
+      expect(panels[0]?.id).toBe('PNL01');
+      expect(panels[0]?.modules.length).toBeGreaterThan(0);
       
-      const module = panels[0].modules[0];
-      expect(module.id).toBe('M0101');
-      expect(module.bodies.length).toBeGreaterThan(0);
-      expect(module.features.length).toBeGreaterThan(0);
+      const module = panels[0]?.modules[0];
+      expect(module?.id).toBe('M0101');
+      expect(module?.bodies.length).toBeGreaterThan(0);
+      expect(module?.features.length).toBeGreaterThan(0);
       
       // Verify body transformation
-      const body = module.bodies[0];
-      expect(body.id).toBe('B1101');
-      expect(body.name).toBe('Pool');
-      expect(body.type).toBe('POOL');
+      const body = module?.bodies[0];
+      expect(body?.id).toBe('B1101');
+      expect(body?.name).toBe('Pool');
+      expect(body?.type).toBe('POOL');
     });
 
     it('should transform pump response data correctly', () => {
       const panels = transformPanels(pumpResponse as any, false, mockLogger);
 
       expect(panels).toHaveLength(1);
-      expect(panels[0].pumps.length).toBeGreaterThan(0);
+      expect(panels[0]?.pumps.length).toBeGreaterThan(0);
       
-      const pump = panels[0].pumps[0];
-      expect(pump.id).toBeDefined();
-      expect(pump.name).toBeDefined();
-      expect(pump.type).toBeDefined();
-      expect(pump.circuits?.length).toBeGreaterThan(0);
+      const pump = panels[0]?.pumps[0];
+      expect(pump?.id).toBeDefined();
+      expect(pump?.name).toBeDefined();
+      expect(pump?.type).toBeDefined();
+      expect(pump?.circuits?.length).toBeGreaterThan(0);
     });
 
     it('should transform sensor response data correctly', () => {
       const panels = transformPanels(sensorResponse as any, false, mockLogger);
 
       expect(panels).toHaveLength(1);
-      expect(panels[0].sensors.length).toBeGreaterThan(0);
+      expect(panels[0]?.sensors.length).toBeGreaterThan(0);
       
-      const sensors = panels[0].sensors;
+      const sensors = panels[0]?.sensors;
       // Verify we have temperature sensors
-      expect(sensors.some(s => s.type)).toBe(true);
-      expect(sensors.every(s => s.objectType)).toBe(true);
+      expect(sensors?.some(s => s.type)).toBe(true);
+      expect(sensors?.every(s => s.objectType)).toBe(true);
     });
 
     it('should transform heater response data correctly', () => {
       const panels = transformPanels(heaterResponse as any, false, mockLogger);
 
       expect(panels).toHaveLength(1);
-      expect(panels[0].modules.length).toBeGreaterThan(0);
+      expect(panels[0]?.modules.length).toBeGreaterThan(0);
       
       // Check for heaters in any module
-      const allHeaters = panels[0].modules.flatMap(m => m.heaters);
-      if (allHeaters.length > 0) {
+      const allHeaters = panels[0]?.modules.flatMap(m => m.heaters);
+      if (allHeaters && allHeaters.length > 0) {
         const heater = allHeaters[0];
-        expect(heater.objectType).toBeDefined();
-        expect(heater.name).toBeDefined();
-        expect(heater.bodyIds).toBeDefined();
+        expect(heater?.objectType).toBeDefined();
+        expect(heater?.name).toBeDefined();
+        expect(heater?.bodyIds).toBeDefined();
       }
     });
 
@@ -85,8 +85,8 @@ describe('Utility Integration Tests', () => {
       const panelsExclusive = transformPanels(circuitResponse as any, false, mockLogger);
       const panelsInclusive = transformPanels(circuitResponse as any, true, mockLogger);
 
-      const exclusiveFeatures = panelsExclusive[0].modules.flatMap(m => m.features).length;
-      const inclusiveFeatures = panelsInclusive[0].modules.flatMap(m => m.features).length;
+      const exclusiveFeatures = panelsExclusive[0]?.modules.flatMap(m => m.features).length || 0;
+      const inclusiveFeatures = panelsInclusive[0]?.modules.flatMap(m => m.features).length || 0;
 
       // Should have more or equal features when includeAllCircuits is true
       expect(inclusiveFeatures).toBeGreaterThanOrEqual(exclusiveFeatures);

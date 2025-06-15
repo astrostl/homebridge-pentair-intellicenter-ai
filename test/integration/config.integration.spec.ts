@@ -53,7 +53,7 @@ describe('Configuration Integration Tests', () => {
       new PentairPlatform(mockLogger, configWithoutIP, mockAPI);
 
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('IP address is not configured')
+        expect.stringContaining('ipAddress is required and must be a string')
       );
     });
 
@@ -63,7 +63,7 @@ describe('Configuration Integration Tests', () => {
       new PentairPlatform(mockLogger, configWithEmptyIP, mockAPI);
 
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('IP address is not configured')
+        expect.stringContaining('ipAddress is required and must be a string')
       );
     });
 
