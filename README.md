@@ -5,7 +5,7 @@ This is a plugin to integrate your [Pentair IntelliCenter](https://www.pentair.c
 
 ## Development and Testing
 
-This is a fork of [Windscar/homebridge-pentair-intellicenter](https://github.com/Windscar/homebridge-pentair-intellicenter), which itself is a fork of [dustindclark/homebridge-pentair-intellicenter](https://github.com/dustindclark/homebridge-pentair-intellicenter). dustindclark's original seems to have not been actively maintained since 2023. Windscar forked it and made a few updates, but has issues disabled and didn't promptly accepted my pull requests. With great gratitude to both of them, I'm breaking this out into a repository that "I" can actively maintain.
+This is a fork of [Windscar/homebridge-pentair-intellicenter](https://github.com/Windscar/homebridge-pentair-intellicenter), which itself is a fork of [dustindclark/homebridge-pentair-intellicenter](https://github.com/dustindclark/homebridge-pentair-intellicenter). dustindclark's original seems to have not been actively maintained since 2023. Windscar forked it and made a few updates, but has issues disabled and doesn't seem to accept pull requests. With great gratitude to both of them, I'm breaking this out into a repository that "I" can actively maintain.
 
 **All code is AI-generated (currently Claude Code) and directed, overseen, and tested by me. If running stuff from the internet scared you, this might horrify you.**
 
