@@ -537,8 +537,8 @@ describe('Platform Integration Tests', () => {
       platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
       (platform as any).isSocketAlive = true;
 
-      // Send commands rapidly to trigger rate limiting
-      const commands = Array.from({ length: 20 }, (_, i) => ({
+      // Send commands rapidly to trigger rate limiting (over 40/minute limit)
+      const commands = Array.from({ length: 50 }, (_, i) => ({
         command: 'GetQuery',
         queryName: 'GetHardwareDefinition',
         arguments: `TEST${i}`,
