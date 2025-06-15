@@ -9,7 +9,9 @@ import {
   Circuit,
   CircuitStatusMessage,
   CircuitTypes,
+  DiscoveryAnswer,
   Heater,
+  IntelliCenterParams,
   IntelliCenterQueryName,
   IntelliCenterRequest,
   IntelliCenterRequestCommand,
@@ -23,7 +25,6 @@ import {
   Sensor,
   SensorTypes,
   TemperatureSensorType,
-  TemperatureUnits,
 } from './types';
 import {v4 as uuidv4} from 'uuid';
 import {mergeResponse, transformPanels, updateBody, updateCircuit, updatePump} from './util';
@@ -42,19 +43,17 @@ import {
 import {HeaterAccessory} from './heaterAccessory';
 import EventEmitter from 'events';
 import { TemperatureAccessory } from './temperatureAccessory';
+import {
+  CircuitBreaker,
+  RetryManager,
+  HealthMonitor,
+  RateLimiter,
+  CircuitBreakerState,
+  DeadLetterQueue,
+} from './errorHandling';
+import { ConfigValidator } from './configValidation';
 
-type PentairConfig = {
-  ipAddress: string;
-  username: string;
-  password: string;
-  maxBufferSize: number;
-  temperatureUnits: TemperatureUnits;
-  minimumTemperature: number;
-  maximumTemperature: number;
-  supportVSP: boolean;
-  airTemp: boolean;
-  includeAllCircuits?: boolean; // Optional: include non-feature circuits
-} & PlatformConfig;
+import { PentairConfig } from './configValidation';
 
 /**
  * HomebridgePlatform
@@ -69,12 +68,12 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   public readonly accessoryMap: Map<string, PlatformAccessory> = new Map();
   public readonly heaters: Map<string, PlatformAccessory> = new Map();
 
-  private readonly connection: Telnet;
-  private readonly maxBufferSize: number;
-  private readonly discoverCommandsSent: Array<string>;
-  private discoveryBuffer: any;
+  private readonly connection!: Telnet;
+  private readonly maxBufferSize!: number;
+  private readonly discoverCommandsSent!: Array<string>;
+  private discoveryBuffer: DiscoveryAnswer | null = null;
   private buffer = '';
-  private readonly pumpIdToCircuitMap: Map<string, Circuit>;
+  private readonly pumpIdToCircuitMap!: Map<string, Circuit>;
 
   // Telnet connection status
   private lastMessageReceived = Date.now();
@@ -89,6 +88,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private commandQueue: IntelliCenterRequest[] = [];
   private processingQueue = false;
 
+  // Error handling and resilience components
+  private circuitBreaker!: CircuitBreaker;
+  private healthMonitor!: HealthMonitor;
+  private rateLimiter!: RateLimiter;
+  private deadLetterQueue!: DeadLetterQueue;
+  private validatedConfig: PentairConfig | null = null;
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -96,18 +102,38 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   ) {
     this.log.debug('Finished initializing platform:', this.config.name);
 
-    this.connection = new Telnet();
-    this.setupSocketEventHandlers();
-    const co = this.getConfig();
-    this.maxBufferSize = co.maxBufferSize || 1048576; // Default to 1MB
-    this.discoverCommandsSent = [];
-    this.discoveryBuffer = undefined;
-    this.pumpIdToCircuitMap = new Map<string, Circuit>();
-
-    if (!co.ipAddress) {
-      this.log.error('IP address is not configured. Cannot connect to Intellicenter');
+    // Validate configuration first
+    const validation = ConfigValidator.validate(this.config);
+    if (!validation.isValid) {
+      this.log.error('Configuration validation failed:');
+      validation.errors.forEach(error => this.log.error(`  - ${error}`));
       return;
     }
+
+    // Log any configuration warnings
+    validation.warnings?.forEach(warning => this.log.warn(`Config Warning: ${warning}`));
+
+    this.validatedConfig = validation.sanitizedConfig!;
+    this.log.info('Configuration validated successfully');
+
+    // Initialize error handling and resilience components
+    this.circuitBreaker = new CircuitBreaker({
+      failureThreshold: 5,
+      resetTimeout: 300000, // 5 minutes
+      monitoringPeriod: 60000, // 1 minute
+    });
+
+    this.healthMonitor = new HealthMonitor();
+    this.rateLimiter = new RateLimiter(40, 60000); // 40 requests per minute - more reasonable for normal operation
+    this.deadLetterQueue = new DeadLetterQueue(100, 24 * 60 * 60 * 1000); // 100 items, 24 hour retention
+
+    this.connection = new Telnet();
+    this.setupSocketEventHandlers();
+
+    this.maxBufferSize = this.validatedConfig.maxBufferSize;
+    this.discoverCommandsSent = [];
+    this.discoveryBuffer = null;
+    this.pumpIdToCircuitMap = new Map<string, Circuit>();
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -133,20 +159,61 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   async connectToIntellicenter() {
-    const co = this.getConfig();
+    if (!this.validatedConfig) {
+      this.log.error('Cannot connect: Configuration validation failed');
+      return;
+    }
+
     const telnetParams = {
-      host: co.ipAddress,
-      port: 6681, //doesn't look like there's any reason to make configurable.
+      host: this.validatedConfig.ipAddress,
+      port: 6681, // Standard IntelliCenter port
       negotiationMandatory: false,
       timeout: 1500,
       debug: true,
-      username: co.username,
-      password: co.password,
+      username: this.validatedConfig.username,
+      password: this.validatedConfig.password,
     };
+
     try {
-      await this.connection.connect(telnetParams);
+      const startTime = Date.now();
+
+      await this.circuitBreaker.execute(async () => {
+        await RetryManager.withRetry(
+          async () => {
+            this.log.debug(`Attempting connection to IntelliCenter at ${telnetParams.host}:${telnetParams.port}`);
+            await this.connection.connect(telnetParams);
+          },
+          {
+            maxAttempts: 3,
+            baseDelay: 1000,
+            maxDelay: 5000,
+            backoffFactor: 2,
+            retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH'],
+          },
+          (message) => this.log.warn(`Connection retry: ${message}`),
+        );
+      });
+
+      const responseTime = Date.now() - startTime;
+      this.healthMonitor.recordSuccess(responseTime);
+      this.log.info(`Successfully connected to IntelliCenter (${responseTime}ms)`);
+
     } catch (error) {
-      this.log.error(`Connection to IntelliCenter failed. Check config: ${this.json(telnetParams)}`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.healthMonitor.recordFailure(errorMessage);
+
+      if (this.circuitBreaker.getState() === CircuitBreakerState.OPEN) {
+        this.log.error('Circuit breaker is OPEN - connection attempts are being rejected. Will retry after cooldown period.');
+      } else {
+        this.log.error(`Connection to IntelliCenter failed after retries: ${errorMessage}`);
+      }
+
+      // Log health status for debugging
+      const health = this.healthMonitor.getHealth();
+      this.log.debug(
+        `Connection health: ${health.consecutiveFailures} consecutive failures, ` +
+        `last success: ${new Date(health.lastSuccessfulOperation)}`,
+      );
     }
   }
 
@@ -176,12 +243,15 @@ export class PentairPlatform implements DynamicPlatformPlugin {
               `First 50 chars: "${line.substring(0, 50)}", Last 50 chars: "${line.substring(Math.max(0, line.length - 50))}"`, error);
           }
         }
-      } else if (this.buffer.length > this.maxBufferSize) {
-        this.log.error(`Exceeded max buffer size ${this.maxBufferSize} without a newline. Discarding buffer.`);
-        this.buffer = '';
       } else {
-        this.log.debug('Received incomplete data in data handler.');
-        this.buffer += chunk;
+        // Check if adding this chunk would exceed buffer size
+        if (this.buffer.length + chunk.length > this.maxBufferSize) {
+          this.log.error(`Exceeded max buffer size ${this.maxBufferSize} without a newline. Discarding buffer.`);
+          this.buffer = '';
+        } else {
+          this.log.debug('Received incomplete data in data handler.');
+          this.buffer += chunk;
+        }
       }
     });
 
@@ -189,7 +259,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       this.isSocketAlive = true;
       this.log.debug('IntelliCenter socket connection has been established.');
       this.discoverCommandsSent.length = 0;
-      this.discoveryBuffer = undefined;
+      this.discoveryBuffer = null;
       // Clear command queue on reconnect
       this.commandQueue.length = 0;
       this.processingQueue = false;
@@ -206,7 +276,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
     });
 
-    this.connection.on('failedlogin', (data) => {
+    this.connection.on('failedlogin', (data: unknown) => {
       this.isSocketAlive = false;
       this.log.error(`IntelliCenter login failed. Check configured username/password. ${data}`);
     });
@@ -220,17 +290,17 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       });
     });
 
-    this.connection.on('error', (data) => {
+    this.connection.on('error', (data: unknown) => {
       this.isSocketAlive = false;
       this.log.error(`IntelliCenter socket error has been detected. Socket will be closed. ${data}`);
     });
 
-    this.connection.on('end', (data) => {
+    this.connection.on('end', (data: unknown) => {
       this.isSocketAlive = false;
       this.log.error(`IntelliCenter socket connection has ended. ${data}`);
     });
 
-    this.connection.on('responseready', (data) => {
+    this.connection.on('responseready', (data: unknown) => {
       this.log.error(`IntelliCenter responseready. ${data}`);
     });
   }
@@ -297,30 +367,30 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       response.objectList.forEach((objListResponse) => {
         const changes = (objListResponse.changes || [objListResponse]) as ReadonlyArray<CircuitStatusMessage>;
         changes.forEach((change) => {
-          if (change.objnam && change.params) {
-            this.log.debug(`Handling update for ${change.objnam}`);
-            const circuit = this.pumpIdToCircuitMap.get(change.objnam);
-            if (circuit) {
-              this.log.debug(`Update is for pump ID ${change.objnam}. Updating circuit ${circuit.id}`);
-              const uuid = this.api.hap.uuid.generate(circuit.id);
-              const existingAccessory = this.accessoryMap.get(uuid) as PlatformAccessory;
-              this.updatePump(existingAccessory, change.params);
-            } else {
-              const uuid = this.api.hap.uuid.generate(change.objnam);
-              const existingAccessory = this.accessoryMap.get(uuid);
-              if (existingAccessory) {
-                if (CircuitTypes.has(existingAccessory.context.circuit?.objectType)) {
-                  this.log.debug(`Object is a circuit. Updating circuit: ${change.objnam}`);
-                  this.updateCircuit(existingAccessory, change.params);
-                } else if (SensorTypes.has(existingAccessory.context.sensor?.objectType)) {
-                  this.log.debug(`Object is a sensor. Updating sensor: ${change.objnam}`);
-                  this.updateSensor(existingAccessory, change.params);
-                } else {
-                  this.log.warn(`Unhandled object type on accessory: ${JSON.stringify(existingAccessory.context)}`);
-                }
+          if (change.objnam) {
+            if (change.params) {
+              this.log.debug(`Handling update for ${change.objnam}`);
+              const circuit = this.pumpIdToCircuitMap.get(change.objnam);
+              if (circuit) {
+                this.log.debug(`Update is for pump ID ${change.objnam}. Updating circuit ${circuit.id}`);
+                const uuid = this.api.hap.uuid.generate(circuit.id);
+                const existingAccessory = this.accessoryMap.get(uuid) as PlatformAccessory;
+                this.updatePump(existingAccessory, change.params);
               } else {
-                // Device is sending updates but wasn't registered - investigate why
-                if (change.params) {
+                const uuid = this.api.hap.uuid.generate(change.objnam);
+                const existingAccessory = this.accessoryMap.get(uuid);
+                if (existingAccessory) {
+                  if (CircuitTypes.has(existingAccessory.context.circuit?.objectType)) {
+                    this.log.debug(`Object is a circuit. Updating circuit: ${change.objnam}`);
+                    this.updateCircuit(existingAccessory, change.params);
+                  } else if (SensorTypes.has(existingAccessory.context.sensor?.objectType)) {
+                    this.log.debug(`Object is a sensor. Updating sensor: ${change.objnam}`);
+                    this.updateSensor(existingAccessory, change.params);
+                  } else {
+                    this.log.warn(`Unhandled object type on accessory: ${JSON.stringify(existingAccessory.context)}`);
+                  }
+                } else {
+                  // Device is sending updates but wasn't registered - investigate why
                   const speed = change.params['SPEED'];
                   const select = change.params['SELECT'];
 
@@ -340,11 +410,12 @@ export class PentairPlatform implements DynamicPlatformPlugin {
                     this.log.info(`Unregistered device details - ID: ${change.objnam}, ` +
                       `Type: ${objType}, SubType: ${subType}, Name: ${name}, Feature: ${feature}`);
                   }
-                } else {
-                  this.log.warn(`Device ${change.objnam} sending updates but not registered as accessory. ` +
-                    'No params available for identification.');
                 }
               }
+            } else {
+              // Device sends objnam but no params - log warning
+              this.log.warn(`Device ${change.objnam} sending updates but not registered as accessory. ` +
+                'No params available for identification.');
             }
           }
         });
@@ -355,7 +426,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  updatePump(accessory: PlatformAccessory, params: never) {
+  updatePump(accessory: PlatformAccessory, params: IntelliCenterParams) {
     updateCircuit(accessory.context.pumpCircuit, params);
     updatePump(accessory.context.pumpCircuit, params);
     this.api.updatePlatformAccessories([accessory]);
@@ -363,7 +434,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
 
-  updateCircuit(accessory: PlatformAccessory, params: never) {
+  updateCircuit(accessory: PlatformAccessory, params: IntelliCenterParams) {
     updateCircuit(accessory.context.circuit, params);
     if (accessory.context.circuit.objectType === ObjectType.Body) {
       const body = accessory.context.circuit as Body;
@@ -374,13 +445,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     new CircuitAccessory(this, accessory);
   }
 
-  updateSensor(accessory: PlatformAccessory, params: never) {
+  updateSensor(accessory: PlatformAccessory, params: IntelliCenterParams) {
     if (accessory.context.sensor) {
       const sensor = accessory.context.sensor;
       if (sensor.objectType === ObjectType.Sensor) {
         this.log.debug(`Updating temperature sensor ${sensor.name}`);
         if (params[PROBE_KEY]) {
-          const probeValue = parseFloat(params[PROBE_KEY]);
+          const probeValue = parseFloat(String(params[PROBE_KEY]));
           if (isNaN(probeValue)) {
             this.log.warn(`Invalid probe value received for sensor ${sensor.name}: ${params[PROBE_KEY]}, skipping update`);
             return;
@@ -414,7 +485,10 @@ export class PentairPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-    this.discoverDeviceType(DISCOVER_COMMANDS[0]);
+    const firstCommand = DISCOVER_COMMANDS[0];
+    if (firstCommand) {
+      this.discoverDeviceType(firstCommand);
+    }
   }
 
   discoverDeviceType(deviceType: string) {
@@ -431,25 +505,28 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   handleDiscoveryResponse(response: IntelliCenterResponse) {
     this.log.debug(`Discovery response from IntelliCenter: ${this.json(response)} ` +
       `of type ${this.discoverCommandsSent[this.discoverCommandsSent.length - 1]}`);
-    if (this.discoveryBuffer === undefined) {
-      this.discoveryBuffer = response.answer;
-    } else {
-      mergeResponse(this.discoveryBuffer, response.answer);
+    if (this.discoveryBuffer === null) {
+      this.discoveryBuffer = response.answer ?? null;
+    } else if (this.discoveryBuffer && response.answer) {
+      mergeResponse(this.discoveryBuffer as Record<string, unknown>, response.answer as Record<string, unknown>);
     }
 
     if (this.discoverCommandsSent.length !== DISCOVER_COMMANDS.length) {
       // Send next discovery command and return until we're done.
       this.log.debug(`Merged ${this.discoverCommandsSent.length} of ${DISCOVER_COMMANDS.length} so far. Sending next command..`);
-      // Add small delay between discovery commands to avoid overwhelming IntelliCenter
+      // Add conservative delay between discovery commands to avoid overwhelming IntelliCenter
       setTimeout(() => {
-        this.discoverDeviceType(DISCOVER_COMMANDS[this.discoverCommandsSent.length]);
-      }, 250);
+        const nextCommand = DISCOVER_COMMANDS[this.discoverCommandsSent.length];
+        if (nextCommand) {
+          this.discoverDeviceType(nextCommand);
+        }
+      }, 500);
       return;
     }
 
     this.log.debug(`Discovery commands completed. Response: ${this.json(this.discoveryBuffer)}`);
 
-    const panels = transformPanels(this.discoveryBuffer, this.getConfig().includeAllCircuits, this.log);
+    const panels = transformPanels(this.discoveryBuffer as Record<string, unknown>, this.getConfig().includeAllCircuits, this.log);
     this.log.debug(`Transformed panels from IntelliCenter: ${this.json(panels)}`);
 
     // Track current circuits to clean up orphaned accessories
@@ -671,23 +748,123 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   getConfig(): PentairConfig {
-    return this.config as PentairConfig;
+    if (!this.validatedConfig) {
+      throw new Error('Configuration has not been validated. Cannot return config.');
+    }
+    return this.validatedConfig;
   }
 
-  json(data) {
-    return JSON.stringify(data, null, 2);
+  json(data: unknown) {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      // Handle circular references and other JSON serialization errors
+      return JSON.stringify(data, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (this.jsonSeenObjects && this.jsonSeenObjects.has(value)) {
+            return '[Circular]';
+          }
+          if (!this.jsonSeenObjects) {
+            this.jsonSeenObjects = new WeakSet();
+          }
+          this.jsonSeenObjects.add(value);
+        }
+        return value;
+      }, 2);
+    }
+  }
+
+  private jsonSeenObjects?: WeakSet<object>;
+
+  /**
+   * Get system health and status information
+   */
+  getSystemHealth() {
+    const health = this.healthMonitor.getHealth();
+    const circuitBreakerStats = this.circuitBreaker.getStats();
+    const rateLimiterStats = this.rateLimiter.getStats();
+
+    return {
+      isHealthy: health.isHealthy,
+      lastSuccessfulOperation: new Date(health.lastSuccessfulOperation),
+      consecutiveFailures: health.consecutiveFailures,
+      lastError: health.lastError,
+      averageResponseTime: health.responseTime,
+      circuitBreaker: {
+        state: circuitBreakerStats.state,
+        failureCount: circuitBreakerStats.failureCount,
+        lastFailureTime: circuitBreakerStats.lastFailureTime ? new Date(circuitBreakerStats.lastFailureTime) : null,
+      },
+      rateLimiter: rateLimiterStats,
+      connection: {
+        isSocketAlive: this.isSocketAlive,
+        lastMessageReceived: new Date(this.lastMessageReceived),
+        reconnecting: this.reconnecting,
+        commandQueueLength: this.commandQueue.length,
+      },
+    };
+  }
+
+  /**
+   * Reset error handling components (useful for testing or manual recovery)
+   */
+  resetErrorHandling() {
+    this.circuitBreaker.reset();
+    this.healthMonitor.reset();
+    this.log.info('Error handling components have been reset');
   }
 
   sendCommandNoWait(command: IntelliCenterRequest): void {
+    // Rate limiting check
+    if (!this.rateLimiter.recordRequest()) {
+      this.log.debug('Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.');
+      this.log.debug(`Rate limiter stats: ${JSON.stringify(this.rateLimiter.getStats())}`);
+      return;
+    }
+
     if (!this.isSocketAlive) {
       this.log.warn(`Cannot send command, socket is not alive: ${this.json(command)}`);
       this.maybeReconnect();
       return;
     }
 
+    // Sanitize command before sending
+    const sanitizedCommand = this.sanitizeCommand(command);
+
     // Add to queue and process
-    this.commandQueue.push(command);
+    this.commandQueue.push(sanitizedCommand);
     this.processCommandQueue();
+  }
+
+  private sanitizeCommand(command: IntelliCenterRequest): IntelliCenterRequest {
+    const sanitized = { ...command };
+
+    // Sanitize string fields to prevent injection attacks
+    if (sanitized.arguments) {
+      sanitized.arguments = sanitized.arguments.replace(/[<>"'&;]/g, '');
+    }
+
+    // Validate messageID format (should be UUID)
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sanitized.messageID)) {
+      this.log.warn(`Invalid messageID format: ${sanitized.messageID}. Regenerating...`);
+      sanitized.messageID = uuidv4();
+    }
+
+    // Validate object list parameters
+    if (sanitized.objectList) {
+      sanitized.objectList = sanitized.objectList.map(obj => {
+        const sanitizedObj = { ...obj };
+
+        if (sanitizedObj.objnam) {
+          // Object names should be alphanumeric with some allowed characters
+          sanitizedObj.objnam = sanitizedObj.objnam.replace(/[^a-zA-Z0-9_-]/g, '');
+        }
+
+        return sanitizedObj;
+      });
+    }
+
+    return sanitized;
   }
 
   private async processCommandQueue(): Promise<void> {
@@ -712,11 +889,20 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         // Send with proper line termination
         await this.connection.send(commandString + '\n');
 
-        // Small delay between commands to prevent overwhelming the device
-        await this.delay(100);
+        // Conservative delay between commands to prevent overwhelming the device
+        await this.delay(200);
 
       } catch (error) {
         this.log.error(`Failed to send command to IntelliCenter: ${error}. Command: ${this.json(command)}`);
+
+        // Add failed command to Dead Letter Queue
+        this.deadLetterQueue.add(
+          command,
+          1, // First attempt (could be enhanced to track retries)
+          String(error),
+          command.messageID || 'unknown',
+        );
+
         const errorString = String(error);
         if (errorString.includes('connection') || errorString.includes('socket')) {
           this.maybeReconnect();
