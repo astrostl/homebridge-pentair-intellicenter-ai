@@ -287,12 +287,12 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         arguments: 'CIRCUITS',
       };
 
-      // Send many commands to trigger rate limiting
-      for (let i = 0; i < 20; i++) {
+      // Send many commands to trigger rate limiting (over 40/minute limit)
+      for (let i = 0; i < 50; i++) {
         platform.sendCommandNoWait(command);
       }
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(mockLogger.debug).toHaveBeenCalledWith(
         expect.stringContaining('Rate limit exceeded')
       );
     });

@@ -547,8 +547,8 @@ describe('Platform Integration Tests', () => {
 
       commands.forEach(cmd => platform.sendCommandNoWait(cmd as any));
 
-      // Should log rate limiting warnings
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      // Should log rate limiting debug messages
+      expect(mockLogger.debug).toHaveBeenCalledWith(
         'Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.'
       );
     });
