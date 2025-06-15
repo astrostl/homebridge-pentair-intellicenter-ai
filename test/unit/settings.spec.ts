@@ -7,7 +7,7 @@ describe('Settings Module', () => {
   });
 
   it('should export correct PLUGIN_NAME', () => {
-    expect(PLUGIN_NAME).toBe('homebridge-intellicenter');
+    expect(PLUGIN_NAME).toBe('homebridge-pentair-intellicenter-ai');
     expect(typeof PLUGIN_NAME).toBe('string');
   });
 

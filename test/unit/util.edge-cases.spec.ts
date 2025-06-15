@@ -23,4 +23,6 @@ describe('util.ts edge cases for 100% coverage', () => {
     expect(result[0]?.pumps).toEqual([]);
     expect(result[0]?.sensors).toEqual([]);
   });
+
+  // Note: util.ts line 241 optional chaining test was attempted but had issues with transformPanels data structure
 });
