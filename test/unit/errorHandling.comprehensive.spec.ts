@@ -618,4 +618,42 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
       jest.useRealTimers();
     });
   });
+
+  describe('Additional Branch Coverage Tests', () => {
+    it('should cover DeadLetterQueue optional chaining branches (lines 241-242)', () => {
+      const dlq = new DeadLetterQueue();
+      
+      // Create items with null timestamps to trigger optional chaining
+      const itemWithNullTimestamp1 = {
+        command: { command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg1' },
+        attempts: 1,
+        lastError: 'Test error',
+        originalMessageId: 'orig1',
+        timestamp: null as any  // This should trigger optional chaining
+      };
+      
+      const itemWithNullTimestamp2 = {
+        command: { command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg2' },
+        attempts: 1,
+        lastError: 'Test error',
+        originalMessageId: 'orig2',
+        timestamp: null as any  // This should trigger optional chaining
+      };
+      
+      // Clear existing queue and set items with null timestamps directly
+      dlq.clear();
+      
+      // Access internal queue directly to bypass normal add method
+      (dlq as any).queue = [itemWithNullTimestamp1, itemWithNullTimestamp2];
+      
+      // Disable cleanup to prevent items from being removed
+      (dlq as any).maxRetentionMs = Number.MAX_SAFE_INTEGER;
+      
+      const stats = dlq.getStats();
+      expect(stats.queueSize).toBe(2);
+      // The optional chaining should handle null timestamps  
+      expect(stats.oldestTimestamp).toBeNull();
+      expect(stats.newestTimestamp).toBeNull();
+    });
+  });
 });
