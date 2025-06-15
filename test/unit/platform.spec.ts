@@ -779,7 +779,7 @@ describe('PentairPlatform', () => {
 
       platform.sendCommandNoWait(command);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(mockLogger.debug).toHaveBeenCalledWith(
         'Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.'
       );
       expect(sendSpy).not.toHaveBeenCalled();
@@ -1167,7 +1167,7 @@ describe('PentairPlatform', () => {
       await (platform as any).processCommandQueue();
 
       expect(sendSpy).toHaveBeenCalled();
-      expect(delaySpy).toHaveBeenCalledWith(100);
+      expect(delaySpy).toHaveBeenCalledWith(200);
     });
   });
 
@@ -1597,7 +1597,7 @@ describe('PentairPlatform', () => {
       );
 
       // Fast forward the timeout
-      jest.advanceTimersByTime(250);
+      jest.advanceTimersByTime(500);
       expect(discoverDeviceTypeSpy).toHaveBeenCalledWith('CHEMS');
       
       jest.useRealTimers();
@@ -2064,7 +2064,7 @@ describe('PentairPlatform', () => {
       
       platform.sendCommandNoWait(command);
       
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(mockLogger.debug).toHaveBeenCalledWith(
         expect.stringContaining('Rate limit exceeded. Command dropped')
       );
     });

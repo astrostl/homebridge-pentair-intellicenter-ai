@@ -193,12 +193,14 @@ const transformFeatures = (circuits: unknown[], includeAllCircuits = false, logg
   }).map(featureObj => {
     const obj = featureObj as IntelliCenterObject;
     const params = obj[PARAMS_KEY];
-    return {
+    const circuit = {
       id: obj[OBJ_ID_KEY],
       name: params[OBJ_NAME_KEY],
       objectType: ObjectType.Circuit,
       type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
     } as Circuit;
+    updateCircuit(circuit, params as IntelliCenterParams);
+    return circuit;
   });
 };
 

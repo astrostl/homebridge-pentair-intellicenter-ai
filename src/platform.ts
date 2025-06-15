@@ -124,7 +124,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     });
 
     this.healthMonitor = new HealthMonitor();
-    this.rateLimiter = new RateLimiter(10, 60000); // 10 requests per minute
+    this.rateLimiter = new RateLimiter(40, 60000); // 40 requests per minute - more reasonable for normal operation
     this.deadLetterQueue = new DeadLetterQueue(100, 24 * 60 * 60 * 1000); // 100 items, 24 hour retention
 
     this.connection = new Telnet();
@@ -514,13 +514,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     if (this.discoverCommandsSent.length !== DISCOVER_COMMANDS.length) {
       // Send next discovery command and return until we're done.
       this.log.debug(`Merged ${this.discoverCommandsSent.length} of ${DISCOVER_COMMANDS.length} so far. Sending next command..`);
-      // Add small delay between discovery commands to avoid overwhelming IntelliCenter
+      // Add conservative delay between discovery commands to avoid overwhelming IntelliCenter
       setTimeout(() => {
         const nextCommand = DISCOVER_COMMANDS[this.discoverCommandsSent.length];
         if (nextCommand) {
           this.discoverDeviceType(nextCommand);
         }
-      }, 250);
+      }, 500);
       return;
     }
 
@@ -817,7 +817,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   sendCommandNoWait(command: IntelliCenterRequest): void {
     // Rate limiting check
     if (!this.rateLimiter.recordRequest()) {
-      this.log.warn('Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.');
+      this.log.debug('Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.');
       this.log.debug(`Rate limiter stats: ${JSON.stringify(this.rateLimiter.getStats())}`);
       return;
     }
@@ -889,8 +889,8 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         // Send with proper line termination
         await this.connection.send(commandString + '\n');
 
-        // Small delay between commands to prevent overwhelming the device
-        await this.delay(100);
+        // Conservative delay between commands to prevent overwhelming the device
+        await this.delay(200);
 
       } catch (error) {
         this.log.error(`Failed to send command to IntelliCenter: ${error}. Command: ${this.json(command)}`);
