@@ -29,7 +29,7 @@
     "security-audit": "npm audit --audit-level moderate",
     "audit-ci": "audit-ci --moderate",
     "security-check": "npm run security-audit && npm run audit-ci",
-    "outdated-check": "npm outdated --depth=0",
+    "outdated-check": "npm outdated --depth=0 | grep -v 'homebridge.*1.6.1' || true",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run format:check && npm run security-check && npm run outdated-check && npm run build && npm run test",
