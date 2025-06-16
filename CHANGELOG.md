@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated Prettier formatting into build pipeline
   - Added security scanning to `prepublishOnly` workflow
   - Enhanced ESLint configuration with protocol-specific security rules
+  - Added dependency freshness checking to quality pipeline (`outdated-check` script)
   - Improved error handling and validation throughout codebase
 
 ### Changed
@@ -66,6 +67,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhanced error handling throughout the codebase
   - Improved type safety and null checking
   - Fixed edge cases in utility functions and accessory handling
+
+### Updated
+- **Development Dependencies**
+  - Updated `@types/jest` from 29.5.14 to 30.0.0
+  - Updated `@types/node` from 24.0.1 to 24.0.3
+  - Updated `@semantic-release/commit-analyzer` from 12.0.0 to 13.0.1
+  - Updated `@semantic-release/github` from 10.3.5 to 11.0.3
+  - Updated `@semantic-release/release-notes-generator` from 12.1.0 to 14.0.3
+  - Updated `jest` from 29.x to 30.0.0
 
 ### Removed
 - **Unused Infrastructure**
