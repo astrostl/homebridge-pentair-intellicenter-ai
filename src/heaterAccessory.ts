@@ -1,6 +1,6 @@
-import {CharacteristicValue, Nullable, PlatformAccessory, Service} from 'homebridge';
+import { CharacteristicValue, Nullable, PlatformAccessory, Service } from 'homebridge';
 
-import {PentairPlatform} from './platform';
+import { PentairPlatform } from './platform';
 import {
   Body,
   CircuitStatus,
@@ -11,8 +11,8 @@ import {
   IntelliCenterRequestCommand,
   TemperatureUnits,
 } from './types';
-import {celsiusToFahrenheit, fahrenheitToCelsius} from './util';
-import {MANUFACTURER} from './settings';
+import { celsiusToFahrenheit, fahrenheitToCelsius } from './util';
+import { MANUFACTURER } from './settings';
 import {
   HEATER_KEY,
   NO_HEATER_ID,
@@ -22,7 +22,7 @@ import {
   CURRENT_TEMP_MIN_C,
   CURRENT_TEMP_MAX_C,
 } from './constants';
-import {v4 as uuidv4} from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Platform Accessory
@@ -44,7 +44,6 @@ export class HeaterAccessory {
     private readonly platform: PentairPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-
     this.heater = this.accessory.context.heater;
     this.body = this.accessory.context.body;
 
@@ -69,33 +68,33 @@ export class HeaterAccessory {
     }
 
     if (this.body?.temperature) {
-      this.temperature = this.isFahrenheit && this.body.temperature
-        ? fahrenheitToCelsius(this.body.temperature)
-        : this.body.temperature;
+      this.temperature = this.isFahrenheit && this.body.temperature ? fahrenheitToCelsius(this.body.temperature) : this.body.temperature;
     } else {
       this.temperature = undefined;
     }
 
-    this.platform.log.debug(`Temperature Slider Min: ${this.minValue}, Max: ${this.maxValue}, ` +
-      `current temperature: ${this.temperature}`);
+    this.platform.log.debug(
+      `Temperature Slider Min: ${this.minValue}, Max: ${this.maxValue}, ` + `current temperature: ${this.temperature}`,
+    );
 
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
+    this.accessory
+      .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, MANUFACTURER)
       .setCharacteristic(this.platform.Characteristic.Model, this.heater.type)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, `${this.body.id}.${this.heater.id}`);
 
-    this.service = this.accessory.getService(this.platform.Service.Thermostat)
-      || this.accessory.addService(this.platform.Service.Thermostat);
+    this.service =
+      this.accessory.getService(this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat);
     this.service.setCharacteristic(this.platform.Characteristic.Name, `${this.body.name} ${this.heater.name}`);
 
     this.bindStaticValues();
     this.bindThermostat();
-
   }
 
   bindThermostat() {
     if (this.lowTemperature) {
-      this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.TargetTemperature)
         .onSet(this.setTargetTemperature.bind(this))
         .onGet(this.getTargetTemperature.bind(this))
         .setProps({
@@ -107,7 +106,8 @@ export class HeaterAccessory {
     }
 
     if (this.temperature) {
-      this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
         .onGet(this.getCurrentTemperature.bind(this))
         .updateValue(this.temperature)
         .setProps({
@@ -117,7 +117,8 @@ export class HeaterAccessory {
         });
     }
 
-    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+    this.service
+      .getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .onGet(this.getMode.bind(this))
       .onSet(this.setMode.bind(this))
       .updateValue(this.getMode())
@@ -132,9 +133,9 @@ export class HeaterAccessory {
   }
 
   getMode(): CharacteristicValue {
-    return (this.body.heaterId === this.heater.id) ?
-      this.platform.Characteristic.TargetHeatingCoolingState.HEAT :
-      this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    return this.body.heaterId === this.heater.id
+      ? this.platform.Characteristic.TargetHeatingCoolingState.HEAT
+      : this.platform.Characteristic.TargetHeatingCoolingState.OFF;
   }
 
   async setMode(value: CharacteristicValue) {
@@ -150,10 +151,12 @@ export class HeaterAccessory {
       const command = {
         command: IntelliCenterRequestCommand.SetParamList,
         messageID: uuidv4(),
-        objectList: [{
-          objnam: this.body.id,
-          params: {[STATUS_KEY]: CircuitStatus.On} as never,
-        } as CircuitStatusMessage],
+        objectList: [
+          {
+            objnam: this.body.id,
+            params: { [STATUS_KEY]: CircuitStatus.On } as never,
+          } as CircuitStatusMessage,
+        ],
       } as IntelliCenterRequest;
       this.platform.sendCommandNoWait(command);
     }
@@ -161,21 +164,24 @@ export class HeaterAccessory {
     const command = {
       command: IntelliCenterRequestCommand.SetParamList,
       messageID: uuidv4(),
-      objectList: [{
-        objnam: this.body.id,
-        params: {[HEATER_KEY]: heater} as never,
-      } as CircuitStatusMessage],
+      objectList: [
+        {
+          objnam: this.body.id,
+          params: { [HEATER_KEY]: heater } as never,
+        } as CircuitStatusMessage,
+      ],
     } as IntelliCenterRequest;
     this.platform.sendCommandNoWait(command);
   }
 
   bindStaticValues() {
-    this.service.updateCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits,
+    this.service.updateCharacteristic(
+      this.platform.Characteristic.TemperatureDisplayUnits,
       this.platform.getConfig().temperatureUnits === TemperatureUnits.F
         ? this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
-        : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS);
-    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState,
-      this.getCurrentHeatingCoolingState());
+        : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS,
+    );
+    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, this.getCurrentHeatingCoolingState());
   }
 
   getCurrentHeatingCoolingState(): CharacteristicValue {
@@ -196,20 +202,20 @@ export class HeaterAccessory {
   async setTargetTemperature(value: CharacteristicValue) {
     const convertedValue: number = this.isFahrenheit
       ? Math.round(celsiusToFahrenheit(value as number)) // Round to nearest 5
-      : value as number;
+      : (value as number);
 
-    this.platform.log.info(`Setting temperature ${value} converted/rounded to: ${convertedValue}` +
-      `for heater ${this.heater.name}`);
+    this.platform.log.info(`Setting temperature ${value} converted/rounded to: ${convertedValue}` + `for heater ${this.heater.name}`);
     const command = {
       command: IntelliCenterRequestCommand.SetParamList, //Weirdly required.
       messageID: uuidv4(),
-      objectList: [{
-        objnam: this.body.id,
-        params: {[LOW_TEMP_KEY]: `${convertedValue}`} as never,
-      } as CircuitStatusMessage],
+      objectList: [
+        {
+          objnam: this.body.id,
+          params: { [LOW_TEMP_KEY]: `${convertedValue}` } as never,
+        } as CircuitStatusMessage,
+      ],
     } as IntelliCenterRequest;
     this.platform.sendCommandNoWait(command);
-
   }
 
   async getCurrentTemperature(): Promise<Nullable<CharacteristicValue>> {

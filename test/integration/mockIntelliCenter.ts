@@ -1,6 +1,12 @@
 import { Server, Socket } from 'net';
 import { EventEmitter } from 'events';
-import { IntelliCenterRequest, IntelliCenterResponse, IntelliCenterResponseStatus, IntelliCenterResponseCommand, IntelliCenterQueryName } from '../../src/types';
+import {
+  IntelliCenterRequest,
+  IntelliCenterResponse,
+  IntelliCenterResponseStatus,
+  IntelliCenterResponseCommand,
+  IntelliCenterQueryName,
+} from '../../src/types';
 
 export interface MockIntelliCenterConfig {
   port?: number;
@@ -35,9 +41,7 @@ export class MockIntelliCenter extends EventEmitter {
       ['S01', { probe: 78.5, type: 'POOL' }],
       ['S02', { probe: 72.3, type: 'AIR' }],
     ]),
-    pumps: new Map([
-      ['P01', { speed: 1500, select: 'RPM', status: 'ON' }],
-    ]),
+    pumps: new Map([['P01', { speed: 1500, select: 'RPM', status: 'ON' }]]),
   };
 
   constructor(config: MockIntelliCenterConfig = {}) {
@@ -62,15 +66,15 @@ export class MockIntelliCenter extends EventEmitter {
       this.connectedClients++;
       this.emit('clientConnected', this.connectedClients);
 
-      socket.on('data', (data) => this.handleClientData(socket, data));
-      
+      socket.on('data', data => this.handleClientData(socket, data));
+
       socket.on('close', () => {
         this.connections.delete(socket);
         this.connectedClients--;
         this.emit('clientDisconnected', this.connectedClients);
       });
 
-      socket.on('error', (error) => {
+      socket.on('error', error => {
         this.emit('socketError', error);
         this.connections.delete(socket);
         this.connectedClients--;
@@ -82,7 +86,7 @@ export class MockIntelliCenter extends EventEmitter {
       }
     });
 
-    this.server.on('error', (error) => {
+    this.server.on('error', error => {
       this.emit('serverError', error);
     });
   }
@@ -97,7 +101,7 @@ export class MockIntelliCenter extends EventEmitter {
       socket.write('Password: ');
       return;
     }
-    
+
     if (message === this.config.password) {
       if (this.config.shouldFailLogin) {
         socket.write('failedlogin\n');
@@ -112,14 +116,13 @@ export class MockIntelliCenter extends EventEmitter {
     try {
       const request: IntelliCenterRequest = JSON.parse(message);
       const response = await this.processCommand(request);
-      
+
       // Simulate network delay
       setTimeout(() => {
         if (!socket.destroyed) {
           socket.write(JSON.stringify(response) + '\n');
         }
       }, this.config.responseDelay);
-      
     } catch (error) {
       // Handle malformed JSON
       if (Math.random() < this.config.parseErrorRate) {
@@ -388,7 +391,7 @@ export class MockIntelliCenter extends EventEmitter {
   }
 
   public async stop(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (!this.isRunning) {
         resolve();
         return;

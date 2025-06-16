@@ -1,4 +1,4 @@
-import {Color} from '../dist/types';
+import { Color } from '../dist/types';
 
 describe('Test Colors', () => {
   it('Red', () => {

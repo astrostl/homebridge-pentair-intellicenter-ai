@@ -45,7 +45,7 @@ const mockLogger = {
 describe('HeaterAccessory Comprehensive Coverage Tests', () => {
   let platform: PentairPlatform;
   let mockConfig: any;
-  
+
   beforeEach(() => {
     mockConfig = {
       name: 'Test Platform',
@@ -58,7 +58,7 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       maximumTemperature: 100,
       supportVSP: true,
     };
-    
+
     platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
   });
 
@@ -101,23 +101,23 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       // Mock platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       const heaterAccessory = new HeaterAccessory(platform, mockAccessory);
-      
+
       // Call getCurrentHeatingCoolingState to trigger the branch where heater is selected and heating
       const state = heaterAccessory.getCurrentHeatingCoolingState();
       expect(state).toBe(mockAPI.hap.Characteristic.CurrentHeatingCoolingState.HEAT);
@@ -174,19 +174,19 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       // Mock platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       // This will trigger the Celsius temperature display unit branch
@@ -206,7 +206,7 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
             highTemperature: 85,
           },
         },
-        getService: jest.fn((serviceType) => {
+        getService: jest.fn(serviceType => {
           if (serviceType === mockAPI.hap.Service.AccessoryInformation) {
             return {
               setCharacteristic: jest.fn().mockReturnThis(),
@@ -230,19 +230,19 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       // Mock platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       // This will trigger the addService branch for Thermostat
@@ -289,23 +289,23 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       // Mock platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       const heaterAccessory = new HeaterAccessory(platform, mockAccessory);
-      
+
       // Call getMode to trigger the branch where heater does not match body heaterId
       const mode = heaterAccessory.getMode();
       expect(mode).toBe(mockAPI.hap.Characteristic.TargetHeatingCoolingState.OFF);
@@ -348,19 +348,19 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       // Mock platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig), // Uses F temperature units
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       // This will trigger fahrenheitToCelsius conversion for temperature

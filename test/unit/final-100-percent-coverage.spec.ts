@@ -56,7 +56,7 @@ const mockLogger = {
 describe('Final 100% Branch Coverage Tests', () => {
   let platform: PentairPlatform;
   let mockConfig: any;
-  
+
   beforeEach(() => {
     mockConfig = {
       name: 'Test Platform',
@@ -68,7 +68,7 @@ describe('Final 100% Branch Coverage Tests', () => {
       maximumTemperature: 100,
       supportVSP: true,
     };
-    
+
     platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
   });
 
@@ -81,12 +81,12 @@ describe('Final 100% Branch Coverage Tests', () => {
           circuit: { id: 'circ1', name: 'Test Circuit', type: CircuitType.Generic },
           pumpCircuit: {
             id: 'pc1',
-            pump: { 
-              minRpm: 1000, 
-              maxRpm: 3000, 
-              minFlow: 10, 
+            pump: {
+              minRpm: 1000,
+              maxRpm: 3000,
+              minFlow: 10,
               maxFlow: 100,
-              name: undefined // This triggers pump?.name optional chaining
+              name: undefined, // This triggers pump?.name optional chaining
             },
             speed: 1500,
             speedType: PumpSpeedType.RPM,
@@ -118,30 +118,30 @@ describe('Final 100% Branch Coverage Tests', () => {
       // Mock the platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'sendCommandNoWait', {
         value: jest.fn(),
-        writable: true
+        writable: true,
       });
 
       const circuitAccessory = new CircuitAccessory(platform, mockAccessory);
-      
+
       // Call setSpeed to trigger pump?.name optional chaining
       await circuitAccessory.setSpeed(50);
-      
+
       // Verify the method was called without throwing
       expect(platform.sendCommandNoWait).toHaveBeenCalled();
     });
@@ -155,7 +155,7 @@ describe('Final 100% Branch Coverage Tests', () => {
           pumpCircuit: {
             id: 'pc1',
             pump: { minRpm: 1000, maxRpm: 3000, minFlow: 10, maxFlow: 100 },
-            speed: 0, // This triggers ?? min nullish coalescing 
+            speed: 0, // This triggers ?? min nullish coalescing
             speedType: PumpSpeedType.RPM,
           },
         },
@@ -185,23 +185,23 @@ describe('Final 100% Branch Coverage Tests', () => {
       // Mock the platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       const circuitAccessory = new CircuitAccessory(platform, mockAccessory);
-      
+
       // Call convertSpeedToPowerLevel to trigger (this.pumpCircuit.speed ?? min) nullish coalescing
       const powerLevel = circuitAccessory.convertSpeedToPowerLevel();
       expect(powerLevel).toBe(0);
@@ -246,19 +246,19 @@ describe('Final 100% Branch Coverage Tests', () => {
       // Mock the platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       // This will trigger the body?.temperature optional chaining
@@ -303,19 +303,19 @@ describe('Final 100% Branch Coverage Tests', () => {
       // Mock the platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       // This will trigger the lowTemperature || 0 logical OR in the updateValue call
@@ -329,7 +329,7 @@ describe('Final 100% Branch Coverage Tests', () => {
           heater: { id: 'heater1', name: 'Test Heater', type: 'GAS' },
           body: {
             id: 'body1',
-            name: 'Pool', 
+            name: 'Pool',
             temperature: 75,
             lowTemperature: null, // This will trigger || 0 in updateValue
             highTemperature: 85,
@@ -360,19 +360,19 @@ describe('Final 100% Branch Coverage Tests', () => {
       // Mock the platform methods
       Object.defineProperty(platform, 'getConfig', {
         value: jest.fn().mockReturnValue(mockConfig),
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Service', {
         value: mockAPI.hap.Service,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'Characteristic', {
         value: mockAPI.hap.Characteristic,
-        writable: true
+        writable: true,
       });
       Object.defineProperty(platform, 'log', {
         value: mockLogger,
-        writable: true
+        writable: true,
       });
 
       // This will trigger the lowTemperature || 0 in the updateValue call
@@ -384,7 +384,7 @@ describe('Final 100% Branch Coverage Tests', () => {
   describe('ErrorHandling remaining uncovered branches', () => {
     it('should cover DeadLetterQueue getStats nullish coalescing for empty queue', () => {
       const dlq = new DeadLetterQueue();
-      
+
       // Get stats on empty queue to trigger queue[0]?.timestamp ?? null
       const stats = dlq.getStats();
       expect(stats.oldestTimestamp).toBeNull();
@@ -394,22 +394,12 @@ describe('Final 100% Branch Coverage Tests', () => {
 
     it('should cover DeadLetterQueue getStats with multiple items', () => {
       const dlq = new DeadLetterQueue();
-      
+
       // Add multiple items to test the optional chaining paths
-      dlq.add(
-        { command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg1' },
-        3,
-        'Test error 1',
-        'original1'
-      );
-      
-      dlq.add(
-        { command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg2' },
-        2,
-        'Test error 2',
-        'original2'
-      );
-      
+      dlq.add({ command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg1' }, 3, 'Test error 1', 'original1');
+
+      dlq.add({ command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg2' }, 2, 'Test error 2', 'original2');
+
       // Get stats to exercise the optional chaining for non-empty queue
       const stats = dlq.getStats();
       expect(stats.queueSize).toBe(2);

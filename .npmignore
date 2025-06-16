@@ -8,9 +8,26 @@ src
 
 # eslint
 .eslintrc
+eslint.config.js
 
 # typescript
 tsconfig.json
+
+# test files
+test/
+
+# husky and semantic-release
+.husky/
+.releaserc.json
+
+# editor config
+.editorconfig
+.nvmrc
+.prettierrc
+
+# development docs
+CLAUDE.md
+CONTRIBUTING.md
 
 # vscode
 .vscode

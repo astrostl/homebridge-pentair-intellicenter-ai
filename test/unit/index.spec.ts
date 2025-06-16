@@ -17,7 +17,7 @@ describe('Index Module', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockAPI = {
       registerPlatform: jest.fn(),
     } as any;
@@ -31,10 +31,7 @@ describe('Index Module', () => {
     indexModule(mockAPI);
 
     expect(mockAPI.registerPlatform).toHaveBeenCalledTimes(1);
-    expect(mockAPI.registerPlatform).toHaveBeenCalledWith(
-      'PentairIntelliCenter',
-      mockPlatform
-    );
+    expect(mockAPI.registerPlatform).toHaveBeenCalledWith('PentairIntelliCenter', mockPlatform);
   });
 
   it('should use the correct platform name from settings', () => {

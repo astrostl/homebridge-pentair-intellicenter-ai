@@ -27,12 +27,12 @@ describe('Utility Integration Tests', () => {
       expect(panels).toHaveLength(1);
       expect(panels[0]?.id).toBe('PNL01');
       expect(panels[0]?.modules.length).toBeGreaterThan(0);
-      
+
       const module = panels[0]?.modules[0];
       expect(module?.id).toBe('M0101');
       expect(module?.bodies.length).toBeGreaterThan(0);
       expect(module?.features.length).toBeGreaterThan(0);
-      
+
       // Verify body transformation
       const body = module?.bodies[0];
       expect(body?.id).toBe('B1101');
@@ -45,7 +45,7 @@ describe('Utility Integration Tests', () => {
 
       expect(panels).toHaveLength(1);
       expect(panels[0]?.pumps.length).toBeGreaterThan(0);
-      
+
       const pump = panels[0]?.pumps[0];
       expect(pump?.id).toBeDefined();
       expect(pump?.name).toBeDefined();
@@ -58,7 +58,7 @@ describe('Utility Integration Tests', () => {
 
       expect(panels).toHaveLength(1);
       expect(panels[0]?.sensors.length).toBeGreaterThan(0);
-      
+
       const sensors = panels[0]?.sensors;
       // Verify we have temperature sensors
       expect(sensors?.some(s => s.type)).toBe(true);
@@ -70,7 +70,7 @@ describe('Utility Integration Tests', () => {
 
       expect(panels).toHaveLength(1);
       expect(panels[0]?.modules.length).toBeGreaterThan(0);
-      
+
       // Check for heaters in any module
       const allHeaters = panels[0]?.modules.flatMap(m => m.heaters);
       if (allHeaters && allHeaters.length > 0) {
@@ -162,7 +162,7 @@ describe('Utility Integration Tests', () => {
       mergeResponseArray(target, toAdd);
 
       expect(target).toHaveLength(3);
-      
+
       // Should update existing item
       const updated = target.find(item => item.objnam === 'existing1');
       expect(updated?.params.value).toBe(10);
@@ -180,9 +180,9 @@ describe('Utility Integration Tests', () => {
     it('should prevent prototype pollution in merge operations', () => {
       const target = { normalProp: 'value' };
       const maliciousPayload = {
-        '__proto__': { polluted: true },
-        'constructor': { prototype: { polluted: true } },
-        'prototype': { polluted: true },
+        __proto__: { polluted: true },
+        constructor: { prototype: { polluted: true } },
+        prototype: { polluted: true },
         normalProp: 'updated',
       };
 

@@ -19,9 +19,9 @@ export interface CircuitBreakerOptions {
 }
 
 export enum CircuitBreakerState {
-  CLOSED = 'closed',     // Normal operation
-  OPEN = 'open',         // Circuit breaker is open, rejecting calls
-  HALF_OPEN = 'half-open' // Testing if service is back
+  CLOSED = 'closed', // Normal operation
+  OPEN = 'open', // Circuit breaker is open, rejecting calls
+  HALF_OPEN = 'half-open', // Testing if service is back
 }
 
 export class CircuitBreaker {
@@ -57,7 +57,8 @@ export class CircuitBreaker {
 
     if (this.state === CircuitBreakerState.HALF_OPEN) {
       this.successCount++;
-      if (this.successCount >= 3) { // Require 3 successes to close
+      if (this.successCount >= 3) {
+        // Require 3 successes to close
         this.state = CircuitBreakerState.CLOSED;
       }
     }
@@ -94,11 +95,7 @@ export class CircuitBreaker {
 }
 
 export class RetryManager {
-  static async withRetry<T>(
-    operation: () => Promise<T>,
-    options: RetryOptions,
-    logger?: (message: string) => void,
-  ): Promise<T> {
+  static async withRetry<T>(operation: () => Promise<T>, options: RetryOptions, logger?: (message: string) => void): Promise<T> {
     let lastError: Error;
 
     for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
@@ -113,19 +110,14 @@ export class RetryManager {
 
         // Check if error is retryable
         if (options.retryableErrors && options.retryableErrors.length > 0) {
-          const isRetryable = options.retryableErrors.some(retryableError =>
-            lastError.message.includes(retryableError),
-          );
+          const isRetryable = options.retryableErrors.some(retryableError => lastError.message.includes(retryableError));
           if (!isRetryable) {
             logger?.(`Non-retryable error encountered: ${lastError.message}`);
             throw lastError;
           }
         }
 
-        const delay = Math.min(
-          options.baseDelay * Math.pow(options.backoffFactor, attempt - 1),
-          options.maxDelay,
-        );
+        const delay = Math.min(options.baseDelay * Math.pow(options.backoffFactor, attempt - 1), options.maxDelay);
 
         logger?.(`Attempt ${attempt}/${options.maxAttempts} failed: ${lastError.message}. Retrying in ${delay}ms...`);
 
@@ -172,9 +164,10 @@ export class HealthMonitor {
 
   getHealth(): ConnectionHealth {
     const timeSinceLastSuccess = Date.now() - this.lastSuccessfulOperation;
-    const avgResponseTime = this.responseTimeHistory.length > 0
-      ? this.responseTimeHistory.reduce((a, b) => a + b, 0) / this.responseTimeHistory.length
-      : undefined;
+    const avgResponseTime =
+      this.responseTimeHistory.length > 0
+        ? this.responseTimeHistory.reduce((a, b) => a + b, 0) / this.responseTimeHistory.length
+        : undefined;
 
     return {
       isHealthy: this.consecutiveFailures < 3 && timeSinceLastSuccess < 300000, // 5 minutes
@@ -206,7 +199,8 @@ export class DeadLetterQueue {
   private maxSize: number;
   private maxRetentionMs: number;
 
-  constructor(maxSize = 100, maxRetentionMs = 24 * 60 * 60 * 1000) { // 24 hours default
+  constructor(maxSize = 100, maxRetentionMs = 24 * 60 * 60 * 1000) {
+    // 24 hours default
     this.maxSize = maxSize;
     this.maxRetentionMs = maxRetentionMs;
   }
@@ -238,8 +232,8 @@ export class DeadLetterQueue {
     return {
       queueSize: this.queue.length,
       maxSize: this.maxSize,
-      oldestTimestamp: this.queue.length > 0 ? this.queue[0]?.timestamp ?? null : null,
-      newestTimestamp: this.queue.length > 0 ? this.queue[this.queue.length - 1]?.timestamp ?? null : null,
+      oldestTimestamp: this.queue.length > 0 ? (this.queue[0]?.timestamp ?? null) : null,
+      newestTimestamp: this.queue.length > 0 ? (this.queue[this.queue.length - 1]?.timestamp ?? null) : null,
     };
   }
 

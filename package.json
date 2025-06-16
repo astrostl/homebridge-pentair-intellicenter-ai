@@ -1,12 +1,12 @@
 {
   "displayName": "Homebridge Pentair IntelliCenter AI",
   "name": "homebridge-pentair-intellicenter-ai",
-  "version": "2.5.1",
+  "version": "2.6.0-beta.1",
   "description": "Homebridge plugin for the Pentair IntelliCenter pool control system (maintained with AI assistance)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git://github.com/astrostl/homebridge-pentair-intellicenter-ai.git"
+    "url": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai.git"
   },
   "bugs": {
     "url": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai/issues"
@@ -16,13 +16,26 @@
     "node": "^18.17.0 || ^20.15.1 || ^22 || ^24"
   },
   "main": "dist/index.js",
+  "type": "commonjs",
+  "files": [
+    "dist",
+    "config.schema.json"
+  ],
   "scripts": {
     "lint": "eslint src/**.ts --max-warnings=0",
     "fix": "eslint src/**.ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "security-audit": "npm audit --audit-level moderate",
+    "audit-ci": "audit-ci --moderate",
+    "security-check": "npm run security-audit && npm run audit-ci",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
-    "prepublishOnly": "npm run lint && npm run build && npm run test",
-    "test": "jest"
+    "prepublishOnly": "npm run lint && npm run format:check && npm run security-check && npm run build && npm run test",
+    "test": "jest",
+    "release": "semantic-release",
+    "release:dry": "semantic-release --dry-run",
+    "prepare": "husky"
   },
   "keywords": [
     "homebridge-plugin",
@@ -39,18 +52,33 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^12.0.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^10.0.6",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^12.1.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^24.0.1",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
     "@typescript-eslint/parser": "^8.34.0",
+    "audit-ci": "^7.1.0",
     "eslint": "^9.29.0",
+    "eslint-plugin-security": "^3.0.1",
     "homebridge": "^1.8.0",
+    "husky": "^9.1.7",
     "jest": "^30.0.0",
     "nodemon": "^3.1.10",
+    "prettier": "^3.5.3",
     "rimraf": "^6.0.1",
+    "semantic-release": "^24.2.5",
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   },
-  "homepage": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai#readme"
+  "homepage": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai#readme",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/astrostl"
+  }
 }

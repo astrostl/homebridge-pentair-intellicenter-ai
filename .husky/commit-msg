@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Conventional commit message validation
+commit_regex='^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\([a-z-]+\))?: .{1,50}'
+
+if ! grep -qE "$commit_regex" "$1"; then
+    echo "❌ Invalid commit message format!"
+    echo ""
+    echo "Commit messages must follow conventional commit format:"
+    echo "  <type>(<scope>): <description>"
+    echo ""
+    echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert"
+    echo "Scopes: platform, accessories, util, config, tests, ci, docs, security, deps, release"
+    echo ""
+    echo "Examples:"
+    echo "  feat(platform): add support for VSP pump speed control"
+    echo "  fix(accessories): resolve heater temperature display issue"
+    echo "  docs(readme): update installation instructions"
+    echo ""
+    exit 1
+fi

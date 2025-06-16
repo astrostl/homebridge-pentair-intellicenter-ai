@@ -1,17 +1,7 @@
 import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { CircuitAccessory } from '../../src/circuitAccessory';
 import { PentairPlatform } from '../../src/platform';
-import {
-  Circuit,
-  CircuitStatus,
-  CircuitType,
-  Color,
-  Module,
-  Panel,
-  PumpCircuit,
-  PumpSpeedType,
-  ObjectType,
-} from '../../src/types';
+import { Circuit, CircuitStatus, CircuitType, Color, Module, Panel, PumpCircuit, PumpSpeedType, ObjectType } from '../../src/types';
 import { MANUFACTURER } from '../../src/settings';
 import { ACT_KEY, DEFAULT_BRIGHTNESS, DEFAULT_COLOR_TEMPERATURE, SPEED_KEY, STATUS_KEY } from '../../src/constants';
 
@@ -124,7 +114,7 @@ describe('CircuitAccessory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Reset platform accessory context
     mockPlatformAccessory.context = {
       panel: mockPanel,
@@ -133,7 +123,7 @@ describe('CircuitAccessory', () => {
     };
 
     // Setup default mock returns
-    (mockPlatformAccessory.getService as jest.Mock).mockImplementation((serviceType) => {
+    (mockPlatformAccessory.getService as jest.Mock).mockImplementation(serviceType => {
       if (serviceType === 'AccessoryInformation') {
         return mockAccessoryInformation;
       }
@@ -200,12 +190,10 @@ describe('CircuitAccessory', () => {
     it('should remove Fan service when VSP is not supported', () => {
       (mockPlatform.getConfig as jest.Mock).mockReturnValue({ supportVSP: false });
       (mockPlatformAccessory.getService as jest.Mock).mockReturnValue(mockService);
-      
+
       circuitAccessory = new CircuitAccessory(mockPlatform, mockPlatformAccessory);
-      
-      expect(mockPlatform.log.info).toHaveBeenCalledWith(
-        expect.stringContaining('Removing VSP Fan service')
-      );
+
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Removing VSP Fan service'));
       expect(mockPlatformAccessory.removeService).toHaveBeenCalledWith(mockService);
     });
   });
@@ -227,7 +215,7 @@ describe('CircuitAccessory', () => {
               params: { [STATUS_KEY]: CircuitStatus.On },
             }),
           ],
-        })
+        }),
       );
     });
 
@@ -241,7 +229,7 @@ describe('CircuitAccessory', () => {
               params: { [STATUS_KEY]: CircuitStatus.Off },
             }),
           ],
-        })
+        }),
       );
     });
 
@@ -258,28 +246,28 @@ describe('CircuitAccessory', () => {
 
     it('should return true when circuit status is On', async () => {
       mockPlatformAccessory.context.circuit.status = CircuitStatus.On;
-      
+
       const result = await circuitAccessory.getOn();
       expect(result).toBe(true);
     });
 
     it('should return false when circuit status is Off', async () => {
       mockPlatformAccessory.context.circuit.status = CircuitStatus.Off;
-      
+
       const result = await circuitAccessory.getOn();
       expect(result).toBe(false);
     });
 
     it('should return false when circuit status is undefined', async () => {
       delete mockPlatformAccessory.context.circuit.status;
-      
+
       const result = await circuitAccessory.getOn();
       expect(result).toBe(false);
     });
 
     it('should return false when context is invalid', async () => {
       mockPlatformAccessory.context = {};
-      
+
       const result = await circuitAccessory.getOn();
       expect(result).toBe(false);
     });
@@ -306,7 +294,7 @@ describe('CircuitAccessory', () => {
                 params: { [ACT_KEY]: expect.any(String) },
               }),
             ],
-          })
+          }),
         );
       });
 
@@ -323,9 +311,7 @@ describe('CircuitAccessory', () => {
         await circuitAccessory.setColorSaturation(75);
 
         expect(mockPlatformAccessory.context.saturation).toBe(75);
-        expect(mockPlatform.log.info).toHaveBeenCalledWith(
-          'Setting IntelliBrite Light saturation to 75'
-        );
+        expect(mockPlatform.log.info).toHaveBeenCalledWith('Setting IntelliBrite Light saturation to 75');
       });
     });
 
@@ -333,13 +319,8 @@ describe('CircuitAccessory', () => {
       it('should ignore and reset to default', async () => {
         await circuitAccessory.setColorTemperature(300);
 
-        expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-          expect.stringContaining('Ignoring color temperature')
-        );
-        expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
-          'ColorTemperature',
-          DEFAULT_COLOR_TEMPERATURE
-        );
+        expect(mockPlatform.log.warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring color temperature'));
+        expect(mockService.updateCharacteristic).toHaveBeenCalledWith('ColorTemperature', DEFAULT_COLOR_TEMPERATURE);
       });
     });
 
@@ -347,13 +328,8 @@ describe('CircuitAccessory', () => {
       it('should ignore and reset to default', async () => {
         await circuitAccessory.setBrightness(50);
 
-        expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-          expect.stringContaining('Ignoring brightness value')
-        );
-        expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
-          'Brightness',
-          DEFAULT_BRIGHTNESS
-        );
+        expect(mockPlatform.log.warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring brightness value'));
+        expect(mockService.updateCharacteristic).toHaveBeenCalledWith('Brightness', DEFAULT_BRIGHTNESS);
       });
     });
 
@@ -407,7 +383,7 @@ describe('CircuitAccessory', () => {
                 params: { [SPEED_KEY]: expect.any(String) },
               }),
             ],
-          })
+          }),
         );
       });
 
@@ -422,29 +398,25 @@ describe('CircuitAccessory', () => {
             // No pumpCircuit
           },
         };
-        
+
         const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithoutPump as unknown as PlatformAccessory);
         await accessoryInstance.setSpeed(50);
 
-        expect(mockPlatform.log.error).toHaveBeenCalledWith(
-          'Tried to set speed when pump circuit is undefined.'
-        );
+        expect(mockPlatform.log.error).toHaveBeenCalledWith('Tried to set speed when pump circuit is undefined.');
         expect(mockPlatform.sendCommandNoWait).not.toHaveBeenCalled();
       });
 
       it('should log speed conversion', async () => {
         await circuitAccessory.setSpeed(50);
 
-        expect(mockPlatform.log.info).toHaveBeenCalledWith(
-          expect.stringContaining('Setting speed for Pool Pump to 50')
-        );
+        expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Setting speed for Pool Pump to 50'));
       });
     });
 
     describe('getSpeed', () => {
       it('should return converted speed as power level', async () => {
         const result = await circuitAccessory.getSpeed();
-        
+
         // Speed 2000 RPM, range 450-3450, should be about 52%
         expect(result).toBeCloseTo(52, 0);
       });
@@ -460,7 +432,7 @@ describe('CircuitAccessory', () => {
             // No pumpCircuit
           },
         };
-        
+
         const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithoutPump as unknown as PlatformAccessory);
         const result = await accessoryInstance.getSpeed();
         expect(result).toBe(0);
@@ -470,7 +442,7 @@ describe('CircuitAccessory', () => {
     describe('convertSpeedToPowerLevel', () => {
       it('should convert RPM correctly', () => {
         const result = circuitAccessory.convertSpeedToPowerLevel();
-        
+
         // Speed 2000, min 450, max 3450, range 3000
         // (2000 - 450) / 3000 * 100 = 51.67, rounded = 52
         expect(result).toBe(52);
@@ -479,9 +451,9 @@ describe('CircuitAccessory', () => {
       it('should convert GPM correctly', () => {
         mockPumpCircuit.speedType = PumpSpeedType.GPM;
         mockPumpCircuit.speed = 50;
-        
+
         const result = circuitAccessory.convertSpeedToPowerLevel();
-        
+
         // Speed 50, min 15, max 130, range 115
         // (50 - 15) / 115 * 100 = 30.43, rounded = 30
         expect(result).toBe(30);
@@ -489,7 +461,7 @@ describe('CircuitAccessory', () => {
 
       it('should return 0 when speed is undefined', () => {
         delete (mockPumpCircuit as any).speed;
-        
+
         const result = circuitAccessory.convertSpeedToPowerLevel();
         expect(result).toBe(0);
       });
@@ -506,7 +478,7 @@ describe('CircuitAccessory', () => {
             pumpCircuit: minSpeedPumpCircuit,
           },
         };
-        
+
         const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithMinSpeed as unknown as PlatformAccessory);
         const result = accessoryInstance.convertSpeedToPowerLevel();
         expect(result).toBe(0);
@@ -524,7 +496,7 @@ describe('CircuitAccessory', () => {
             pumpCircuit: maxSpeedPumpCircuit,
           },
         };
-        
+
         const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithMaxSpeed as unknown as PlatformAccessory);
         const result = accessoryInstance.convertSpeedToPowerLevel();
         expect(result).toBe(100);
@@ -535,18 +507,18 @@ describe('CircuitAccessory', () => {
       it('should convert power level to RPM correctly', () => {
         // Reset speedType to RPM in case previous test changed it
         mockPumpCircuit.speedType = PumpSpeedType.RPM;
-        
+
         const result = circuitAccessory.convertPowerLevelToSpeed(50);
-        
+
         // 50% of range (3000) + min (450) = 1950, rounded to nearest 50 = 1950
         expect(result).toBe(1950);
       });
 
       it('should convert power level to GPM correctly', () => {
         mockPumpCircuit.speedType = PumpSpeedType.GPM;
-        
+
         const result = circuitAccessory.convertPowerLevelToSpeed(50);
-        
+
         // 50% of range (115) + min (15) = 72.5, rounded = 73
         expect(result).toBe(73);
       });
@@ -562,20 +534,18 @@ describe('CircuitAccessory', () => {
             // No pumpCircuit
           },
         };
-        
+
         const accessoryInstance = new CircuitAccessory(mockPlatform, accessoryWithoutPump as unknown as PlatformAccessory);
         const result = accessoryInstance.convertPowerLevelToSpeed(50);
-        
-        expect(mockPlatform.log.error).toHaveBeenCalledWith(
-          'Cannot convert power level when pumpCircuit is null'
-        );
+
+        expect(mockPlatform.log.error).toHaveBeenCalledWith('Cannot convert power level when pumpCircuit is null');
         expect(result).toBe(0);
       });
 
       it('should round GPM to nearest integer', () => {
         mockPumpCircuit.speedType = PumpSpeedType.GPM;
         const result = circuitAccessory.convertPowerLevelToSpeed(33);
-        
+
         // 33% of 115 + 15 = 52.95, rounded = 53
         expect(result).toBe(53);
       });
@@ -583,7 +553,7 @@ describe('CircuitAccessory', () => {
       it('should handle edge cases', () => {
         // Reset speedType to RPM in case previous test changed it
         mockPumpCircuit.speedType = PumpSpeedType.RPM;
-        
+
         // For RPM speed type: 0% = 450 RPM (min), 100% = 3450 RPM (max)
         expect(circuitAccessory.convertPowerLevelToSpeed(0)).toBe(450); // minRpm for RPM speed type
         expect(circuitAccessory.convertPowerLevelToSpeed(100)).toBe(3450); // maxRpm for RPM speed type
@@ -594,22 +564,16 @@ describe('CircuitAccessory', () => {
   describe('Serial Number Generation', () => {
     it('should generate correct serial for circuit with module', () => {
       circuitAccessory = new CircuitAccessory(mockPlatform, mockPlatformAccessory);
-      
-      expect(mockAccessoryInformation.setCharacteristic).toHaveBeenCalledWith(
-        'SerialNumber',
-        'PNL01.M01.C01'
-      );
+
+      expect(mockAccessoryInformation.setCharacteristic).toHaveBeenCalledWith('SerialNumber', 'PNL01.M01.C01');
     });
 
     it('should generate correct serial for circuit without module', () => {
       mockPlatformAccessory.context.module = null;
-      
+
       circuitAccessory = new CircuitAccessory(mockPlatform, mockPlatformAccessory);
-      
-      expect(mockAccessoryInformation.setCharacteristic).toHaveBeenCalledWith(
-        'SerialNumber',
-        'PNL01.C01'
-      );
+
+      expect(mockAccessoryInformation.setCharacteristic).toHaveBeenCalledWith('SerialNumber', 'PNL01.C01');
     });
   });
 });

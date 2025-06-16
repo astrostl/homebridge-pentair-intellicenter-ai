@@ -2,9 +2,9 @@ import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
 import { PentairPlatform } from '../../src/platform';
 import { Telnet } from 'telnet-client';
 import { PLUGIN_NAME, PLATFORM_NAME } from '../../src/settings';
-import { 
-  IntelliCenterResponse, 
-  IntelliCenterResponseStatus, 
+import {
+  IntelliCenterResponse,
+  IntelliCenterResponseStatus,
   IntelliCenterResponseCommand,
   IntelliCenterRequestCommand,
   IntelliCenterQueryName,
@@ -14,7 +14,7 @@ import {
   TemperatureSensorType,
   CircuitType,
   BodyType,
-  IntelliCenterRequest
+  IntelliCenterRequest,
 } from '../../src/types';
 import { PentairConfig } from '../../src/configValidation';
 import { CircuitBreakerState } from '../../src/errorHandling';
@@ -111,16 +111,10 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         modules: [
           {
             id: 'M0101',
-            features: [
-              { id: 'C0001', name: 'Pool Light', objectType: ObjectType.Circuit, type: CircuitType.Generic }
-            ],
-            bodies: [
-              { id: 'B1101', name: 'Pool', objectType: ObjectType.Body, type: BodyType.Pool, circuit: { id: 'C0001' } }
-            ],
-            heaters: [
-              { id: 'H0001', name: 'Pool Heater', objectType: ObjectType.Heater, type: CircuitType.Generic, bodyIds: ['B1101'] }
-            ]
-          }
+            features: [{ id: 'C0001', name: 'Pool Light', objectType: ObjectType.Circuit, type: CircuitType.Generic }],
+            bodies: [{ id: 'B1101', name: 'Pool', objectType: ObjectType.Body, type: BodyType.Pool, circuit: { id: 'C0001' } }],
+            heaters: [{ id: 'H0001', name: 'Pool Heater', objectType: ObjectType.Heater, type: CircuitType.Generic, bodyIds: ['B1101'] }],
+          },
         ],
         features: [],
         pumps: [
@@ -129,15 +123,11 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
             name: 'Pool Pump',
             objectType: ObjectType.Pump,
             type: 'VSP',
-            circuits: [
-              { id: 'PC0001', pump: {}, circuitId: 'C0001', speed: 1500, speedType: 'RPM' }
-            ]
-          }
+            circuits: [{ id: 'PC0001', pump: {}, circuitId: 'C0001', speed: 1500, speedType: 'RPM' }],
+          },
         ],
-        sensors: [
-          { id: 'S0001', name: 'Air Temp', objectType: ObjectType.Sensor, type: TemperatureSensorType.Air, probe: 75 }
-        ]
-      }
+        sensors: [{ id: 'S0001', name: 'Air Temp', objectType: ObjectType.Sensor, type: TemperatureSensorType.Air, probe: 75 }],
+      },
     ]);
 
     // Mock logger
@@ -170,7 +160,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
           generate: jest.fn().mockImplementation((id: string) => `mock-uuid-${id}`),
         },
       },
-      on: jest.fn().mockImplementation((event: string, callback: (() => void)) => {
+      on: jest.fn().mockImplementation((event: string, callback: () => void) => {
         if (event === 'didFinishLaunching') {
           // Store the callback for later invocation in tests
           (mockAPI as any)._didFinishLaunchingCallback = callback;
@@ -231,11 +221,9 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       // Test that the platform handles connection errors through the circuit breaker
       const health = platform.getSystemHealth();
       expect(health.circuitBreaker).toBeDefined();
-      
+
       // The platform should log that configuration was validated
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Configuration validated successfully')
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Configuration validated successfully'));
     });
 
     it('should handle circuit breaker OPEN state', () => {
@@ -245,7 +233,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       // Test circuit breaker state directly
       const circuitBreaker = (platform as any).circuitBreaker;
       expect(circuitBreaker).toBeDefined();
-      
+
       // Test that we can get system health which includes circuit breaker state
       const health = platform.getSystemHealth();
       expect(health.circuitBreaker).toBeDefined();
@@ -292,9 +280,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         platform.sendCommandNoWait(command);
       }
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Rate limit exceeded')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Rate limit exceeded'));
     });
 
     it('should sanitize commands before sending', () => {
@@ -309,7 +295,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
           {
             objnam: 'malicious<>name"',
             keys: ['STATUS'],
-          }
+          },
         ],
       };
 
@@ -318,9 +304,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform.sendCommandNoWait(maliciousCommand);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid messageID format')
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Invalid messageID format'));
     });
 
     it('should handle connection not alive', () => {
@@ -338,9 +322,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform.sendCommandNoWait(command);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Cannot send command, socket is not alive')
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Cannot send command, socket is not alive'));
     });
   });
 
@@ -351,94 +333,80 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
     it('should handle connect event', () => {
       const connectHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'connect')?.[1];
-      
+
       if (connectHandler) {
         connectHandler();
       }
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'IntelliCenter socket connection has been established.'
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith('IntelliCenter socket connection has been established.');
     });
 
     it('should handle ready event', () => {
       const readyHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'ready')?.[1];
-      
+
       if (readyHandler) {
         readyHandler();
       }
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'IntelliCenter socket connection is ready.'
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith('IntelliCenter socket connection is ready.');
     });
 
     it('should handle failedlogin event', () => {
       const failedLoginHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'failedlogin')?.[1];
-      
+
       if (failedLoginHandler) {
         failedLoginHandler('Authentication failed');
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('IntelliCenter login failed')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('IntelliCenter login failed'));
     });
 
     it('should handle close event', async () => {
       const closeHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'close')?.[1];
-      
+
       if (closeHandler) {
         closeHandler();
       }
 
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'IntelliCenter socket has been closed. Waiting 30 seconds and attempting to reconnect...'
+        'IntelliCenter socket has been closed. Waiting 30 seconds and attempting to reconnect...',
       );
 
       // Fast forward the delay
       jest.advanceTimersByTime(30000);
       await Promise.resolve();
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        'Finished waiting. Attempting reconnect...'
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith('Finished waiting. Attempting reconnect...');
     });
 
     it('should handle error event', () => {
       const errorHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'error')?.[1];
-      
+
       if (errorHandler) {
         errorHandler('Socket error occurred');
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('IntelliCenter socket error has been detected')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('IntelliCenter socket error has been detected'));
     });
 
     it('should handle end event', () => {
       const endHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'end')?.[1];
-      
+
       if (endHandler) {
         endHandler('Connection ended');
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('IntelliCenter socket connection has ended')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('IntelliCenter socket connection has ended'));
     });
 
     it('should handle responseready event', () => {
       const responseReadyHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'responseready')?.[1];
-      
+
       if (responseReadyHandler) {
         responseReadyHandler('Response ready data');
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('IntelliCenter responseready')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('IntelliCenter responseready'));
     });
   });
 
@@ -449,59 +417,50 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
     it('should handle incomplete data chunks', () => {
       const dataHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'data')?.[1];
-      
+
       // Send incomplete JSON data (no newline)
       if (dataHandler) {
         dataHandler('{"command": "partial');
       }
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Received incomplete data in data handler.'
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith('Received incomplete data in data handler.');
     });
 
     it('should handle buffer overflow', () => {
       const dataHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'data')?.[1];
-      
+
       // Set a small buffer first by accessing private property
       const largeData = 'x'.repeat(2000000); // Larger than default buffer
-      
+
       if (dataHandler) {
         dataHandler(largeData);
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Exceeded max buffer size')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Exceeded max buffer size'));
     });
 
     it('should handle malformed JSON', () => {
       const dataHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'data')?.[1];
-      
+
       // Send malformed JSON with newline
       const malformedData = Buffer.from('{"invalid": json}\n');
       if (dataHandler) {
         dataHandler(malformedData);
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to parse JSON from IntelliCenter'),
-        expect.any(Error)
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to parse JSON from IntelliCenter'), expect.any(Error));
     });
 
     it('should handle malformed JSON lines without proper brackets', () => {
       const dataHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'data')?.[1];
-      
+
       // Send data without proper JSON brackets
       const malformedData = Buffer.from('not-json-data\n');
       if (dataHandler) {
         dataHandler(malformedData);
       }
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Skipping malformed JSON line')
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Skipping malformed JSON line'));
     });
   });
 
@@ -572,9 +531,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform.updateSensor(mockAccessory, { PROBE: 'invalid' });
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid probe value received')
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Invalid probe value received'));
     });
 
     it('should handle circuit updates for body objects', () => {
@@ -608,9 +565,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       await platform.handleUpdate(parseErrorResponse);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('IntelliCenter ParseError')
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('IntelliCenter ParseError'));
     });
 
     it('should handle frequent ParseErrors and suggest reboot', async () => {
@@ -626,9 +581,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         await platform.handleUpdate(parseErrorResponse);
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Frequent IntelliCenter ParseErrors detected')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Frequent IntelliCenter ParseErrors detected'));
     });
 
     it('should attempt reconnect on excessive ParseErrors', async () => {
@@ -644,9 +597,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         await platform.handleUpdate(parseErrorResponse);
       }
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Excessive ParseErrors')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Excessive ParseErrors'));
     });
 
     it('should handle other error responses', async () => {
@@ -659,9 +610,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       await platform.handleUpdate(errorResponse);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Received unsuccessful response code 500')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Received unsuccessful response code 500'));
     });
   });
 
@@ -697,14 +646,12 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
     it('should trigger reconnection after long silence', () => {
       // Set socket as alive initially
       (platform as any).isSocketAlive = true;
-      (platform as any).lastMessageReceived = Date.now() - (5 * 60 * 60 * 1000); // 5 hours ago
+      (platform as any).lastMessageReceived = Date.now() - 5 * 60 * 60 * 1000; // 5 hours ago
 
       // Advance timer to trigger heartbeat check
       jest.advanceTimersByTime(60000);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'No data from IntelliCenter in over 4 hours. Closing and restarting connection.'
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith('No data from IntelliCenter in over 4 hours. Closing and restarting connection.');
       expect(mockTelnetInstance.destroy).toHaveBeenCalled();
     });
 
@@ -716,9 +663,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const maybeReconnect = (platform as any).maybeReconnect.bind(platform);
       await maybeReconnect();
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Reconnect suppressed: too soon after last one.'
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith('Reconnect suppressed: too soon after last one.');
     });
 
     it('should skip reconnection if already in progress', async () => {
@@ -727,9 +672,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const maybeReconnect = (platform as any).maybeReconnect.bind(platform);
       await maybeReconnect();
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Reconnect already in progress. Skipping.'
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith('Reconnect already in progress. Skipping.');
     });
   });
 
@@ -743,8 +686,8 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         UUID: 'mock-uuid-orphaned',
         displayName: 'Orphaned Circuit',
         context: {
-          circuit: { id: 'ORPHANED_CIRCUIT' }
-        }
+          circuit: { id: 'ORPHANED_CIRCUIT' },
+        },
       } as unknown as PlatformAccessory;
 
       // Add orphaned accessory to the map
@@ -757,12 +700,8 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Removing orphaned circuit accessory')
-      );
-      expect(mockAPI.unregisterPlatformAccessories).toHaveBeenCalledWith(
-        PLUGIN_NAME, PLATFORM_NAME, [orphanedAccessory]
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned circuit accessory'));
+      expect(mockAPI.unregisterPlatformAccessories).toHaveBeenCalledWith(PLUGIN_NAME, PLATFORM_NAME, [orphanedAccessory]);
     });
 
     it('should clean up orphaned sensor accessories', () => {
@@ -770,8 +709,8 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         UUID: 'mock-uuid-orphaned-sensor',
         displayName: 'Orphaned Sensor',
         context: {
-          sensor: { id: 'ORPHANED_SENSOR' }
-        }
+          sensor: { id: 'ORPHANED_SENSOR' },
+        },
       } as unknown as PlatformAccessory;
 
       platform.accessoryMap.set('mock-uuid-orphaned-sensor', orphanedAccessory);
@@ -782,9 +721,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Removing orphaned sensor accessory')
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned sensor accessory'));
     });
 
     it('should clean up orphaned heater accessories', () => {
@@ -793,8 +730,8 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         displayName: 'Orphaned Heater',
         context: {
           heater: { id: 'ORPHANED_HEATER' },
-          body: { id: 'ORPHANED_BODY' }
-        }
+          body: { id: 'ORPHANED_BODY' },
+        },
       } as unknown as PlatformAccessory;
 
       platform.accessoryMap.set('mock-uuid-orphaned-heater', orphanedAccessory);
@@ -806,9 +743,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Removing orphaned heater accessory')
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned heater accessory'));
     });
   });
 
@@ -833,9 +768,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       await platform.handleUpdate(discoveryResponse);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Merged 1 of')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Merged 1 of'));
 
       // Advance timer to trigger next discovery command
       jest.advanceTimersByTime(250);
@@ -858,9 +791,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       await platform.handleUpdate(discoveryResponse);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Discovery commands completed')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Discovery commands completed'));
     });
   });
 
@@ -889,7 +820,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         modules: [],
         features: [],
         pumps: [],
-        sensors: []
+        sensors: [],
       };
 
       const sensor = {
@@ -897,14 +828,12 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         name: 'Air Temp',
         objectType: ObjectType.Sensor,
         type: TemperatureSensorType.Air,
-        probe: 75
+        probe: 75,
       };
 
       newPlatform.discoverTemperatureSensor(panel, null, sensor);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Skipping air temperature sensor')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Skipping air temperature sensor'));
     });
 
     it('should skip water temperature sensor when heater is present', () => {
@@ -915,12 +844,12 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
             id: 'M0101',
             features: [],
             bodies: [],
-            heaters: [{ id: 'H0001', name: 'Pool Heater', bodyIds: ['B1101'], objectType: ObjectType.Heater, type: CircuitType.Generic }] // Has heater
-          }
+            heaters: [{ id: 'H0001', name: 'Pool Heater', bodyIds: ['B1101'], objectType: ObjectType.Heater, type: CircuitType.Generic }], // Has heater
+          },
         ],
         features: [],
         pumps: [],
-        sensors: []
+        sensors: [],
       };
 
       const sensor = {
@@ -928,14 +857,12 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         name: 'Pool Temp',
         objectType: ObjectType.Sensor,
         type: TemperatureSensorType.Pool,
-        probe: 78
+        probe: 78,
       };
 
       platform.discoverTemperatureSensor(panel, null, sensor);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Skipping water temperature sensor')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Skipping water temperature sensor'));
     });
   });
 
@@ -964,9 +891,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Config Warning: Temperature units defaulted to Fahrenheit'
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith('Config Warning: Temperature units defaulted to Fahrenheit');
     });
 
     it('should throw error when accessing config without validation', () => {
@@ -979,9 +904,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
       platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
 
-      expect(() => platform.getConfig()).toThrow(
-        'Configuration has not been validated. Cannot return config.'
-      );
+      expect(() => platform.getConfig()).toThrow('Configuration has not been validated. Cannot return config.');
     });
   });
 });
