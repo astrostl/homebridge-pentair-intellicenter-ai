@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2025-06-16
+
 ### Added
 - **Development Infrastructure Overhaul**
   - Added `.nvmrc` for Node.js version consistency (Node 20 LTS)
@@ -88,10 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Note
 Version 2.5.1 was the baseline for this major development infrastructure overhaul. The changes above represent a comprehensive modernization of the development workflow, code quality standards, and documentation accuracy while maintaining the core plugin functionality and excellent test coverage that made this plugin reliable.
 
-### Key Metrics (Current State)
-- **Test Coverage**: 100% statement coverage, 96%+ branch coverage
+### Key Metrics (v2.6.0)
+- **Test Coverage**: 100% statement coverage, 97%+ branch coverage
 - **Test Suite**: 525 comprehensive tests across 23 test suites
 - **Code Quality**: Zero ESLint warnings, Prettier formatted, security scanned
-- **Build Process**: Complete quality gates with lint, format, security, build, and test validation
-- **Node.js Support**: Node 20+ LTS versions
+- **Build Process**: Complete quality gates with lint, format, security, dependency checking, build, and test validation
+- **Node.js Support**: Node 18+, 20+, 22+, 24+ LTS versions
 - **Homebridge Compatibility**: 1.8.0+ and 2.0.0+ beta support
+- **Development Dependencies**: All updated to latest versions (Jest 30, TypeScript types, semantic-release tools)
