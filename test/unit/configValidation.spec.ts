@@ -81,13 +81,7 @@ describe('ConfigValidator', () => {
 
   describe('IP Address Validation', () => {
     it('should reject invalid IP addresses', () => {
-      const invalidIPs = [
-        '999.999.999.999',
-        '192.168.1',
-        'not-an-ip',
-        '192.168.1.256',
-        '',
-      ];
+      const invalidIPs = ['999.999.999.999', '192.168.1', 'not-an-ip', '192.168.1.256', ''];
 
       invalidIPs.forEach(ip => {
         const config = { ...baseConfig, ipAddress: ip };
@@ -99,14 +93,7 @@ describe('ConfigValidator', () => {
     });
 
     it('should accept valid IP addresses', () => {
-      const validIPs = [
-        '192.168.1.100',
-        '10.0.0.1',
-        '172.16.0.1',
-        '127.0.0.1',
-        '0.0.0.0',
-        '255.255.255.255',
-      ];
+      const validIPs = ['192.168.1.100', '10.0.0.1', '172.16.0.1', '127.0.0.1', '0.0.0.0', '255.255.255.255'];
 
       validIPs.forEach(ip => {
         const config = { ...baseConfig, ipAddress: ip };
@@ -119,13 +106,11 @@ describe('ConfigValidator', () => {
     it('should warn about public IP addresses', () => {
       const publicIP = '8.8.8.8';
       const config = { ...baseConfig, ipAddress: publicIP };
-      
+
       const result = ConfigValidator.validate(config);
 
       expect(result.isValid).toBe(true);
-      expect(result.warnings.some(warning => 
-        warning.includes('public network')
-      )).toBe(true);
+      expect(result.warnings.some(warning => warning.includes('public network'))).toBe(true);
     });
   });
 
@@ -164,14 +149,7 @@ describe('ConfigValidator', () => {
     });
 
     it('should accept valid usernames', () => {
-      const validUsernames = [
-        'testuser',
-        'user@example.com',
-        'user.name',
-        'user123',
-        'user_name',
-        'user-name',
-      ];
+      const validUsernames = ['testuser', 'user@example.com', 'user.name', 'user123', 'user_name', 'user-name'];
 
       validUsernames.forEach(username => {
         const config = { ...baseConfig, username };
@@ -199,13 +177,12 @@ describe('ConfigValidator', () => {
       expect(result.errors.some(error => error.includes('less than 200 characters'))).toBe(true);
     });
 
-
     it('should accept valid passwords', () => {
       const validPasswords = [
         'MyStrongPassword123!',
         'another-good-password',
         'Complex_Pass_2023',
-        'password',  // Now allowed since it's user's existing credential
+        'password', // Now allowed since it's user's existing credential
         'simple123',
       ];
 
@@ -231,7 +208,7 @@ describe('ConfigValidator', () => {
       const invalidRanges = [
         { min: 20, max: 104 }, // Too low
         { min: 40, max: 150 }, // Too high
-        { min: 80, max: 70 },  // Min > Max
+        { min: 80, max: 70 }, // Min > Max
       ];
 
       invalidRanges.forEach(({ min, max }) => {
@@ -250,7 +227,7 @@ describe('ConfigValidator', () => {
     it('should reject invalid temperature ranges for Celsius', () => {
       const invalidRanges = [
         { min: -5, max: 40 }, // Too low
-        { min: 4, max: 60 },  // Too high
+        { min: 4, max: 60 }, // Too high
         { min: 30, max: 20 }, // Min > Max
       ];
 
@@ -361,7 +338,7 @@ describe('ConfigValidator', () => {
 
       expect(result.isValid).toBe(true);
       expect(result.sanitizedConfig!.supportVSP).toBe(false); // Default
-      expect(result.sanitizedConfig!.airTemp).toBe(true);     // Default
+      expect(result.sanitizedConfig!.airTemp).toBe(true); // Default
       expect(result.sanitizedConfig!.includeAllCircuits).toBe(false); // Default
     });
   });
@@ -473,7 +450,7 @@ describe('ConfigValidator', () => {
         minimumTemperature: 40.999999,
         maximumTemperature: 104.111111,
       };
-      
+
       const result = ConfigValidator.validate(edgeCaseConfig);
 
       expect(result.isValid).toBe(true);
@@ -482,7 +459,6 @@ describe('ConfigValidator', () => {
       expect(result.sanitizedConfig!.minimumTemperature).toBe(41.0);
       expect(result.sanitizedConfig!.maximumTemperature).toBe(104.1);
     });
-
 
     it('should cover temperature rounding lines 280-281', () => {
       // Test precise floating point values that need rounding
@@ -532,7 +508,7 @@ describe('ConfigValidator', () => {
       expect(resultLarge.isValid).toBe(false);
       expect(resultLarge.errors.some(error => error.includes('IP address octets must be between 0 and 255'))).toBe(true);
 
-      // Cover lines 280-281: Buffer size type validation  
+      // Cover lines 280-281: Buffer size type validation
       // Test with non-string, non-number buffer size
       const configWithInvalidBufferType = {
         ...baseConfig,
@@ -554,7 +530,7 @@ describe('ConfigValidator', () => {
       expect(result3.isValid).toBe(true);
       expect(result3.warnings.some(warning => warning.includes('maxBufferSize'))).toBe(true);
 
-      // Test with null for buffer size 
+      // Test with null for buffer size
       const configWithNullBuffer = {
         ...baseConfig,
         maxBufferSize: null as any, // Null type should trigger lines 280-281
@@ -578,7 +554,7 @@ describe('ConfigValidator', () => {
       // Create a password with many dangerous characters to trigger sanitization warning
       const configWithDangerousPassword = {
         ...baseConfig,
-        password: 'mypassword<script><>""&&&\'\'\'&&&<><><script><script>', // Many dangerous chars to trigger warning
+        password: "mypassword<script><>\"\"&&&'''&&&<><><script><script>", // Many dangerous chars to trigger warning
       };
 
       const result6 = ConfigValidator.validate(configWithDangerousPassword);

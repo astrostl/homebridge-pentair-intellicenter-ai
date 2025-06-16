@@ -26,7 +26,6 @@ export type PentairConfig = {
 } & PlatformConfig;
 
 export class ConfigValidator {
-
   static validate(config: PlatformConfig): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -94,7 +93,7 @@ export class ConfigValidator {
     const tempValidation = this.validateTemperatureRange(
       config.minimumTemperature,
       config.maximumTemperature,
-      config.temperatureUnits as TemperatureUnits || TemperatureUnits.F,
+      (config.temperatureUnits as TemperatureUnits) || TemperatureUnits.F,
     );
     if (!tempValidation.isValid) {
       errors.push(tempValidation.error!);
@@ -206,7 +205,6 @@ export class ConfigValidator {
     max: unknown,
     units: TemperatureUnits,
   ): { isValid: boolean; error?: string; sanitizedMin?: number; sanitizedMax?: number } {
-
     let minTemp: number;
     let maxTemp: number;
 

@@ -1,18 +1,18 @@
 export enum IntelliCenterResponseStatus {
-  Ok = '200'
+  Ok = '200',
 }
 
 export enum IntelliCenterRequestCommand {
   GetQuery = 'GetQuery',
   RequestParamList = 'RequestParamList',
-  SetParamList = 'SetParamList'
+  SetParamList = 'SetParamList',
 }
 
 export enum IntelliCenterResponseCommand {
   SendQuery = 'SendQuery',
   NotifyList = 'NotifyList',
   WriteParamList = 'WriteParamList',
-  Error = 'Error'
+  Error = 'Error',
 }
 
 export enum IntelliCenterQueryName {
@@ -103,7 +103,7 @@ export type IntelliCenterResponse = {
 
 export enum CircuitType {
   IntelliBrite = 'INTELLI',
-  Generic = 'GENERIC'
+  Generic = 'GENERIC',
 }
 
 export enum TemperatureSensorType {
@@ -159,13 +159,13 @@ export enum CircuitStatus {
 }
 
 export enum PumpSpeedType {
-  RPM= 'RPM',
+  RPM = 'RPM',
   GPM = 'GPM',
 }
 
 export enum HeatMode {
   On = 2,
-  Off = 1
+  Off = 1,
 }
 
 export type Body = {
@@ -217,15 +217,15 @@ export enum TemperatureUnits {
 }
 
 export class Color {
-  public static readonly White = new Color( 'WHITER', 0, 0);
-  public static readonly Red = new Color( 'REDR', 0, 100);
-  public static readonly Green = new Color( 'GREENR', 120, 100);
-  public static readonly Blue = new Color( 'BLUER', 240, 100);
-  public static readonly Magenta = new Color( 'MAGNTAR', 300, 100);
+  public static readonly White = new Color('WHITER', 0, 0);
+  public static readonly Red = new Color('REDR', 0, 100);
+  public static readonly Green = new Color('GREENR', 120, 100);
+  public static readonly Blue = new Color('BLUER', 240, 100);
+  public static readonly Magenta = new Color('MAGNTAR', 300, 100);
 
   private constructor(
     public readonly intellicenterCode: string,
     public readonly hue: number,
-    public readonly saturation: number) {
-  }
+    public readonly saturation: number,
+  ) {}
 }

@@ -1,19 +1,23 @@
-import {CharacteristicValue, Nullable, PlatformAccessory, Service} from 'homebridge';
+import { CharacteristicValue, Nullable, PlatformAccessory, Service } from 'homebridge';
 
-import {PentairPlatform} from './platform';
+import { PentairPlatform } from './platform';
 import {
   Circuit,
   CircuitStatus,
-  CircuitStatusMessage, CircuitType, Color,
+  CircuitStatusMessage,
+  CircuitType,
+  Color,
   IntelliCenterRequest,
   IntelliCenterRequestCommand,
   Module,
-  Panel, PumpCircuit, PumpSpeedType,
+  Panel,
+  PumpCircuit,
+  PumpSpeedType,
 } from './types';
-import {v4 as uuidv4} from 'uuid';
-import {MANUFACTURER} from './settings';
-import {ACT_KEY, DEFAULT_BRIGHTNESS, DEFAULT_COLOR_TEMPERATURE, SPEED_KEY, STATUS_KEY} from './constants';
-import {getIntelliBriteColor} from './util';
+import { v4 as uuidv4 } from 'uuid';
+import { MANUFACTURER } from './settings';
+import { ACT_KEY, DEFAULT_BRIGHTNESS, DEFAULT_COLOR_TEMPERATURE, SPEED_KEY, STATUS_KEY } from './constants';
+import { getIntelliBriteColor } from './util';
 
 const MODEL = 'Circuit';
 
@@ -33,56 +37,57 @@ export class CircuitAccessory {
     private readonly platform: PentairPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-
     this.module = accessory.context.module as Module;
     this.panel = accessory.context.panel as Panel;
     this.circuit = accessory.context.circuit as Circuit;
     this.pumpCircuit = accessory.context.pumpCircuit as PumpCircuit;
 
-    const serial = this.module ? `${this.panel.id}.${this.module.id}.${this.circuit.id}` :
-      `${this.panel.id}.${this.circuit.id}`;
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
+    const serial = this.module ? `${this.panel.id}.${this.module.id}.${this.circuit.id}` : `${this.panel.id}.${this.circuit.id}`;
+    this.accessory
+      .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, MANUFACTURER)
       .setCharacteristic(this.platform.Characteristic.Model, MODEL)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, serial);
 
     if (CircuitType.IntelliBrite === this.circuit.type) {
-      this.service = this.accessory.getService(this.platform.Service.Lightbulb)
-        || this.accessory.addService(this.platform.Service.Lightbulb);
+      this.service =
+        this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
 
-      this.service.getCharacteristic(this.platform.Characteristic.Hue)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.Hue)
         .onSet(this.setColorHue.bind(this))
         .onGet(this.getColorHue.bind(this));
 
-      this.service.getCharacteristic(this.platform.Characteristic.Saturation)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.Saturation)
         .onSet(this.setColorSaturation.bind(this))
         .onGet(this.getColorSaturation.bind(this));
 
-      this.service.getCharacteristic(this.platform.Characteristic.ColorTemperature)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.ColorTemperature)
         .onSet(this.setColorTemperature.bind(this))
         .onGet(this.getColorTemperature.bind(this));
 
-      this.service.getCharacteristic(this.platform.Characteristic.Brightness)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.Brightness)
         .onSet(this.setBrightness.bind(this))
         .onGet(this.getBrightness.bind(this));
     } else {
-      this.service = this.accessory.getService(this.platform.Service.Switch)
-        || this.accessory.addService(this.platform.Service.Switch);
+      this.service = this.accessory.getService(this.platform.Service.Switch) || this.accessory.addService(this.platform.Service.Switch);
     }
 
     this.service.setCharacteristic(this.platform.Characteristic.Name, this.circuit.name);
 
     this.service.updateCharacteristic(this.platform.Characteristic.On, this.getCircuitStatus());
 
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .onSet(this.setOn.bind(this))
-      .onGet(this.getOn.bind(this));
+    this.service.getCharacteristic(this.platform.Characteristic.On).onSet(this.setOn.bind(this)).onGet(this.getOn.bind(this));
 
     const fanService = this.accessory.getService(this.platform.Service.Fan);
 
     if (this.pumpCircuit && this.platform.getConfig().supportVSP) {
       this.service = fanService || this.accessory.addService(this.platform.Service.Fan);
-      this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      this.service
+        .getCharacteristic(this.platform.Characteristic.RotationSpeed)
         .onSet(this.setSpeed.bind(this))
         .onGet(this.getSpeed.bind(this))
         .updateValue(this.convertSpeedToPowerLevel());
@@ -101,10 +106,12 @@ export class CircuitAccessory {
     const command = {
       command: IntelliCenterRequestCommand.SetParamList,
       messageID: uuidv4(),
-      objectList: [{
-        objnam: this.circuit.id,
-        params: {[STATUS_KEY]: value ? CircuitStatus.On : CircuitStatus.Off} as never,
-      } as CircuitStatusMessage],
+      objectList: [
+        {
+          objnam: this.circuit.id,
+          params: { [STATUS_KEY]: value ? CircuitStatus.On : CircuitStatus.Off } as never,
+        } as CircuitStatusMessage,
+      ],
     } as IntelliCenterRequest;
     this.platform.sendCommandNoWait(command);
   }
@@ -118,10 +125,12 @@ export class CircuitAccessory {
     const command = {
       command: IntelliCenterRequestCommand.SetParamList,
       messageID: uuidv4(),
-      objectList: [{
-        objnam: this.circuit.id,
-        params: {[ACT_KEY]: this.accessory.context.color.intellicenterCode} as never,
-      } as CircuitStatusMessage],
+      objectList: [
+        {
+          objnam: this.circuit.id,
+          params: { [ACT_KEY]: this.accessory.context.color.intellicenterCode } as never,
+        } as CircuitStatusMessage,
+      ],
     } as IntelliCenterRequest;
     this.platform.sendCommandNoWait(command);
     this.accessory.context.saturation = this.accessory.context.color.saturation;
@@ -192,18 +201,21 @@ export class CircuitAccessory {
     }
     const convertedValue = this.convertPowerLevelToSpeed(value as number);
 
-    this.platform.log.info(`Setting speed for ${this.pumpCircuit.pump?.name} to ${value} converted/rounded to: ${convertedValue} ` +
-      `${this.pumpCircuit.speedType}`);
+    this.platform.log.info(
+      `Setting speed for ${this.pumpCircuit.pump?.name} to ${value} converted/rounded to: ${convertedValue} ` +
+        `${this.pumpCircuit.speedType}`,
+    );
     const command = {
       command: IntelliCenterRequestCommand.SetParamList, //Weirdly required.
       messageID: uuidv4(),
-      objectList: [{
-        objnam: this.pumpCircuit.id,
-        params: {[SPEED_KEY]: `${convertedValue}`} as never,
-      } as CircuitStatusMessage],
+      objectList: [
+        {
+          objnam: this.pumpCircuit.id,
+          params: { [SPEED_KEY]: `${convertedValue}` } as never,
+        } as CircuitStatusMessage,
+      ],
     } as IntelliCenterRequest;
     this.platform.sendCommandNoWait(command);
-
   }
 
   async getSpeed(): Promise<Nullable<CharacteristicValue>> {
@@ -218,7 +230,7 @@ export class CircuitAccessory {
     const max = this.pumpCircuit.speedType === PumpSpeedType.GPM ? this.pumpCircuit.pump.maxFlow : this.pumpCircuit.pump.maxRpm;
     const range = max - min;
     const current = (this.pumpCircuit.speed ?? min) - min;
-    const value = current / range * 100;
+    const value = (current / range) * 100;
     const result = Math.round(value);
     this.platform.log.debug(`Converted speed value from ${this.pumpCircuit.speed} ${this.pumpCircuit.speedType} to ${result}`);
     return result;
@@ -232,10 +244,9 @@ export class CircuitAccessory {
     const min = this.pumpCircuit.speedType === PumpSpeedType.GPM ? this.pumpCircuit.pump.minFlow : this.pumpCircuit.pump.minRpm;
     const max = this.pumpCircuit.speedType === PumpSpeedType.GPM ? this.pumpCircuit.pump.maxFlow : this.pumpCircuit.pump.maxRpm;
     const range: number = max - min;
-    const fromMin: number = powerLevel / 100 * range;
+    const fromMin: number = (powerLevel / 100) * range;
     const value = min + fromMin;
-    const result = this.pumpCircuit.speedType === PumpSpeedType.GPM ? Math.round(value) :
-      Math.round(value / 50) * 50;
+    const result = this.pumpCircuit.speedType === PumpSpeedType.GPM ? Math.round(value) : Math.round(value / 50) * 50;
     this.platform.log.debug(`Converted power level from ${powerLevel} to ${result} ${this.pumpCircuit.speedType}`);
     return result;
   }

@@ -66,14 +66,14 @@ describe('TemperatureAccessory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Reset platform accessory context
     mockPlatformAccessory.context = {
       sensor: mockSensor,
     };
 
     // Setup default mock returns
-    (mockPlatformAccessory.getService as jest.Mock).mockImplementation((serviceType) => {
+    (mockPlatformAccessory.getService as jest.Mock).mockImplementation(serviceType => {
       if (serviceType === 'AccessoryInformation') {
         return mockAccessoryInformation;
       }
@@ -133,7 +133,7 @@ describe('TemperatureAccessory', () => {
 
     it('should convert Fahrenheit to Celsius', async () => {
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       // 78.5°F should convert to ~25.83°C
       expect(result).toBeCloseTo(25.83, 1);
     });
@@ -186,51 +186,41 @@ describe('TemperatureAccessory', () => {
     it('should handle undefined temperature', async () => {
       mockPlatformAccessory.context.sensor.probe = undefined;
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       expect(result).toBe(0);
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature value: undefined, returning 0'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature value: undefined, returning 0');
     });
 
     it('should handle null temperature', async () => {
       mockPlatformAccessory.context.sensor.probe = null;
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       expect(result).toBe(0);
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature value: null, returning 0'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature value: null, returning 0');
     });
 
     it('should handle NaN temperature', async () => {
       mockPlatformAccessory.context.sensor.probe = NaN;
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       expect(result).toBe(0);
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature value: NaN, returning 0'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature value: NaN, returning 0');
     });
 
     it('should handle missing sensor context', async () => {
       mockPlatformAccessory.context.sensor = undefined;
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       expect(result).toBe(0);
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature value: undefined, returning 0'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature value: undefined, returning 0');
     });
 
     it('should handle string temperature values that are NaN', async () => {
       mockPlatformAccessory.context.sensor.probe = 'invalid' as any;
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       expect(result).toBe(0);
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature value: invalid, returning 0'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature value: invalid, returning 0');
     });
   });
 
@@ -245,26 +235,21 @@ describe('TemperatureAccessory', () => {
       expect(mockPlatformAccessory.context.sensor.probe).toBe(80);
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
         'CurrentTemperature',
-        expect.any(Number) // 80°F to Celsius conversion
+        expect.any(Number), // 80°F to Celsius conversion
       );
     });
 
     it('should log temperature update with units', () => {
       temperatureAccessory.updateTemperature(75.5);
 
-      expect(mockPlatform.log.debug).toHaveBeenCalledWith(
-        expect.stringContaining('[Pool Temperature] Updated temperature: 75.5F -> 24.1')
-      );
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('[Pool Temperature] Updated temperature: 75.5F -> 24.1'));
     });
 
     it('should handle decimal input values', () => {
       temperatureAccessory.updateTemperature(78.25);
 
       expect(mockPlatformAccessory.context.sensor.probe).toBe(78.25);
-      expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
-        'CurrentTemperature',
-        expect.any(Number)
-      );
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentTemperature', expect.any(Number));
     });
   });
 
@@ -282,16 +267,14 @@ describe('TemperatureAccessory', () => {
       expect(mockPlatformAccessory.context.sensor.probe).toBe(25);
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
         'CurrentTemperature',
-        25 // No conversion
+        25, // No conversion
       );
     });
 
     it('should log temperature update with Celsius units', () => {
       temperatureAccessory.updateTemperature(23.5);
 
-      expect(mockPlatform.log.debug).toHaveBeenCalledWith(
-        '[Pool Temperature] Updated temperature: 23.5C -> 23.5C'
-      );
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith('[Pool Temperature] Updated temperature: 23.5C -> 23.5C');
     });
   });
 
@@ -303,27 +286,21 @@ describe('TemperatureAccessory', () => {
     it('should skip update for undefined value', () => {
       temperatureAccessory.updateTemperature(undefined as any);
 
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature update value: undefined, skipping update'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature update value: undefined, skipping update');
       expect(mockService.updateCharacteristic).not.toHaveBeenCalled();
     });
 
     it('should skip update for null value', () => {
       temperatureAccessory.updateTemperature(null as any);
 
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature update value: null, skipping update'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature update value: null, skipping update');
       expect(mockService.updateCharacteristic).not.toHaveBeenCalled();
     });
 
     it('should skip update for NaN value', () => {
       temperatureAccessory.updateTemperature(NaN);
 
-      expect(mockPlatform.log.warn).toHaveBeenCalledWith(
-        '[Pool Temperature] Invalid temperature update value: NaN, skipping update'
-      );
+      expect(mockPlatform.log.warn).toHaveBeenCalledWith('[Pool Temperature] Invalid temperature update value: NaN, skipping update');
       expect(mockService.updateCharacteristic).not.toHaveBeenCalled();
     });
 
@@ -343,7 +320,7 @@ describe('TemperatureAccessory', () => {
     it('should handle extreme high temperatures', async () => {
       mockPlatformAccessory.context.sensor.probe = 1000; // 1000°F
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       // 1000°F should convert to ~537.78°C
       expect(result).toBeCloseTo(537.78, 1);
     });
@@ -351,7 +328,7 @@ describe('TemperatureAccessory', () => {
     it('should handle extreme low temperatures', async () => {
       mockPlatformAccessory.context.sensor.probe = -100; // -100°F
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       // -100°F should convert to ~-73.33°C
       expect(result).toBeCloseTo(-73.33, 1);
     });
@@ -359,7 +336,7 @@ describe('TemperatureAccessory', () => {
     it('should handle zero temperature', async () => {
       mockPlatformAccessory.context.sensor.probe = 0; // 0°F
       const result = await temperatureAccessory.getCurrentTemperature();
-      
+
       // 0°F should convert to ~-17.78°C
       expect(result).toBeCloseTo(-17.78, 1);
     });
@@ -368,10 +345,7 @@ describe('TemperatureAccessory', () => {
       temperatureAccessory.updateTemperature(0.001);
 
       expect(mockPlatformAccessory.context.sensor.probe).toBe(0.001);
-      expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
-        'CurrentTemperature',
-        expect.any(Number)
-      );
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentTemperature', expect.any(Number));
     });
   });
 
@@ -382,7 +356,7 @@ describe('TemperatureAccessory', () => {
 
     it('should use existing service if available', () => {
       const existingService = { ...mockService };
-      (mockPlatformAccessory.getService as jest.Mock).mockImplementation((serviceType) => {
+      (mockPlatformAccessory.getService as jest.Mock).mockImplementation(serviceType => {
         if (serviceType === 'AccessoryInformation') {
           return mockAccessoryInformation;
         }
@@ -394,17 +368,14 @@ describe('TemperatureAccessory', () => {
 
       // Reset call count since constructor was called in beforeEach
       jest.clearAllMocks();
-      
+
       temperatureAccessory = new TemperatureAccessory(mockPlatform, mockPlatformAccessory);
 
       expect(mockPlatformAccessory.addService).not.toHaveBeenCalled();
     });
 
     it('should create new service if none exists', () => {
-      expect(mockPlatformAccessory.addService).toHaveBeenCalledWith(
-        'TemperatureSensor',
-        'Pool Temperature'
-      );
+      expect(mockPlatformAccessory.addService).toHaveBeenCalledWith('TemperatureSensor', 'Pool Temperature');
     });
   });
 
@@ -444,14 +415,14 @@ describe('TemperatureAccessory', () => {
     it('should not modify original sensor object during construction', () => {
       const originalProbe = mockSensor.probe;
       temperatureAccessory = new TemperatureAccessory(mockPlatform, mockPlatformAccessory);
-      
+
       expect(mockSensor.probe).toBe(originalProbe);
     });
 
     it('should modify context sensor probe during updates', () => {
       const newTemp = 85.5;
       temperatureAccessory.updateTemperature(newTemp);
-      
+
       expect(mockPlatformAccessory.context.sensor.probe).toBe(newTemp);
     });
   });

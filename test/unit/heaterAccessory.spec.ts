@@ -122,7 +122,7 @@ describe('HeaterAccessory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Reset platform accessory context
     mockPlatformAccessory.context = {
       heater: mockHeater,
@@ -130,7 +130,7 @@ describe('HeaterAccessory', () => {
     };
 
     // Setup default mock returns
-    (mockPlatformAccessory.getService as jest.Mock).mockImplementation((serviceType) => {
+    (mockPlatformAccessory.getService as jest.Mock).mockImplementation(serviceType => {
       if (serviceType === 'AccessoryInformation') {
         return mockAccessoryInformation;
       }
@@ -164,10 +164,10 @@ describe('HeaterAccessory', () => {
     it('should convert Fahrenheit temperatures to Celsius for internal use', () => {
       // Verify temperature conversion in constructor
       expect(mockPlatform.log.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Temperature Slider Min: 4.444444444444445') // 40F to C
+        expect.stringContaining('Temperature Slider Min: 4.444444444444445'), // 40F to C
       );
       expect(mockPlatform.log.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Max: 40') // 104F to C
+        expect.stringContaining('Max: 40'), // 104F to C
       );
     });
 
@@ -179,8 +179,8 @@ describe('HeaterAccessory', () => {
           OFF: 0,
           HEAT: 1,
           COOL: 2,
-          AUTO: 3
-        })
+          AUTO: 3,
+        }),
       );
     });
 
@@ -188,9 +188,9 @@ describe('HeaterAccessory', () => {
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
         expect.objectContaining({
           CELSIUS: 0,
-          FAHRENHEIT: 1
+          FAHRENHEIT: 1,
         }),
-        1 // FAHRENHEIT
+        1, // FAHRENHEIT
       );
     });
   });
@@ -203,7 +203,7 @@ describe('HeaterAccessory', () => {
         maximumTemperature: 40, // Celsius
       });
       mockPlatformAccessory.context.body = mockBodyCelsius;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
     });
 
@@ -211,15 +211,15 @@ describe('HeaterAccessory', () => {
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
         expect.objectContaining({
           CELSIUS: 0,
-          FAHRENHEIT: 1
+          FAHRENHEIT: 1,
         }),
-        0 // CELSIUS
+        0, // CELSIUS
       );
     });
 
     it('should not convert temperatures when in Celsius mode', () => {
       expect(mockPlatform.log.debug).toHaveBeenCalledWith(
-        expect.stringContaining('current temperature: 25') // No conversion
+        expect.stringContaining('current temperature: 25'), // No conversion
       );
     });
   });
@@ -230,9 +230,9 @@ describe('HeaterAccessory', () => {
       delete bodyWithoutTemps.temperature;
       delete bodyWithoutTemps.lowTemperature;
       delete bodyWithoutTemps.highTemperature;
-      
+
       mockPlatformAccessory.context.body = bodyWithoutTemps;
-      
+
       expect(() => {
         heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
       }).not.toThrow();
@@ -241,14 +241,12 @@ describe('HeaterAccessory', () => {
     it('should handle undefined body temperature', () => {
       const bodyWithUndefinedTemp = { ...mockBody };
       bodyWithUndefinedTemp.temperature = undefined;
-      
+
       mockPlatformAccessory.context.body = bodyWithUndefinedTemp;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
-      
-      expect(mockPlatform.log.debug).toHaveBeenCalledWith(
-        expect.stringContaining('current temperature: undefined')
-      );
+
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('current temperature: undefined'));
     });
   });
 
@@ -270,7 +268,7 @@ describe('HeaterAccessory', () => {
                 params: { [LOW_TEMP_KEY]: '77' }, // 25°C = 77°F
               }),
             ],
-          })
+          }),
         );
       });
 
@@ -280,7 +278,7 @@ describe('HeaterAccessory', () => {
           minimumTemperature: 4,
           maximumTemperature: 40,
         });
-        
+
         heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
         await heaterAccessory.setTargetTemperature(25);
 
@@ -291,23 +289,21 @@ describe('HeaterAccessory', () => {
                 params: { [LOW_TEMP_KEY]: '25' }, // No conversion
               }),
             ],
-          })
+          }),
         );
       });
 
       it('should log the temperature setting action', async () => {
         await heaterAccessory.setTargetTemperature(25);
 
-        expect(mockPlatform.log.info).toHaveBeenCalledWith(
-          expect.stringContaining('Setting temperature 25 converted/rounded to: 77')
-        );
+        expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Setting temperature 25 converted/rounded to: 77'));
       });
     });
 
     describe('getTargetTemperature', () => {
       it('should return low temperature when available', async () => {
         const result = await heaterAccessory.getTargetTemperature();
-        
+
         // Should return converted low temperature (75°F -> ~23.89°C)
         expect(result).toBeCloseTo(23.89, 1);
       });
@@ -316,10 +312,10 @@ describe('HeaterAccessory', () => {
         const bodyWithoutLowTemp = { ...mockBody };
         delete bodyWithoutLowTemp.lowTemperature;
         mockPlatformAccessory.context.body = bodyWithoutLowTemp;
-        
+
         heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
         const result = await heaterAccessory.getTargetTemperature();
-        
+
         // Should return converted minimum (40°F -> ~4.44°C)
         expect(result).toBeCloseTo(4.44, 1);
       });
@@ -334,7 +330,7 @@ describe('HeaterAccessory', () => {
     describe('getCurrentTemperature', () => {
       it('should return current temperature when available', async () => {
         const result = await heaterAccessory.getCurrentTemperature();
-        
+
         // Should return converted current temperature (78°F -> ~25.56°C)
         expect(result).toBeCloseTo(25.56, 1);
       });
@@ -343,10 +339,10 @@ describe('HeaterAccessory', () => {
         const bodyWithoutTemp = { ...mockBody };
         delete bodyWithoutTemp.temperature;
         mockPlatformAccessory.context.body = bodyWithoutTemp;
-        
+
         heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
         const result = await heaterAccessory.getCurrentTemperature();
-        
+
         expect(result).toBe(-1);
       });
     });
@@ -365,14 +361,14 @@ describe('HeaterAccessory', () => {
 
       it('should return OFF when different heater is active', () => {
         mockPlatformAccessory.context.body.heaterId = 'H02'; // Different heater
-        
+
         const result = heaterAccessory.getMode();
         expect(result).toBe(0); // OFF
       });
 
       it('should return OFF when no heater is active', () => {
         mockPlatformAccessory.context.body.heaterId = NO_HEATER_ID;
-        
+
         const result = heaterAccessory.getMode();
         expect(result).toBe(0); // OFF
       });
@@ -384,9 +380,10 @@ describe('HeaterAccessory', () => {
 
         // Should send two commands: one for pump, one for heater
         expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(2);
-        
+
         // First command: turn on pump
-        expect(mockPlatform.sendCommandNoWait).toHaveBeenNthCalledWith(1,
+        expect(mockPlatform.sendCommandNoWait).toHaveBeenNthCalledWith(
+          1,
           expect.objectContaining({
             command: IntelliCenterRequestCommand.SetParamList,
             objectList: [
@@ -395,11 +392,12 @@ describe('HeaterAccessory', () => {
                 params: { [STATUS_KEY]: CircuitStatus.On },
               }),
             ],
-          })
+          }),
         );
 
         // Second command: set heater
-        expect(mockPlatform.sendCommandNoWait).toHaveBeenNthCalledWith(2,
+        expect(mockPlatform.sendCommandNoWait).toHaveBeenNthCalledWith(
+          2,
           expect.objectContaining({
             command: IntelliCenterRequestCommand.SetParamList,
             objectList: [
@@ -408,7 +406,7 @@ describe('HeaterAccessory', () => {
                 params: { [HEATER_KEY]: 'H01' },
               }),
             ],
-          })
+          }),
         );
       });
 
@@ -417,7 +415,7 @@ describe('HeaterAccessory', () => {
 
         // Should send only heater command (no pump command)
         expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(1);
-        
+
         expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
           expect.objectContaining({
             command: IntelliCenterRequestCommand.SetParamList,
@@ -427,16 +425,14 @@ describe('HeaterAccessory', () => {
                 params: { [HEATER_KEY]: NO_HEATER_ID },
               }),
             ],
-          })
+          }),
         );
       });
 
       it('should log the mode setting action', async () => {
         await heaterAccessory.setMode(1);
 
-        expect(mockPlatform.log.info).toHaveBeenCalledWith(
-          'Set heat power to 1 for heater Pool Heater'
-        );
+        expect(mockPlatform.log.info).toHaveBeenCalledWith('Set heat power to 1 for heater Pool Heater');
       });
     });
   });
@@ -448,7 +444,7 @@ describe('HeaterAccessory', () => {
 
     it('should return OFF when heater is not active for this body', () => {
       mockPlatformAccessory.context.body.heaterId = 'H02'; // Different heater
-      
+
       const result = heaterAccessory.getCurrentHeatingCoolingState();
       expect(result).toBe(0); // OFF
     });
@@ -463,7 +459,7 @@ describe('HeaterAccessory', () => {
         heaterId: 'H01', // This heater is active
       };
       mockPlatformAccessory.context.body = bodyBelowTarget;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
       const result = heaterAccessory.getCurrentHeatingCoolingState();
       expect(result).toBe(2); // HEAT from CurrentHeatingCoolingState.HEAT
@@ -477,7 +473,7 @@ describe('HeaterAccessory', () => {
 
     it('should return OFF when temperature data is missing', () => {
       delete mockPlatformAccessory.context.body.temperature;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
       const result = heaterAccessory.getCurrentHeatingCoolingState();
       expect(result).toBe(0); // OFF
@@ -485,7 +481,7 @@ describe('HeaterAccessory', () => {
 
     it('should return OFF when target temperature is missing', () => {
       delete mockPlatformAccessory.context.body.lowTemperature;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
       const result = heaterAccessory.getCurrentHeatingCoolingState();
       expect(result).toBe(0); // OFF
@@ -505,9 +501,9 @@ describe('HeaterAccessory', () => {
           HEATING: 2,
           COOLING: 3,
           OFF: 0,
-          HEAT: 2
+          HEAT: 2,
         }),
-        expect.any(Number)
+        expect.any(Number),
       );
     });
 
@@ -515,9 +511,9 @@ describe('HeaterAccessory', () => {
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
         expect.objectContaining({
           CELSIUS: 0,
-          FAHRENHEIT: 1
+          FAHRENHEIT: 1,
         }),
-        1 // FAHRENHEIT
+        1, // FAHRENHEIT
       );
     });
   });
@@ -534,7 +530,7 @@ describe('HeaterAccessory', () => {
         maxValue: 1,
         validValues: [0, 1],
       });
-      
+
       // setProps should be called at least once with these common props
       expect(mockService.setProps).toHaveBeenCalled();
     });
@@ -572,7 +568,7 @@ describe('HeaterAccessory', () => {
     it('should handle temperature conversion edge cases', async () => {
       // Test extreme temperatures
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
-      
+
       await heaterAccessory.setTargetTemperature(0); // 0°C
       expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -582,10 +578,10 @@ describe('HeaterAccessory', () => {
               params: { [LOW_TEMP_KEY]: '32' }, // 0°C = 32°F
             }),
           ],
-        })
+        }),
       );
 
-      await heaterAccessory.setTargetTemperature(100); // 100°C  
+      await heaterAccessory.setTargetTemperature(100); // 100°C
       expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
         expect.objectContaining({
           command: IntelliCenterRequestCommand.SetParamList,
@@ -594,24 +590,24 @@ describe('HeaterAccessory', () => {
               params: { [LOW_TEMP_KEY]: '212' }, // 100°C = 212°F
             }),
           ],
-        })
+        }),
       );
     });
 
     it('should handle body with zero temperature', async () => {
       const bodyWithZero = { ...mockBody, temperature: 0 };
       mockPlatformAccessory.context.body = bodyWithZero;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
       const result = await heaterAccessory.getCurrentTemperature();
-      
+
       // Should return -1 when temperature is 0 (falsy), same as undefined
       expect(result).toBe(-1);
     });
 
     it('should handle fractional temperature rounding', async () => {
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
-      
+
       await heaterAccessory.setTargetTemperature(25.7); // Should round to 78°F
       expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -620,17 +616,17 @@ describe('HeaterAccessory', () => {
               params: { [LOW_TEMP_KEY]: '78' },
             }),
           ],
-        })
+        }),
       );
     });
 
     it('should handle getTargetTemperature with zero lowTemperature', async () => {
       const bodyWithZeroTarget = { ...mockBody, lowTemperature: 0 };
       mockPlatformAccessory.context.body = bodyWithZeroTarget;
-      
+
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
       const result = await heaterAccessory.getTargetTemperature();
-      
+
       // Should return minimum value when lowTemperature is 0 (falsy)
       expect(result).toBeCloseTo(4.44, 1); // minValue converted
     });
@@ -639,7 +635,7 @@ describe('HeaterAccessory', () => {
       const bodyWithoutLowTemp = { ...mockBody };
       delete bodyWithoutLowTemp.lowTemperature;
       mockPlatformAccessory.context.body = bodyWithoutLowTemp;
-      
+
       // Should not throw error
       expect(() => {
         heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
@@ -650,7 +646,7 @@ describe('HeaterAccessory', () => {
       const bodyWithoutTemp = { ...mockBody };
       delete bodyWithoutTemp.temperature;
       mockPlatformAccessory.context.body = bodyWithoutTemp;
-      
+
       // Should not throw error
       expect(() => {
         heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
@@ -659,7 +655,7 @@ describe('HeaterAccessory', () => {
 
     it('should properly initialize heater and body properties', () => {
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
-      
+
       expect(heaterAccessory.heater).toBe(mockHeater);
       expect(heaterAccessory).toHaveProperty('heater');
     });

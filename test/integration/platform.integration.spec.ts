@@ -1,6 +1,6 @@
 /**
  * Integration tests for PentairPlatform
- * 
+ *
  * These tests focus on end-to-end flows and integration between components.
  * They test the complete Telnet → IntelliCenter → HomeKit workflow.
  */
@@ -8,14 +8,14 @@
 import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
 import { PentairPlatform } from '../../src/platform';
 import { Telnet } from 'telnet-client';
-import { 
-  IntelliCenterResponse, 
-  IntelliCenterResponseStatus, 
+import {
+  IntelliCenterResponse,
+  IntelliCenterResponseStatus,
   IntelliCenterResponseCommand,
   IntelliCenterQueryName,
   TemperatureUnits,
   ObjectType,
-  CircuitStatusMessage
+  CircuitStatusMessage,
 } from '../../src/types';
 
 // Mock telnet-client
@@ -75,6 +75,7 @@ describe('Platform Integration Tests', () => {
   let mockAPI: jest.Mocked<API>;
   let mockTelnetInstance: jest.Mocked<Telnet>;
   let mockConfig: PlatformConfig;
+  const platformInstances: PentairPlatform[] = [];
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -151,14 +152,29 @@ describe('Platform Integration Tests', () => {
   });
 
   afterEach(() => {
+    // Clean up all platform instances to prevent timer leaks
+    platformInstances.forEach(platform => {
+      if (platform && typeof platform.cleanup === 'function') {
+        platform.cleanup();
+      }
+    });
+    platformInstances.length = 0;
+
     jest.useRealTimers();
   });
+
+  // Helper function to create and track platform instances
+  const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
+    const platform = new PentairPlatform(logger, config, api);
+    platformInstances.push(platform);
+    return platform;
+  };
 
   describe('Connection Management', () => {
     it('should establish connection to IntelliCenter', async () => {
       mockTelnetInstance.connect.mockResolvedValue(undefined);
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
       await platform.connectToIntellicenter();
 
       expect(mockTelnetInstance.connect).toHaveBeenCalledWith({
@@ -176,7 +192,7 @@ describe('Platform Integration Tests', () => {
       // Simulate multiple connection failures
       mockTelnetInstance.connect.mockRejectedValue(new Error('Connection failed'));
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Make multiple failed connection attempts
       for (let i = 0; i < 6; i++) {
@@ -197,7 +213,7 @@ describe('Platform Integration Tests', () => {
         .mockRejectedValueOnce(new Error('Connection failed'))
         .mockResolvedValue(undefined); // Successful connection
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Trigger circuit breaker to OPEN
       for (let i = 0; i < 5; i++) {
@@ -215,46 +231,58 @@ describe('Platform Integration Tests', () => {
 
   describe('Device Discovery Flow', () => {
     it('should complete full discovery cycle', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Mock transformPanels to return sample data
       const mockTransformPanels = require('../../src/util').transformPanels;
       mockTransformPanels.mockReturnValue([
         {
           id: 'panel1',
-          sensors: [{
-            id: 'sensor1',
-            name: 'Air Temp',
-            objectType: ObjectType.Sensor,
-            sensorType: 'Air',
-          }],
-          pumps: [{
-            id: 'pump1',
-            name: 'Main Pump',
-            circuits: [{
-              id: 'pumpcircuit1',
-              circuitId: 'circuit1',
-              speed: 75,
-              speedType: 'RPM',
-            }],
-          }],
-          modules: [{
-            id: 'module1',
-            bodies: [{
-              id: 'body1',
-              name: 'Pool',
-              objectType: ObjectType.Body,
-              circuitType: 'Pool',
-            }],
-            circuits: [{
-              id: 'circuit1',
-              name: 'Pool Light',
-              objectType: ObjectType.Circuit,
-              circuitType: 'Light',
-            }],
-            heaters: [],
-            features: [],
-          }],
+          sensors: [
+            {
+              id: 'sensor1',
+              name: 'Air Temp',
+              objectType: ObjectType.Sensor,
+              sensorType: 'Air',
+            },
+          ],
+          pumps: [
+            {
+              id: 'pump1',
+              name: 'Main Pump',
+              circuits: [
+                {
+                  id: 'pumpcircuit1',
+                  circuitId: 'circuit1',
+                  speed: 75,
+                  speedType: 'RPM',
+                },
+              ],
+            },
+          ],
+          modules: [
+            {
+              id: 'module1',
+              bodies: [
+                {
+                  id: 'body1',
+                  name: 'Pool',
+                  objectType: ObjectType.Body,
+                  circuitType: 'Pool',
+                },
+              ],
+              circuits: [
+                {
+                  id: 'circuit1',
+                  name: 'Pool Light',
+                  objectType: ObjectType.Circuit,
+                  circuitType: 'Light',
+                },
+              ],
+              heaters: [],
+              features: [],
+            },
+          ],
           features: [],
         },
       ]);
@@ -321,7 +349,7 @@ describe('Platform Integration Tests', () => {
 
       // Simulate discovery sequence - each response increments the commands sent
       (platform as any).discoverCommandsSent = []; // Start empty
-      
+
       for (let i = 0; i < mockDiscoveryResponses.length; i++) {
         // Add command as if it was sent
         (platform as any).discoverCommandsSent.push(['CIRCUITS', 'PUMPS', 'CHEMS', 'VALVES', 'HEATERS', 'SENSORS', 'GROUPS'][i]);
@@ -333,13 +361,11 @@ describe('Platform Integration Tests', () => {
 
       // Verify accessories were registered
       expect(mockAPI.registerPlatformAccessories).toHaveBeenCalled();
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Discovery commands completed')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Discovery commands completed'));
     });
 
     it('should handle discovery with no devices', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Mock transformPanels to return empty data
       const mockTransformPanels = require('../../src/util').transformPanels;
@@ -359,15 +385,13 @@ describe('Platform Integration Tests', () => {
       platform.handleDiscoveryResponse(response);
 
       // Should not crash and should log completion
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Discovery commands completed')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Discovery commands completed'));
     });
   });
 
   describe('Real-time Updates', () => {
     it('should process circuit status updates', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Set up an accessory
       const mockAccessory = {
@@ -389,10 +413,12 @@ describe('Platform Integration Tests', () => {
         messageID: 'notify-123',
         description: 'Status update',
         answer: undefined as never,
-        objectList: [{
-          objnam: 'C01',
-          params: { STATUS: 'ON' },
-        } as CircuitStatusMessage],
+        objectList: [
+          {
+            objnam: 'C01',
+            params: { STATUS: 'ON' },
+          } as CircuitStatusMessage,
+        ],
       };
 
       await platform.handleUpdate(notifyResponse);
@@ -401,7 +427,7 @@ describe('Platform Integration Tests', () => {
     });
 
     it('should handle multiple concurrent updates', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Set up multiple accessories
       const circuitAccessory = {
@@ -411,7 +437,7 @@ describe('Platform Integration Tests', () => {
 
       const sensorAccessory = {
         UUID: 'uuid-S01',
-        context: { 
+        context: {
           sensor: { id: 'S01', objectType: ObjectType.Sensor, name: 'Pool Temp' },
         },
       } as unknown as PlatformAccessory;
@@ -446,11 +472,11 @@ describe('Platform Integration Tests', () => {
     });
 
     it('should handle temperature sensor updates', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const sensorAccessory = {
         UUID: 'uuid-S01',
-        context: { 
+        context: {
           sensor: { id: 'S01', objectType: ObjectType.Sensor, name: 'Pool Temp' },
         },
       } as unknown as PlatformAccessory;
@@ -463,10 +489,12 @@ describe('Platform Integration Tests', () => {
         messageID: 'notify-temp',
         description: 'Temperature update',
         answer: undefined as never,
-        objectList: [{
-          objnam: 'S01',
-          params: { PROBE: '78.5' },
-        } as CircuitStatusMessage],
+        objectList: [
+          {
+            objnam: 'S01',
+            params: { PROBE: '78.5' },
+          } as CircuitStatusMessage,
+        ],
       };
 
       await platform.handleUpdate(notifyResponse);
@@ -478,53 +506,44 @@ describe('Platform Integration Tests', () => {
 
   describe('Error Resilience', () => {
     it('should recover from malformed JSON responses', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Get the data handler
-      const dataHandler = mockTelnetInstance.on.mock.calls.find(
-        call => call[0] === 'data'
-      )![1] as (chunk: Buffer) => Promise<void>;
+      const dataHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'data')![1] as (chunk: Buffer) => Promise<void>;
 
       // Send malformed JSON
       const malformedChunk = Buffer.from('{ "malformed": json}\n');
       await dataHandler(malformedChunk);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to parse JSON'),
-        expect.any(Error)
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to parse JSON'), expect.any(Error));
 
       // Send valid JSON after error - should still work
-      const validChunk = Buffer.from(JSON.stringify({
-        response: IntelliCenterResponseStatus.Ok,
-        command: IntelliCenterResponseCommand.SendQuery,
-        messageID: 'test-123',
-        description: 'Valid response',
-      }) + '\n');
+      const validChunk = Buffer.from(
+        JSON.stringify({
+          response: IntelliCenterResponseStatus.Ok,
+          command: IntelliCenterResponseCommand.SendQuery,
+          messageID: 'test-123',
+          description: 'Valid response',
+        }) + '\n',
+      );
 
       await dataHandler(validChunk);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Unhandled command in handleUpdate')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Unhandled command in handleUpdate'));
     });
 
     it('should handle connection drops and reconnect', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Get the close handler
-      const closeHandler = mockTelnetInstance.on.mock.calls.find(
-        call => call[0] === 'close'
-      )![1] as () => void;
+      const closeHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'close')![1] as () => void;
 
       const maybeReconnectSpy = jest.spyOn(platform as any, 'maybeReconnect').mockImplementation();
 
       // Simulate connection close
       closeHandler();
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('socket has been closed')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('socket has been closed'));
 
       // Fast-forward past reconnection delay
       jest.advanceTimersByTime(30000);
@@ -534,7 +553,7 @@ describe('Platform Integration Tests', () => {
     });
 
     it('should handle rate limiting under load', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
       (platform as any).isSocketAlive = true;
 
       // Send commands rapidly to trigger rate limiting (over 40/minute limit)
@@ -548,13 +567,11 @@ describe('Platform Integration Tests', () => {
       commands.forEach(cmd => platform.sendCommandNoWait(cmd as any));
 
       // Should log rate limiting debug messages
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.'
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith('Rate limit exceeded. Command dropped to prevent overwhelming IntelliCenter.');
     });
 
     it('should handle parse errors with frequency tracking', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const parseErrorResponse = {
         response: '400' as any, // Non-OK status to trigger error handling
@@ -570,15 +587,13 @@ describe('Platform Integration Tests', () => {
       }
 
       // Should detect frequent parse errors
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Frequent IntelliCenter ParseErrors detected')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Frequent IntelliCenter ParseErrors detected'));
     });
   });
 
   describe('Health Monitoring', () => {
     it('should track connection health over time', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Simulate successful operations
       const healthMonitor = (platform as any).healthMonitor;
@@ -592,7 +607,7 @@ describe('Platform Integration Tests', () => {
     });
 
     it('should detect unhealthy connection patterns', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const healthMonitor = (platform as any).healthMonitor;
 
@@ -607,56 +622,56 @@ describe('Platform Integration Tests', () => {
     });
 
     it('should detect connection timeout', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Set connection as old
       (platform as any).isSocketAlive = true;
-      (platform as any).lastMessageReceived = Date.now() - (5 * 60 * 60 * 1000);
+      (platform as any).lastMessageReceived = Date.now() - 5 * 60 * 60 * 1000;
 
       // Trigger heartbeat check
       jest.advanceTimersByTime(61000);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'No data from IntelliCenter in over 4 hours. Closing and restarting connection.'
-      );
+      expect(mockLogger.warn).toHaveBeenCalledWith('No data from IntelliCenter in over 4 hours. Closing and restarting connection.');
     });
   });
 
   describe('End-to-End Scenarios', () => {
     it('should handle complete device lifecycle', async () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // 1. Connection established
       mockTelnetInstance.connect.mockResolvedValue(undefined);
-      const connectHandler = mockTelnetInstance.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )![1] as () => void;
+      const connectHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'connect')![1] as () => void;
 
       connectHandler();
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'IntelliCenter socket connection has been established.'
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith('IntelliCenter socket connection has been established.');
 
       // 2. Discovery completed
       const mockTransformPanels = require('../../src/util').transformPanels;
-      mockTransformPanels.mockReturnValue([{
-        id: 'panel1',
-        modules: [{
-          id: 'module1',
-          circuits: [{
-            id: 'circuit1',
-            name: 'Pool Light',
-            objectType: ObjectType.Circuit,
-            circuitType: 'Light',
-          }],
-          bodies: [],
-          heaters: [],
+      mockTransformPanels.mockReturnValue([
+        {
+          id: 'panel1',
+          modules: [
+            {
+              id: 'module1',
+              circuits: [
+                {
+                  id: 'circuit1',
+                  name: 'Pool Light',
+                  objectType: ObjectType.Circuit,
+                  circuitType: 'Light',
+                },
+              ],
+              bodies: [],
+              heaters: [],
+              features: [],
+            },
+          ],
+          sensors: [],
+          pumps: [],
           features: [],
-        }],
-        sensors: [],
-        pumps: [],
-        features: [],
-      }]);
+        },
+      ]);
 
       // Mock discovery responses - complete all 7 commands first
       const discoveryResponses = [
@@ -735,10 +750,12 @@ describe('Platform Integration Tests', () => {
         messageID: 'update-1',
         description: 'Status update',
         answer: undefined as never,
-        objectList: [{
-          objnam: 'circuit1',
-          params: { STATUS: 'ON' },
-        } as CircuitStatusMessage],
+        objectList: [
+          {
+            objnam: 'circuit1',
+            params: { STATUS: 'ON' },
+          } as CircuitStatusMessage,
+        ],
       };
 
       await platform.handleUpdate(updateResponse);
@@ -746,32 +763,22 @@ describe('Platform Integration Tests', () => {
       // Verify complete flow worked
       // The registerPlatformAccessories should have been called for circuit discovery
       // Check if debug logs show discovery completion
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Discovery commands completed')
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Discovery commands completed'));
     });
 
     it('should handle graceful shutdown', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Simulate various shutdown scenarios
-      const errorHandler = mockTelnetInstance.on.mock.calls.find(
-        call => call[0] === 'error'
-      )![1] as (error: string) => void;
+      const errorHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'error')![1] as (error: string) => void;
 
-      const endHandler = mockTelnetInstance.on.mock.calls.find(
-        call => call[0] === 'end'
-      )![1] as (data: string) => void;
+      const endHandler = mockTelnetInstance.on.mock.calls.find(call => call[0] === 'end')![1] as (data: string) => void;
 
       errorHandler('Connection error');
       endHandler('Connection ended');
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('socket error has been detected')
-      );
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('socket connection has ended')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('socket error has been detected'));
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('socket connection has ended'));
     });
   });
 
@@ -789,14 +796,14 @@ describe('Platform Integration Tests', () => {
         sanitizedConfig: invalidConfig,
       });
 
-      platform = new PentairPlatform(mockLogger, invalidConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, invalidConfig, mockAPI);
 
       expect(mockLogger.error).toHaveBeenCalledWith('Configuration validation failed:');
     });
 
     it('should handle VSP pump configuration', () => {
       const vspConfig = { ...mockConfig, supportVSP: true };
-      
+
       // Mock config validation to return the VSP config
       const mockConfigValidator = require('../../src/configValidation').ConfigValidator;
       mockConfigValidator.validate.mockReturnValueOnce({
@@ -805,15 +812,15 @@ describe('Platform Integration Tests', () => {
         warnings: [],
         sanitizedConfig: { ...vspConfig },
       });
-      
-      platform = new PentairPlatform(mockLogger, vspConfig, mockAPI);
+
+      platform = createTrackedPlatform(mockLogger, vspConfig, mockAPI);
 
       expect(platform.getConfig().supportVSP).toBe(true);
     });
 
     it('should handle temperature unit configuration', () => {
       const celsiusConfig = { ...mockConfig, temperatureUnits: TemperatureUnits.C };
-      
+
       // Mock config validation to return the celsius config
       const mockConfigValidator = require('../../src/configValidation').ConfigValidator;
       mockConfigValidator.validate.mockReturnValueOnce({
@@ -822,8 +829,8 @@ describe('Platform Integration Tests', () => {
         warnings: [],
         sanitizedConfig: { ...celsiusConfig },
       });
-      
-      platform = new PentairPlatform(mockLogger, celsiusConfig, mockAPI);
+
+      platform = createTrackedPlatform(mockLogger, celsiusConfig, mockAPI);
 
       expect(platform.getConfig().temperatureUnits).toBe(TemperatureUnits.C);
     });

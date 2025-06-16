@@ -18,18 +18,19 @@ export class TemperatureAccessory {
     this.type = accessory.context.sensor.type;
     this.name = accessory.context.sensor.name;
 
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
+    this.accessory
+      .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, MANUFACTURER)
       .setCharacteristic(this.platform.Characteristic.Model, MODEL)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.UUID);
 
-    this.service = this.accessory.getService(this.platform.Service.TemperatureSensor)
-      || this.accessory.addService(this.platform.Service.TemperatureSensor, this.name);
+    this.service =
+      this.accessory.getService(this.platform.Service.TemperatureSensor) ||
+      this.accessory.addService(this.platform.Service.TemperatureSensor, this.name);
 
     this.service.setCharacteristic(this.platform.Characteristic.Name, this.name);
 
-    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-      .onGet(this.getCurrentTemperature.bind(this));
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).onGet(this.getCurrentTemperature.bind(this));
   }
 
   async getCurrentTemperature(): Promise<CharacteristicValue> {

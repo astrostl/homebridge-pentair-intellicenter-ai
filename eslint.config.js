@@ -1,6 +1,7 @@
 const js = require('@eslint/js');
 const tseslint = require('@typescript-eslint/eslint-plugin');
 const tsparser = require('@typescript-eslint/parser');
+const security = require('eslint-plugin-security');
 
 module.exports = [
   js.configs.recommended,
@@ -19,11 +20,13 @@ module.exports = [
         setTimeout: 'readonly',
         setInterval: 'readonly',
         clearTimeout: 'readonly',
-        clearInterval: 'readonly'
+        clearInterval: 'readonly',
+        NodeJS: 'readonly'
       }
     },
     plugins: {
-      '@typescript-eslint': tseslint
+      '@typescript-eslint': tseslint,
+      'security': security
     },
     rules: {
       'quotes': ['warn', 'single'],
@@ -49,7 +52,19 @@ module.exports = [
         'varsIgnorePattern': '^_',
         'args': 'after-used'
       }],
-      'no-unused-vars': 'off'  // Turn off base rule to avoid conflicts
+      'no-unused-vars': 'off',  // Turn off base rule to avoid conflicts
+      // Security rules (relaxed for legitimate IoT protocol access)
+      'security/detect-object-injection': 'off', // Disabled for HomeKit/IntelliCenter protocol communication
+      'security/detect-non-literal-regexp': 'warn',
+      'security/detect-non-literal-fs-filename': 'warn',
+      'security/detect-eval-with-expression': 'error',
+      'security/detect-no-csrf-before-method-override': 'warn',
+      'security/detect-buffer-noassert': 'error',
+      'security/detect-child-process': 'warn',
+      'security/detect-disable-mustache-escape': 'error',
+      'security/detect-pseudoRandomBytes': 'error',
+      'security/detect-possible-timing-attacks': 'warn',
+      'security/detect-unsafe-regex': 'error'
     }
   },
   {

@@ -49,33 +49,39 @@ describe('util.ts 100% coverage tests', () => {
 
   it('should cover null params checks in transform functions', () => {
     // Lines 168-169: transformFeatures with object having null params
-    const featureWithNullParams = [{
-      objnam: 'FEATURE1',
-      params: null  // This should trigger the null params check
-    }];
+    const featureWithNullParams = [
+      {
+        objnam: 'FEATURE1',
+        params: null, // This should trigger the null params check
+      },
+    ];
     expect(transformFeatures(featureWithNullParams)).toEqual([]);
 
     // Lines 215-216: transformPumps with object having null params
-    const pumpWithNullParams = [{
-      objnam: 'PUMP1', 
-      params: null  // This should trigger the null params check
-    }];
+    const pumpWithNullParams = [
+      {
+        objnam: 'PUMP1',
+        params: null, // This should trigger the null params check
+      },
+    ];
     expect(transformPumps(pumpWithNullParams)).toEqual([]);
   });
 
   it('should still work with transformPanels for integration', () => {
     // Test that we didn't break the main public API
     const testData = {
-      panels: [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null
-        }
-      }]
+      panels: [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null,
+          },
+        },
+      ],
     };
-    
+
     const result = transformPanels(testData as any);
     expect(result).toHaveLength(1);
     expect(result[0]?.modules).toEqual([]);
@@ -86,50 +92,55 @@ describe('util.ts 100% coverage tests', () => {
     const testDataWithInvalidObjects = {
       panels: [
         'invalid_string', // This should trigger lines 340-341
-        null,            // This should trigger lines 340-341  
-        {                // Valid object
+        null, // This should trigger lines 340-341
+        {
+          // Valid object
           objnam: 'P1',
           params: {
             OBJTYP: 'PANEL',
             SNAME: 'Panel 1',
-            OBJLIST: []
-          }
-        }
-      ]
+            OBJLIST: [],
+          },
+        },
+      ],
     };
-    
+
     const result = transformPanels(testDataWithInvalidObjects as any);
     expect(result).toHaveLength(1); // Only the valid object should be processed
-    
+
     // Lines 144-145: findBodyCircuit with invalid circuit objects
     const testDataWithInvalidCircuits = {
-      panels: [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: [{
-            objnam: 'M1',
-            params: {
-              OBJTYP: 'MODULE',
-              SNAME: 'Module 1',
-              CIRCUITS: [
-                'invalid_circuit', // This should trigger lines 144-145
-                null,             // This should trigger lines 144-145
-                {
-                  objnam: 'B1',
-                  params: {
-                    OBJTYP: 'BODY',
-                    SNAME: 'Pool'
-                  }
-                }
-              ]
-            }
-          }]
-        }
-      }]
+      panels: [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: [
+              {
+                objnam: 'M1',
+                params: {
+                  OBJTYP: 'MODULE',
+                  SNAME: 'Module 1',
+                  CIRCUITS: [
+                    'invalid_circuit', // This should trigger lines 144-145
+                    null, // This should trigger lines 144-145
+                    {
+                      objnam: 'B1',
+                      params: {
+                        OBJTYP: 'BODY',
+                        SNAME: 'Pool',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
     };
-    
+
     const result2 = transformPanels(testDataWithInvalidCircuits as any);
     expect(result2).toHaveLength(1);
   });

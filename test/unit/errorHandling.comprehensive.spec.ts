@@ -1,17 +1,16 @@
-import { 
-  CircuitBreaker, 
-  RetryManager, 
-  HealthMonitor, 
-  RateLimiter, 
+import {
+  CircuitBreaker,
+  RetryManager,
+  HealthMonitor,
+  RateLimiter,
   DeadLetterQueue,
   CircuitBreakerState,
   RetryOptions,
-  CircuitBreakerOptions
+  CircuitBreakerOptions,
 } from '../../src/errorHandling';
 import { IntelliCenterRequest, IntelliCenterRequestCommand, IntelliCenterQueryName } from '../../src/types';
 
 describe('Error Handling Components - Comprehensive Coverage', () => {
-  
   describe('CircuitBreaker - Advanced Scenarios', () => {
     let circuitBreaker: CircuitBreaker;
     let options: CircuitBreakerOptions;
@@ -32,7 +31,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
 
     it('should transition to HALF_OPEN after reset timeout', async () => {
       const failingOperation = jest.fn().mockRejectedValue(new Error('failure'));
-      
+
       // Trigger failures to open circuit breaker
       for (let i = 0; i < 3; i++) {
         try {
@@ -41,16 +40,16 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
           // Expected
         }
       }
-      
+
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.OPEN);
-      
+
       // Fast forward past reset timeout
       jest.advanceTimersByTime(6000);
-      
+
       // Next operation should transition to HALF_OPEN
       const successOperation = jest.fn().mockResolvedValue('success');
       await circuitBreaker.execute(successOperation);
-      
+
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.HALF_OPEN);
     });
 
@@ -58,7 +57,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
       // Force into HALF_OPEN state
       circuitBreaker.reset();
       const failingOperation = jest.fn().mockRejectedValue(new Error('failure'));
-      
+
       for (let i = 0; i < 3; i++) {
         try {
           await circuitBreaker.execute(failingOperation);
@@ -66,19 +65,19 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
           // Expected
         }
       }
-      
+
       jest.advanceTimersByTime(6000);
-      
+
       const successOperation = jest.fn().mockResolvedValue('success');
-      
+
       // First success - should stay HALF_OPEN
       await circuitBreaker.execute(successOperation);
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.HALF_OPEN);
-      
+
       // Second success - should stay HALF_OPEN
       await circuitBreaker.execute(successOperation);
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.HALF_OPEN);
-      
+
       // Third success - should close
       await circuitBreaker.execute(successOperation);
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.CLOSED);
@@ -87,7 +86,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
     it('should return to OPEN on failure in HALF_OPEN state', async () => {
       // Force into OPEN state
       const failingOperation = jest.fn().mockRejectedValue(new Error('failure'));
-      
+
       for (let i = 0; i < 3; i++) {
         try {
           await circuitBreaker.execute(failingOperation);
@@ -95,21 +94,21 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
           // Expected
         }
       }
-      
+
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.OPEN);
-      
+
       // Advance time to move to HALF_OPEN
       jest.advanceTimersByTime(6000);
-      
+
       // One success to get into HALF_OPEN
       const successOperation = jest.fn().mockResolvedValue('success');
       await circuitBreaker.execute(successOperation);
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.HALF_OPEN);
-      
+
       // Next failure should keep it in HALF_OPEN (not return to OPEN immediately)
       // The circuit breaker only goes OPEN after reaching threshold failures
       const failingOperation2 = jest.fn().mockRejectedValue(new Error('failure2'));
-      
+
       // Need to reach the failure threshold again
       for (let i = 0; i < 3; i++) {
         try {
@@ -118,13 +117,13 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
           // Expected
         }
       }
-      
+
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.OPEN);
     });
 
     it('should provide comprehensive stats', () => {
       const stats = circuitBreaker.getStats();
-      
+
       expect(stats).toHaveProperty('state');
       expect(stats).toHaveProperty('failureCount');
       expect(stats).toHaveProperty('lastFailureTime');
@@ -136,7 +135,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
 
     it('should reset all state when reset is called', async () => {
       const failingOperation = jest.fn().mockRejectedValue(new Error('failure'));
-      
+
       // Cause some failures
       for (let i = 0; i < 3; i++) {
         try {
@@ -145,12 +144,12 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
           // Expected
         }
       }
-      
+
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.OPEN);
-      
+
       // Reset should restore to CLOSED state
       circuitBreaker.reset();
-      
+
       expect(circuitBreaker.getState()).toBe(CircuitBreakerState.CLOSED);
       const stats = circuitBreaker.getStats();
       expect(stats.failureCount).toBe(0);
@@ -180,14 +179,10 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
       const logger = jest.fn();
       const operation = jest.fn().mockRejectedValue(new Error('UNAUTHORIZED'));
 
-      await expect(
-        RetryManager.withRetry(operation, options, logger)
-      ).rejects.toThrow('UNAUTHORIZED');
+      await expect(RetryManager.withRetry(operation, options, logger)).rejects.toThrow('UNAUTHORIZED');
 
       expect(operation).toHaveBeenCalledTimes(1);
-      expect(logger).toHaveBeenCalledWith(
-        expect.stringContaining('Non-retryable error encountered')
-      );
+      expect(logger).toHaveBeenCalledWith(expect.stringContaining('Non-retryable error encountered'));
     });
 
     it('should retry retryable errors', async () => {
@@ -200,7 +195,8 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
       };
 
       const logger = jest.fn();
-      const operation = jest.fn()
+      const operation = jest
+        .fn()
         .mockRejectedValueOnce(new Error('ECONNREFUSED'))
         .mockRejectedValueOnce(new Error('ECONNREFUSED'))
         .mockResolvedValueOnce('success');
@@ -237,9 +233,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
       };
 
       const logger = jest.fn();
-      const operation = jest.fn()
-        .mockRejectedValueOnce(new Error('ANY_ERROR'))
-        .mockResolvedValueOnce('success');
+      const operation = jest.fn().mockRejectedValueOnce(new Error('ANY_ERROR')).mockResolvedValueOnce('success');
 
       const result = await RetryManager.withRetry(operation, options, logger);
 
@@ -255,9 +249,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
         backoffFactor: 2,
       };
 
-      const operation = jest.fn()
-        .mockRejectedValueOnce(new Error('TEMPORARY_ERROR'))
-        .mockResolvedValueOnce('success');
+      const operation = jest.fn().mockRejectedValueOnce(new Error('TEMPORARY_ERROR')).mockResolvedValueOnce('success');
 
       const result = await RetryManager.withRetry(operation, options);
 
@@ -388,12 +380,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
     it('should respect max size limit', () => {
       // Add more commands than max size (3)
       for (let i = 0; i < 5; i++) {
-        deadLetterQueue.add(
-          { ...mockCommand, messageID: `msg-${i}` },
-          1,
-          `Error ${i}`,
-          `original-${i}`
-        );
+        deadLetterQueue.add({ ...mockCommand, messageID: `msg-${i}` }, 1, `Error ${i}`, `original-${i}`);
       }
 
       const failedCommands = deadLetterQueue.getFailedCommands();
@@ -404,16 +391,11 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
 
     it('should clean up expired items', () => {
       deadLetterQueue.add(mockCommand, 1, 'Old error', 'old-id');
-      
+
       // Fast forward past retention time
       jest.advanceTimersByTime(1500);
-      
-      deadLetterQueue.add(
-        { ...mockCommand, messageID: 'new-msg' },
-        1,
-        'New error',
-        'new-id'
-      );
+
+      deadLetterQueue.add({ ...mockCommand, messageID: 'new-msg' }, 1, 'New error', 'new-id');
 
       const failedCommands = deadLetterQueue.getFailedCommands();
       expect(failedCommands).toHaveLength(1);
@@ -423,12 +405,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
     it('should provide comprehensive stats', () => {
       deadLetterQueue.add(mockCommand, 1, 'Error 1', 'id-1');
       jest.advanceTimersByTime(100);
-      deadLetterQueue.add(
-        { ...mockCommand, messageID: 'msg-2' },
-        2,
-        'Error 2',
-        'id-2'
-      );
+      deadLetterQueue.add({ ...mockCommand, messageID: 'msg-2' }, 2, 'Error 2', 'id-2');
 
       const stats = deadLetterQueue.getStats();
       expect(stats.queueSize).toBe(2);
@@ -448,12 +425,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
 
     it('should clear all items', () => {
       deadLetterQueue.add(mockCommand, 1, 'Error 1', 'id-1');
-      deadLetterQueue.add(
-        { ...mockCommand, messageID: 'msg-2' },
-        2,
-        'Error 2',
-        'id-2'
-      );
+      deadLetterQueue.add({ ...mockCommand, messageID: 'msg-2' }, 2, 'Error 2', 'id-2');
 
       expect(deadLetterQueue.getFailedCommands()).toHaveLength(2);
 
@@ -480,10 +452,10 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
     it('should allow requests within limit', () => {
       expect(rateLimiter.canMakeRequest()).toBe(true);
       expect(rateLimiter.recordRequest()).toBe(true);
-      
+
       expect(rateLimiter.canMakeRequest()).toBe(true);
       expect(rateLimiter.recordRequest()).toBe(true);
-      
+
       expect(rateLimiter.canMakeRequest()).toBe(true);
       expect(rateLimiter.recordRequest()).toBe(true);
     });
@@ -597,7 +569,7 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
           },
           1,
           String(error),
-          'original-1'
+          'original-1',
         );
       }
 
@@ -622,36 +594,36 @@ describe('Error Handling Components - Comprehensive Coverage', () => {
   describe('Additional Branch Coverage Tests', () => {
     it('should cover DeadLetterQueue optional chaining branches (lines 241-242)', () => {
       const dlq = new DeadLetterQueue();
-      
+
       // Create items with null timestamps to trigger optional chaining
       const itemWithNullTimestamp1 = {
         command: { command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg1' },
         attempts: 1,
         lastError: 'Test error',
         originalMessageId: 'orig1',
-        timestamp: null as any  // This should trigger optional chaining
+        timestamp: null as any, // This should trigger optional chaining
       };
-      
+
       const itemWithNullTimestamp2 = {
         command: { command: IntelliCenterRequestCommand.GetQuery, messageID: 'msg2' },
         attempts: 1,
         lastError: 'Test error',
         originalMessageId: 'orig2',
-        timestamp: null as any  // This should trigger optional chaining
+        timestamp: null as any, // This should trigger optional chaining
       };
-      
+
       // Clear existing queue and set items with null timestamps directly
       dlq.clear();
-      
+
       // Access internal queue directly to bypass normal add method
       (dlq as any).queue = [itemWithNullTimestamp1, itemWithNullTimestamp2];
-      
+
       // Disable cleanup to prevent items from being removed
       (dlq as any).maxRetentionMs = Number.MAX_SAFE_INTEGER;
-      
+
       const stats = dlq.getStats();
       expect(stats.queueSize).toBe(2);
-      // The optional chaining should handle null timestamps  
+      // The optional chaining should handle null timestamps
       expect(stats.oldestTimestamp).toBeNull();
       expect(stats.newestTimestamp).toBeNull();
     });

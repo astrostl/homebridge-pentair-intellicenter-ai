@@ -10,7 +10,7 @@ import {
   updateCircuit,
   updatePump,
 } from '../src/util';
-import {Color} from '../src/types';
+import { Color } from '../src/types';
 
 import beforeTransform from './resources/beforeTransform.json';
 import afterTransform from './resources/afterTransform.json';
@@ -23,7 +23,6 @@ import pumpResponse from './resources/pumpResponse.json';
 import sensorResponse from './resources/sensorResponse.json';
 import valveResponse from './resources/valveResponse.json';
 import mergeResult from './resources/mergeResult.json';
-
 
 describe('Test IntellBrite Colors', () => {
   it('Test White', () => {
@@ -155,13 +154,13 @@ describe('Test utility functions', () => {
       ];
 
       mergeResponseArray(target, responseToAdd);
-      
+
       // Based on actual behavior: obj1 gets merged, obj3 gets added
       expect(target.length).toBe(2);
-      
+
       // Should add new items to target array (obj3)
       expect(target.some(obj => obj.OBJID === 'obj3')).toBe(true);
-      
+
       // obj2 should remain unchanged
       expect(target.some(obj => obj.OBJID === 'obj2')).toBe(true);
     });
@@ -198,10 +197,10 @@ describe('Test utility functions', () => {
     it('should skip prototype pollution attempts', () => {
       const target = { a: 1 };
       const maliciousResponse = {
-        '__proto__': { polluted: true },
-        'constructor': { polluted: true },
-        'prototype': { polluted: true },
-        'b': 2,
+        __proto__: { polluted: true },
+        constructor: { polluted: true },
+        prototype: { polluted: true },
+        b: 2,
       };
 
       mergeResponse(target, maliciousResponse);
@@ -304,14 +303,16 @@ describe('Test update functions', () => {
     it('should handle transformPanels with null response properties', () => {
       const responseWithNulls = {
         answer: {
-          panels: [{
-            circuits: null, // This will test the null check in extractCircuits
-            heaters: null,  // This will test the null check in extractHeaters
-            bodies: null,   // This will test the null check in extractBodies  
-            sensors: null,  // This will test the null check in extractSensors
-            features: null, // This will test the null check in extractFeatures
-          }]
-        }
+          panels: [
+            {
+              circuits: null, // This will test the null check in extractCircuits
+              heaters: null, // This will test the null check in extractHeaters
+              bodies: null, // This will test the null check in extractBodies
+              sensors: null, // This will test the null check in extractSensors
+              features: null, // This will test the null check in extractFeatures
+            },
+          ],
+        },
       };
 
       const result = transformPanels(responseWithNulls as any);
@@ -321,10 +322,12 @@ describe('Test update functions', () => {
     it('should handle transformPanels with undefined response properties', () => {
       const responseWithUndefined = {
         answer: {
-          panels: [{
-            // Missing all arrays - should handle undefined gracefully
-          }]
-        }
+          panels: [
+            {
+              // Missing all arrays - should handle undefined gracefully
+            },
+          ],
+        },
       };
 
       const result = transformPanels(responseWithUndefined as any);
@@ -333,55 +336,61 @@ describe('Test update functions', () => {
 
     it('should cover all null/undefined guard clauses in util functions', () => {
       // Test to achieve 100% coverage by hitting specific uncovered lines
-      
+
       // Test extractHeaters with null input (lines 36-37)
       const heaterResponse = {
         answer: {
-          panels: [{
-            objid: 'P1',
-            objnam: 'Panel 1',
-            heaters: null, // This should hit lines 36-37
-            circuits: [], 
-            bodies: [],
-            sensors: [],
-            features: [],
-            pumps: [],
-          }]
-        }
+          panels: [
+            {
+              objid: 'P1',
+              objnam: 'Panel 1',
+              heaters: null, // This should hit lines 36-37
+              circuits: [],
+              bodies: [],
+              sensors: [],
+              features: [],
+              pumps: [],
+            },
+          ],
+        },
       };
       transformPanels(heaterResponse as any);
 
-      // Test extractBodies with null input (lines 95-96)  
+      // Test extractBodies with null input (lines 95-96)
       const bodyResponse = {
         answer: {
-          panels: [{
-            objid: 'P1',
-            objnam: 'Panel 1',
-            heaters: [],
-            circuits: null, // This should hit lines 95-96 in transformBodies
-            bodies: [],
-            sensors: [],
-            features: [],
-            pumps: [],
-          }]
-        }
+          panels: [
+            {
+              objid: 'P1',
+              objnam: 'Panel 1',
+              heaters: [],
+              circuits: null, // This should hit lines 95-96 in transformBodies
+              bodies: [],
+              sensors: [],
+              features: [],
+              pumps: [],
+            },
+          ],
+        },
       };
       transformPanels(bodyResponse as any);
 
       // Test transformFeatures with null input (lines 128-129)
       const featureResponse = {
         answer: {
-          panels: [{
-            objid: 'P1',
-            objnam: 'Panel 1', 
-            heaters: [],
-            circuits: [],
-            bodies: [],
-            sensors: [],
-            features: null, // This should hit lines 128-129
-            pumps: [],
-          }]
-        }
+          panels: [
+            {
+              objid: 'P1',
+              objnam: 'Panel 1',
+              heaters: [],
+              circuits: [],
+              bodies: [],
+              sensors: [],
+              features: null, // This should hit lines 128-129
+              pumps: [],
+            },
+          ],
+        },
       };
       transformPanels(featureResponse as any);
 
@@ -389,26 +398,29 @@ describe('Test update functions', () => {
       // This is hit when no matching circuit is found
       const emptyResponse = {
         answer: {
-          panels: [{
-            objid: 'P1',
-            objnam: 'Panel 1',
-            heaters: [],
-            circuits: [],
-            bodies: [{
-              objid: 'B1',
-              params: {
-                objtyp: 'BODY',
-                objnam: 'Pool'
-              }
-            }],
-            sensors: [],
-            features: [],
-            pumps: [],
-          }]
-        }
+          panels: [
+            {
+              objid: 'P1',
+              objnam: 'Panel 1',
+              heaters: [],
+              circuits: [],
+              bodies: [
+                {
+                  objid: 'B1',
+                  params: {
+                    objtyp: 'BODY',
+                    objnam: 'Pool',
+                  },
+                },
+              ],
+              sensors: [],
+              features: [],
+              pumps: [],
+            },
+          ],
+        },
       };
       transformPanels(emptyResponse as any);
-
     });
 
     it('should handle circuit object with missing status properties', () => {
@@ -428,7 +440,7 @@ describe('Test update functions', () => {
     });
 
     it('should handle pump circuit with missing speed properties', () => {
-      // Test coverage for lines where SPEED is undefined in updatePump  
+      // Test coverage for lines where SPEED is undefined in updatePump
       const pumpCircuit = {
         id: 'P1',
         name: 'Pool Pump',
@@ -462,142 +474,170 @@ describe('Test update functions', () => {
 
     it('should cover additional uncovered lines in util functions', () => {
       // Cover lines 36-37: transformHeaters with null input
-      const heatersNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null // This should trigger null check at lines 35-37 in transformHeaters
-        }
-      }];
+      const heatersNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null, // This should trigger null check at lines 35-37 in transformHeaters
+          },
+        },
+      ];
       transformPanels(heatersNullTest as any);
 
       // Cover lines 95-96: transformBodies with null input
-      const bodiesNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null // This should trigger null check at lines 94-96 in transformBodies
-        }
-      }];
+      const bodiesNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null, // This should trigger null check at lines 94-96 in transformBodies
+          },
+        },
+      ];
       transformPanels(bodiesNullTest as any);
 
       // Cover lines 128-129: transformFeatures with null input
-      const featuresNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null // This should trigger null check at lines 127-129 in transformFeatures
-        }
-      }];
+      const featuresNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null, // This should trigger null check at lines 127-129 in transformFeatures
+          },
+        },
+      ];
       transformPanels(featuresNullTest as any);
 
       // Cover lines 172-173: transformPumps with null input
-      const pumpsNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null // This should trigger null check at lines 171-173 in transformPumps
-        }
-      }];
+      const pumpsNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null, // This should trigger null check at lines 171-173 in transformPumps
+          },
+        },
+      ];
       transformPanels(pumpsNullTest as any);
 
       // Cover lines 177-178: transformPumps with pumpObj missing params
-      const pumpNoParamsTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: [{
-            objnam: 'PUMP1'
-            // Missing params key - should trigger lines 177-178
-          }]
-        }
-      }];
+      const pumpNoParamsTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: [
+              {
+                objnam: 'PUMP1',
+                // Missing params key - should trigger lines 177-178
+              },
+            ],
+          },
+        },
+      ];
       transformPanels(pumpNoParamsTest as any);
 
       // Cover lines 219-220: transformTempSensors with null input
-      const sensorsNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null // This should trigger null check at lines 218-220 in transformTempSensors
-        }
-      }];
+      const sensorsNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null, // This should trigger null check at lines 218-220 in transformTempSensors
+          },
+        },
+      ];
       transformPanels(sensorsNullTest as any);
 
       // Cover lines 245-246: transformPumpCircuits with null input
-      const pumpCircuitsNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: [{
-            objnam: 'PUMP1',
-            params: {
-              OBJTYP: 'PUMP',
-              SUBTYP: 'SPEED',
-              SNAME: 'Pool Pump',
-              OBJLIST: null // This should trigger null check at lines 244-246 in transformPumpCircuits
-            }
-          }]
-        }
-      }];
+      const pumpCircuitsNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: [
+              {
+                objnam: 'PUMP1',
+                params: {
+                  OBJTYP: 'PUMP',
+                  SUBTYP: 'SPEED',
+                  SNAME: 'Pool Pump',
+                  OBJLIST: null, // This should trigger null check at lines 244-246 in transformPumpCircuits
+                },
+              },
+            ],
+          },
+        },
+      ];
       transformPanels(pumpCircuitsNullTest as any);
 
       // Cover lines 260-261: transformModules with null input
-      const modulesNullTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: null // This should trigger null check at lines 259-261 in transformModules
-        }
-      }];
+      const modulesNullTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: null, // This should trigger null check at lines 259-261 in transformModules
+          },
+        },
+      ];
       transformPanels(modulesNullTest as any);
     });
 
     it('should cover remaining uncovered null checks in util.ts', () => {
       // Cover lines 36-37: transformHeaters with null circuits input
       // This happens when a module has null CIRCUITS
-      const heatersNullCircuitsTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: [{
-            objnam: 'M1',
-            params: {
-              OBJTYP: 'MODULE',
-              SNAME: 'Module 1',
-              CIRCUITS: null // This should trigger null check at lines 35-37 in transformHeaters
-            }
-          }]
-        }
-      }];
+      const heatersNullCircuitsTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: [
+              {
+                objnam: 'M1',
+                params: {
+                  OBJTYP: 'MODULE',
+                  SNAME: 'Module 1',
+                  CIRCUITS: null, // This should trigger null check at lines 35-37 in transformHeaters
+                },
+              },
+            ],
+          },
+        },
+      ];
       transformPanels(heatersNullCircuitsTest as any);
 
       // Cover lines 95-96: transformBodies with null circuits input
       // This also happens when a module has null CIRCUITS
-      const bodiesNullCircuitsTest = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: [{
-            objnam: 'M1',
-            params: {
-              OBJTYP: 'MODULE',
-              SNAME: 'Module 1',
-              CIRCUITS: null // This should trigger null check at lines 94-96 in transformBodies
-            }
-          }]
-        }
-      }];
+      const bodiesNullCircuitsTest = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: [
+              {
+                objnam: 'M1',
+                params: {
+                  OBJTYP: 'MODULE',
+                  SNAME: 'Module 1',
+                  CIRCUITS: null, // This should trigger null check at lines 94-96 in transformBodies
+                },
+              },
+            ],
+          },
+        },
+      ];
       transformPanels(bodiesNullCircuitsTest as any);
     });
 
@@ -612,50 +652,56 @@ describe('Test update functions', () => {
 
       // Test variable speed pump discovery with logger (lines 187-189)
       // Pumps need to be in params.OBJLIST structure, not features
-      const variableSpeedPumpResponse = [{
-        objnam: 'P1', // OBJ_ID_KEY is 'objnam'
-        params: {     // PARAMS_KEY is 'params'
-          OBJTYP: 'PANEL',  
-          SNAME: 'Panel 1',  // OBJ_NAME_KEY is 'SNAME'
-          OBJLIST: [{
-            objnam: 'PUMP1',   // OBJ_ID_KEY is 'objnam'
-            params: {          // PARAMS_KEY is 'params'
-              OBJTYP: 'PUMP',
-              SUBTYP: 'SPEED', // OBJ_SUBTYPE_KEY is 'SUBTYP'
-              SNAME: 'Pool Pump VS' // OBJ_NAME_KEY is 'SNAME'
-            }
-          }]
-        }
-      }];
+      const variableSpeedPumpResponse = [
+        {
+          objnam: 'P1', // OBJ_ID_KEY is 'objnam'
+          params: {
+            // PARAMS_KEY is 'params'
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1', // OBJ_NAME_KEY is 'SNAME'
+            OBJLIST: [
+              {
+                objnam: 'PUMP1', // OBJ_ID_KEY is 'objnam'
+                params: {
+                  // PARAMS_KEY is 'params'
+                  OBJTYP: 'PUMP',
+                  SUBTYP: 'SPEED', // OBJ_SUBTYPE_KEY is 'SUBTYP'
+                  SNAME: 'Pool Pump VS', // OBJ_NAME_KEY is 'SNAME'
+                },
+              },
+            ],
+          },
+        },
+      ];
       transformPanels(variableSpeedPumpResponse as any, true, mockLogger);
-      
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Variable speed pump discovered')
-      );
+
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Variable speed pump discovered'));
 
       // Test non-variable speed pump with logger (lines 190-192)
-      const nonVariableSpeedPumpResponse = [{
-        objnam: 'P1',
-        params: {
-          OBJTYP: 'PANEL',
-          SNAME: 'Panel 1',
-          OBJLIST: [{
-            objnam: 'PUMP2',
-            params: {
-              OBJTYP: 'PUMP',
-              SUBTYP: 'REGULAR', // Non-variable speed pump subtype
-              SNAME: 'Pool Pump Regular'
-            }
-          }]
-        }
-      }];
-      
+      const nonVariableSpeedPumpResponse = [
+        {
+          objnam: 'P1',
+          params: {
+            OBJTYP: 'PANEL',
+            SNAME: 'Panel 1',
+            OBJLIST: [
+              {
+                objnam: 'PUMP2',
+                params: {
+                  OBJTYP: 'PUMP',
+                  SUBTYP: 'REGULAR', // Non-variable speed pump subtype
+                  SNAME: 'Pool Pump Regular',
+                },
+              },
+            ],
+          },
+        },
+      ];
+
       mockLogger.debug.mockClear();
       transformPanels(nonVariableSpeedPumpResponse as any, true, mockLogger);
-      
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Pump filtered out')
-      );
+
+      expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Pump filtered out'));
     });
   });
 });

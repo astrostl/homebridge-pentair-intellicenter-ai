@@ -33,14 +33,34 @@ const baseConfig: PlatformConfig = {
 };
 
 describe('Configuration Integration Tests', () => {
+  // Track platform instances for cleanup
+  const platformInstances: PentairPlatform[] = [];
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    // Clean up all platform instances to prevent timer leaks
+    platformInstances.forEach(platform => {
+      if (platform && typeof platform.cleanup === 'function') {
+        platform.cleanup();
+      }
+    });
+    platformInstances.length = 0;
+  });
+
+  // Helper function to create and track platform instances
+  const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
+    const platform = new PentairPlatform(logger, config, api);
+    platformInstances.push(platform);
+    return platform;
+  };
+
   describe('Required Configuration Validation', () => {
     it('should accept valid minimum configuration', () => {
       expect(() => {
-        new PentairPlatform(mockLogger, baseConfig, mockAPI);
+        createTrackedPlatform(mockLogger, baseConfig, mockAPI);
       }).not.toThrow();
 
       expect(mockLogger.error).not.toHaveBeenCalled();
@@ -50,21 +70,17 @@ describe('Configuration Integration Tests', () => {
       const configWithoutIP = { ...baseConfig };
       delete (configWithoutIP as any).ipAddress;
 
-      new PentairPlatform(mockLogger, configWithoutIP, mockAPI);
+      createTrackedPlatform(mockLogger, configWithoutIP, mockAPI);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('ipAddress is required and must be a string')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('ipAddress is required and must be a string'));
     });
 
     it('should handle empty IP address', () => {
       const configWithEmptyIP = { ...baseConfig, ipAddress: '' };
 
-      new PentairPlatform(mockLogger, configWithEmptyIP, mockAPI);
+      createTrackedPlatform(mockLogger, configWithEmptyIP, mockAPI);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('ipAddress is required and must be a string')
-      );
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('ipAddress is required and must be a string'));
     });
 
     it('should handle missing credentials gracefully', () => {
@@ -74,19 +90,19 @@ describe('Configuration Integration Tests', () => {
 
       // Should not error during construction, but will fail on connection
       expect(() => {
-        new PentairPlatform(mockLogger, configWithoutCredentials, mockAPI);
+        createTrackedPlatform(mockLogger, configWithoutCredentials, mockAPI);
       }).not.toThrow();
     });
   });
 
   describe('Optional Configuration Parameters', () => {
     it('should apply default values for optional parameters', () => {
-      const platform = new PentairPlatform(mockLogger, baseConfig, mockAPI);
-      
+      const platform = createTrackedPlatform(mockLogger, baseConfig, mockAPI);
+
       // Platform should handle defaults internally
       expect(platform['maxBufferSize']).toBeDefined();
       expect(platform['maxBufferSize']).toBe(1048576); // Default 1MB
-      
+
       // Config getter returns raw config (which may not have defaults)
       const config = platform.getConfig();
       expect(config.ipAddress).toBe(baseConfig.ipAddress);
@@ -96,8 +112,8 @@ describe('Configuration Integration Tests', () => {
       const celsiusConfig = { ...baseConfig, temperatureUnits: 'C' };
       const fahrenheitConfig = { ...baseConfig, temperatureUnits: 'F' };
 
-      const celsiusPlatform = new PentairPlatform(mockLogger, celsiusConfig, mockAPI);
-      const fahrenheitPlatform = new PentairPlatform(mockLogger, fahrenheitConfig, mockAPI);
+      const celsiusPlatform = createTrackedPlatform(mockLogger, celsiusConfig, mockAPI);
+      const fahrenheitPlatform = createTrackedPlatform(mockLogger, fahrenheitConfig, mockAPI);
 
       expect(celsiusPlatform.getConfig().temperatureUnits).toBe('C');
       expect(fahrenheitPlatform.getConfig().temperatureUnits).toBe('F');
@@ -110,7 +126,7 @@ describe('Configuration Integration Tests', () => {
         maximumTemperature: 110,
       };
 
-      const platform = new PentairPlatform(mockLogger, customTempConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, customTempConfig, mockAPI);
       const config = platform.getConfig();
 
       expect(config.minimumTemperature).toBe(50);
@@ -121,8 +137,8 @@ describe('Configuration Integration Tests', () => {
       const vspEnabledConfig = { ...baseConfig, supportVSP: true };
       const vspDisabledConfig = { ...baseConfig, supportVSP: false };
 
-      const vspEnabledPlatform = new PentairPlatform(mockLogger, vspEnabledConfig, mockAPI);
-      const vspDisabledPlatform = new PentairPlatform(mockLogger, vspDisabledConfig, mockAPI);
+      const vspEnabledPlatform = createTrackedPlatform(mockLogger, vspEnabledConfig, mockAPI);
+      const vspDisabledPlatform = createTrackedPlatform(mockLogger, vspDisabledConfig, mockAPI);
 
       expect(vspEnabledPlatform.getConfig().supportVSP).toBe(true);
       expect(vspDisabledPlatform.getConfig().supportVSP).toBe(false);
@@ -132,8 +148,8 @@ describe('Configuration Integration Tests', () => {
       const airTempEnabledConfig = { ...baseConfig, airTemp: true };
       const airTempDisabledConfig = { ...baseConfig, airTemp: false };
 
-      const airTempEnabledPlatform = new PentairPlatform(mockLogger, airTempEnabledConfig, mockAPI);
-      const airTempDisabledPlatform = new PentairPlatform(mockLogger, airTempDisabledConfig, mockAPI);
+      const airTempEnabledPlatform = createTrackedPlatform(mockLogger, airTempEnabledConfig, mockAPI);
+      const airTempDisabledPlatform = createTrackedPlatform(mockLogger, airTempDisabledConfig, mockAPI);
 
       expect(airTempEnabledPlatform.getConfig().airTemp).toBe(true);
       expect(airTempDisabledPlatform.getConfig().airTemp).toBe(false);
@@ -143,8 +159,8 @@ describe('Configuration Integration Tests', () => {
       const includeAllConfig = { ...baseConfig, includeAllCircuits: true };
       const excludeNonFeaturesConfig = { ...baseConfig, includeAllCircuits: false };
 
-      const includeAllPlatform = new PentairPlatform(mockLogger, includeAllConfig, mockAPI);
-      const excludePlatform = new PentairPlatform(mockLogger, excludeNonFeaturesConfig, mockAPI);
+      const includeAllPlatform = createTrackedPlatform(mockLogger, includeAllConfig, mockAPI);
+      const excludePlatform = createTrackedPlatform(mockLogger, excludeNonFeaturesConfig, mockAPI);
 
       expect(includeAllPlatform.getConfig().includeAllCircuits).toBe(true);
       expect(excludePlatform.getConfig().includeAllCircuits).toBe(false);
@@ -153,7 +169,7 @@ describe('Configuration Integration Tests', () => {
     it('should handle custom buffer size configuration', () => {
       const customBufferConfig = { ...baseConfig, maxBufferSize: 2097152 }; // 2MB
 
-      const platform = new PentairPlatform(mockLogger, customBufferConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, customBufferConfig, mockAPI);
       const config = platform.getConfig();
 
       expect(config.maxBufferSize).toBe(2097152);
@@ -163,17 +179,17 @@ describe('Configuration Integration Tests', () => {
   describe('Configuration Edge Cases', () => {
     it('should handle IP addresses with different formats', () => {
       const ipFormats = [
-        '192.168.1.100',      // Standard IPv4
-        '10.0.0.1',           // Private network
-        '172.16.0.1',         // Another private range
+        '192.168.1.100', // Standard IPv4
+        '10.0.0.1', // Private network
+        '172.16.0.1', // Another private range
         'intellicenter.local', // Hostname
       ];
 
       ipFormats.forEach(ip => {
         const config = { ...baseConfig, ipAddress: ip };
-        
+
         expect(() => {
-          new PentairPlatform(mockLogger, config, mockAPI);
+          createTrackedPlatform(mockLogger, config, mockAPI);
         }).not.toThrow();
       });
     });
@@ -187,7 +203,7 @@ describe('Configuration Integration Tests', () => {
       };
 
       expect(() => {
-        new PentairPlatform(mockLogger, configWithStringNumbers as any, mockAPI);
+        createTrackedPlatform(mockLogger, configWithStringNumbers as any, mockAPI);
       }).not.toThrow();
     });
 
@@ -200,7 +216,7 @@ describe('Configuration Integration Tests', () => {
       };
 
       expect(() => {
-        new PentairPlatform(mockLogger, configWithStringBooleans as any, mockAPI);
+        createTrackedPlatform(mockLogger, configWithStringBooleans as any, mockAPI);
       }).not.toThrow();
     });
 
@@ -212,14 +228,14 @@ describe('Configuration Integration Tests', () => {
       };
 
       expect(() => {
-        new PentairPlatform(mockLogger, minimalConfig as any, mockAPI);
+        createTrackedPlatform(mockLogger, minimalConfig as any, mockAPI);
       }).not.toThrow();
     });
   });
 
   describe('Configuration Schema Validation', () => {
     it('should match expected configuration schema structure', () => {
-      const platform = new PentairPlatform(mockLogger, baseConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, baseConfig, mockAPI);
       const config = platform.getConfig();
 
       // Required fields
@@ -246,7 +262,7 @@ describe('Configuration Integration Tests', () => {
         includeAllCircuits: true,
       };
 
-      const platform = new PentairPlatform(mockLogger, fullConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, fullConfig, mockAPI);
       const config = platform.getConfig();
 
       expect(config.username).toBe('testuser');
@@ -264,13 +280,13 @@ describe('Configuration Integration Tests', () => {
   describe('Configuration Error Scenarios', () => {
     it('should handle null configuration', () => {
       expect(() => {
-        new PentairPlatform(mockLogger, null as any, mockAPI);
+        createTrackedPlatform(mockLogger, null as any, mockAPI);
       }).toThrow();
     });
 
     it('should handle undefined configuration', () => {
       expect(() => {
-        new PentairPlatform(mockLogger, undefined as any, mockAPI);
+        createTrackedPlatform(mockLogger, undefined as any, mockAPI);
       }).toThrow();
     });
 
@@ -285,7 +301,7 @@ describe('Configuration Integration Tests', () => {
 
       // Should not throw during construction
       expect(() => {
-        new PentairPlatform(mockLogger, invalidConfig as any, mockAPI);
+        createTrackedPlatform(mockLogger, invalidConfig as any, mockAPI);
       }).not.toThrow();
     });
   });
@@ -302,7 +318,7 @@ describe('Configuration Integration Tests', () => {
         includeAllCircuits: false,
       };
 
-      const platform = new PentairPlatform(mockLogger, poolConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, poolConfig, mockAPI);
       expect(platform.getConfig().temperatureUnits).toBe('F');
     });
 
@@ -317,7 +333,7 @@ describe('Configuration Integration Tests', () => {
         includeAllCircuits: true,
       };
 
-      const platform = new PentairPlatform(mockLogger, spaConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, spaConfig, mockAPI);
       expect(platform.getConfig().minimumTemperature).toBe(80);
     });
 
@@ -332,7 +348,7 @@ describe('Configuration Integration Tests', () => {
         includeAllCircuits: false,
       };
 
-      const platform = new PentairPlatform(mockLogger, europeanConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, europeanConfig, mockAPI);
       expect(platform.getConfig().temperatureUnits).toBe('C');
       expect(platform.getConfig().minimumTemperature).toBe(4);
       expect(platform.getConfig().maximumTemperature).toBe(40);
