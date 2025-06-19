@@ -143,6 +143,7 @@ export type PumpCircuit = {
   circuitId: string;
   speed: number;
   speedType: string;
+  status?: CircuitStatus;
 } & BaseCircuit;
 
 export type Sensor = {

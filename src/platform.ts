@@ -437,8 +437,12 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   updatePump(accessory: PlatformAccessory, params: IntelliCenterParams) {
+    this.log.debug(`Updating pump circuit ${accessory.context.pumpCircuit.id} with params:`, this.json(params));
     updateCircuit(accessory.context.pumpCircuit, params);
     updatePump(accessory.context.pumpCircuit, params);
+    this.log.debug(
+      `After update - pump circuit status: ${accessory.context.pumpCircuit.status}, speed: ${accessory.context.pumpCircuit.speed}`,
+    );
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
 
@@ -494,12 +498,14 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       // Update the pump data in the accessory context
       const pump = pumpRpmAccessory.context.pump as Pump;
 
-      // Find the pump circuit in the pump's circuits and update its speed
+      // Find the pump circuit in the pump's circuits and update its properties
       if (pump.circuits) {
         const circuitToUpdate = pump.circuits.find((c: PumpCircuit) => c.id === pumpCircuit.id);
         if (circuitToUpdate) {
           circuitToUpdate.speed = pumpCircuit.speed;
           circuitToUpdate.speedType = pumpCircuit.speedType;
+          circuitToUpdate.status = pumpCircuit.status;
+          this.log.debug(`Updated pump circuit ${circuitToUpdate.id}: speed=${circuitToUpdate.speed}, status=${circuitToUpdate.status}`);
         }
       }
 

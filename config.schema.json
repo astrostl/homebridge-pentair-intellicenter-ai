@@ -3,13 +3,16 @@
   "pluginType": "platform",
   "singular": true,
   "name": "PentairIntelliCenter",
+  "headerDisplay": "For help and support visit: [GitHub Repository](https://github.com/astrostl/homebridge-pentair-intellicenter-ai)",
+  "footerDisplay": "💖 Support this plugin: [GitHub Sponsors](https://github.com/sponsors/astrostl) | [PayPal](https://paypal.me/astrostl)",
+  "donate": "https://paypal.me/astrostl",
   "funding": [
     {
       "type": "github",
       "url": "https://github.com/sponsors/astrostl"
     },
     {
-      "type": "paypal",
+      "type": "paypal", 
       "url": "https://paypal.me/astrostl"
     }
   ],
