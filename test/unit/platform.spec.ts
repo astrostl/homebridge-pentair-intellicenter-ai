@@ -137,6 +137,24 @@ describe('PentairPlatform', () => {
           UUID: uuid,
           displayName: name,
           context: {},
+          getService: jest.fn().mockReturnValue({
+            setCharacteristic: jest.fn().mockReturnThis(),
+            getCharacteristic: jest.fn().mockReturnValue({
+              onGet: jest.fn().mockReturnThis(),
+              onSet: jest.fn().mockReturnThis(),
+              updateValue: jest.fn().mockReturnThis(),
+            }),
+            updateCharacteristic: jest.fn().mockReturnThis(),
+          }),
+          addService: jest.fn().mockReturnValue({
+            setCharacteristic: jest.fn().mockReturnThis(),
+            getCharacteristic: jest.fn().mockReturnValue({
+              onGet: jest.fn().mockReturnThis(),
+              onSet: jest.fn().mockReturnThis(),
+              updateValue: jest.fn().mockReturnThis(),
+            }),
+            updateCharacteristic: jest.fn().mockReturnThis(),
+          }),
         };
       }),
     } as any;
@@ -1928,7 +1946,7 @@ describe('PentairPlatform', () => {
       const currentSensorIds = new Set<string>();
       const currentHeaterIds = new Set<string>();
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
 
       expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned circuit accessory: Pool Light (C01)'));
       expect(mockAPI.unregisterPlatformAccessories).toHaveBeenCalled();
@@ -1949,7 +1967,7 @@ describe('PentairPlatform', () => {
       const currentSensorIds = new Set<string>(['S02']); // Different ID to trigger removal
       const currentHeaterIds = new Set<string>();
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
 
       expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned sensor accessory: Pool Temp (S01)'));
     });
@@ -1971,7 +1989,7 @@ describe('PentairPlatform', () => {
       const currentSensorIds = new Set<string>();
       const currentHeaterIds = new Set<string>(['H01.B02']); // Different body ID to trigger removal
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
 
       expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned heater accessory: Pool Heater (H01.B01)'));
     });

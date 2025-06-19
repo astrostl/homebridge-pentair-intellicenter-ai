@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Pentair IntelliCenter AI",
   "name": "homebridge-pentair-intellicenter-ai",
-  "version": "2.6.1-beta.1",
+  "version": "2.7.0-beta.1",
   "description": "Homebridge plugin for the Pentair IntelliCenter pool control system (maintained with AI assistance)",
   "license": "Apache-2.0",
   "repository": {
@@ -78,8 +78,14 @@
     "typescript": "^5.8.3"
   },
   "homepage": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai#readme",
-  "funding": {
-    "type": "github",
-    "url": "https://github.com/sponsors/astrostl"
-  }
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/astrostl"
+    },
+    {
+      "type": "paypal",
+      "url": "https://paypal.me/astrostl"
+    }
+  ]
 }

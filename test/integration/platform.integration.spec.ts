@@ -119,6 +119,24 @@ describe('Platform Integration Tests', () => {
         displayName: name,
         UUID: uuid,
         context: {},
+        getService: jest.fn().mockReturnValue({
+          setCharacteristic: jest.fn().mockReturnThis(),
+          getCharacteristic: jest.fn().mockReturnValue({
+            onGet: jest.fn().mockReturnThis(),
+            onSet: jest.fn().mockReturnThis(),
+            updateValue: jest.fn().mockReturnThis(),
+          }),
+          updateCharacteristic: jest.fn().mockReturnThis(),
+        }),
+        addService: jest.fn().mockReturnValue({
+          setCharacteristic: jest.fn().mockReturnThis(),
+          getCharacteristic: jest.fn().mockReturnValue({
+            onGet: jest.fn().mockReturnThis(),
+            onSet: jest.fn().mockReturnThis(),
+            updateValue: jest.fn().mockReturnThis(),
+          }),
+          updateCharacteristic: jest.fn().mockReturnThis(),
+        }),
       })),
     } as any;
 
