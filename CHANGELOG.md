@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Circuit State Synchronization**: Fixed issue where circuit status updates from external sources (remote control, manual switches) were not properly synchronized with HomeKit
+  - Corrected `updateCircuit` function type signature in `src/util.ts` to accept both `Circuit` and `Body` types
+  - Plugin now correctly detects and reflects real-time circuit state changes from IntelliCenter
+  - Fixes scenario where lights turned on via remote control wouldn't show as "on" in HomeKit until manually toggled
+
 ## [2.6.0] - 2025-06-16
 
 ### Added
