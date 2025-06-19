@@ -91,10 +91,10 @@ const pumpParams = new Map([
   ['speed', SPEED_KEY],
 ]) as ReadonlyMap<string, string>;
 
-export const updateCircuit = (circuit: Body, params: IntelliCenterParams): void => {
+export const updateCircuit = (circuit: Circuit | Body, params: IntelliCenterParams): void => {
   circuitParams.forEach((value, key) => {
     if (params[value]) {
-      circuit[key] = params[value];
+      (circuit as any)[key] = params[value];
     }
   });
 };
