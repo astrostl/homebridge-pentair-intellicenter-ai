@@ -174,6 +174,24 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
           UUID: uuid,
           displayName: name,
           context: {},
+          getService: jest.fn().mockReturnValue({
+            setCharacteristic: jest.fn().mockReturnThis(),
+            getCharacteristic: jest.fn().mockReturnValue({
+              onGet: jest.fn().mockReturnThis(),
+              onSet: jest.fn().mockReturnThis(),
+              updateValue: jest.fn().mockReturnThis(),
+            }),
+            updateCharacteristic: jest.fn().mockReturnThis(),
+          }),
+          addService: jest.fn().mockReturnValue({
+            setCharacteristic: jest.fn().mockReturnThis(),
+            getCharacteristic: jest.fn().mockReturnValue({
+              onGet: jest.fn().mockReturnThis(),
+              onSet: jest.fn().mockReturnThis(),
+              updateValue: jest.fn().mockReturnThis(),
+            }),
+            updateCharacteristic: jest.fn().mockReturnThis(),
+          }),
         };
       }),
     } as any;
@@ -698,7 +716,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const currentSensorIds = new Set(['S0001']);
       const currentHeaterIds = new Set(['H0001.B1101']);
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
 
       expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned circuit accessory'));
       expect(mockAPI.unregisterPlatformAccessories).toHaveBeenCalledWith(PLUGIN_NAME, PLATFORM_NAME, [orphanedAccessory]);
@@ -719,7 +737,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const currentSensorIds = new Set(['S0001']);
       const currentHeaterIds = new Set(['H0001.B1101']);
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
 
       expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned sensor accessory'));
     });
@@ -741,7 +759,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const currentSensorIds = new Set(['S0001']);
       const currentHeaterIds = new Set(['H0001.B1101']);
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
 
       expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned heater accessory'));
     });

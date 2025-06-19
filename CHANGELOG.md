@@ -7,11 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0-beta.1] - 2025-06-19
+
+### Added
+- **Pump RPM Visualization**: Added light sensor accessories to display actual pump RPM values in Apple Home app
+  - Each variable speed pump now gets a corresponding RPM sensor (e.g., "Pool Pump RPM")
+  - RPM values displayed as lux readings (1500 RPM = 1500 lx) for easy visualization
+  - Real-time updates when pump speed changes through any control method
+  - New `PumpRpmAccessory` class handles light sensor implementation
+
 ### Fixed
 - **Circuit State Synchronization**: Fixed issue where circuit status updates from external sources (remote control, manual switches) were not properly synchronized with HomeKit
   - Corrected `updateCircuit` function type signature in `src/util.ts` to accept both `Circuit` and `Body` types
   - Plugin now correctly detects and reflects real-time circuit state changes from IntelliCenter
   - Fixes scenario where lights turned on via remote control wouldn't show as "on" in HomeKit until manually toggled
+
+### Enhanced
+- **Sponsor Configuration**: Added multiple funding options for project support
+  - GitHub Sponsors integration for recurring support
+  - PayPal.me option for one-time donations
+  - Visible in both Homebridge UI and npm registry
 
 ## [2.6.0] - 2025-06-16
 

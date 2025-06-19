@@ -3,6 +3,16 @@
   "pluginType": "platform",
   "singular": true,
   "name": "PentairIntelliCenter",
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/astrostl"
+    },
+    {
+      "type": "paypal",
+      "url": "https://paypal.me/astrostl"
+    }
+  ],
   "schema": {
     "type": "object",
     "properties": {

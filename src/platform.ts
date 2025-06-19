@@ -21,6 +21,7 @@ import {
   Module,
   ObjectType,
   Panel,
+  Pump,
   PumpCircuit,
   Sensor,
   SensorTypes,
@@ -43,6 +44,7 @@ import {
 import { HeaterAccessory } from './heaterAccessory';
 import EventEmitter from 'events';
 import { TemperatureAccessory } from './temperatureAccessory';
+import { PumpRpmAccessory } from './pumpRpmAccessory';
 import { CircuitBreaker, RetryManager, HealthMonitor, RateLimiter, CircuitBreakerState, DeadLetterQueue } from './errorHandling';
 import { ConfigValidator } from './configValidation';
 
@@ -439,6 +441,9 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     updatePump(accessory.context.pumpCircuit, params);
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
+
+    // Update the corresponding pump RPM sensor
+    this.updatePumpRpmSensor(accessory.context.pumpCircuit);
   }
 
   updateCircuit(accessory: PlatformAccessory, params: IntelliCenterParams) {
@@ -469,6 +474,39 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       }
     }
     this.api.updatePlatformAccessories([accessory]);
+  }
+
+  updatePumpRpmSensor(pumpCircuit: PumpCircuit) {
+    // Guard against pump circuit without pump reference (can happen in tests)
+    if (!pumpCircuit.pump || !pumpCircuit.pump.id) {
+      this.log.debug('Skipping pump RPM sensor update: pump circuit has no pump reference');
+      return;
+    }
+
+    // Find the pump RPM sensor accessory for this pump
+    const pumpRpmSensorId = `${pumpCircuit.pump.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(pumpRpmSensorId);
+    const pumpRpmAccessory = this.accessoryMap.get(uuid);
+
+    if (pumpRpmAccessory && pumpRpmAccessory.context.pump) {
+      this.log.debug(`Updating pump RPM sensor for ${pumpCircuit.pump.name}: ${pumpCircuit.speed} RPM`);
+
+      // Update the pump data in the accessory context
+      const pump = pumpRpmAccessory.context.pump as Pump;
+
+      // Find the pump circuit in the pump's circuits and update its speed
+      if (pump.circuits) {
+        const circuitToUpdate = pump.circuits.find((c: PumpCircuit) => c.id === pumpCircuit.id);
+        if (circuitToUpdate) {
+          circuitToUpdate.speed = pumpCircuit.speed;
+          circuitToUpdate.speedType = pumpCircuit.speedType;
+        }
+      }
+
+      // Update the accessory and refresh the RPM display
+      this.api.updatePlatformAccessories([pumpRpmAccessory]);
+      new PumpRpmAccessory(this, pumpRpmAccessory);
+    }
   }
 
   updateHeaterStatuses(body: Body) {
@@ -542,6 +580,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const currentCircuitIds = new Set<string>();
     const currentSensorIds = new Set<string>();
     const currentHeaterIds = new Set<string>();
+    const currentPumpRpmSensorIds = new Set<string>();
 
     this.pumpIdToCircuitMap.clear();
     const circuitIdPumpMap = new Map<string, PumpCircuit>();
@@ -554,6 +593,12 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       }
       for (const pump of panel.pumps) {
         this.log.debug(`Processing pump: ${pump.name} (ID: ${pump.id}) with ${pump.circuits?.length || 0} circuits`);
+
+        // Create RPM sensor for each pump
+        const pumpRpmSensorId = `${pump.id}-rpm`;
+        currentPumpRpmSensorIds.add(pumpRpmSensorId);
+        this.discoverPumpRpmSensor(panel, pump);
+
         for (const pumpCircuit of pump.circuits as ReadonlyArray<PumpCircuit>) {
           this.log.debug(
             `  Pump circuit: ${pumpCircuit.id} -> Circuit: ${pumpCircuit.circuitId}, ` +
@@ -591,10 +636,15 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
 
     // Clean up orphaned accessories
-    this.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds);
+    this.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, currentPumpRpmSensorIds);
   }
 
-  cleanupOrphanedAccessories(currentCircuitIds: Set<string>, currentSensorIds: Set<string>, currentHeaterIds: Set<string>) {
+  cleanupOrphanedAccessories(
+    currentCircuitIds: Set<string>,
+    currentSensorIds: Set<string>,
+    currentHeaterIds: Set<string>,
+    currentPumpRpmSensorIds: Set<string>,
+  ) {
     const accessoriesToRemove: PlatformAccessory[] = [];
 
     this.accessoryMap.forEach((accessory, uuid) => {
@@ -619,6 +669,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         const heaterId = `${accessory.context.heater.id}.${accessory.context.body.id}`;
         if (!currentHeaterIds.has(heaterId)) {
           this.log.info(`Removing orphaned heater accessory: ${accessory.displayName} (${heaterId})`);
+          shouldRemove = true;
+        }
+      } else if (accessory.context.pump) {
+        // Check if it's a pump RPM sensor accessory
+        const pumpRpmSensorId = `${accessory.context.pump.id}-rpm`;
+        if (!currentPumpRpmSensorIds.has(pumpRpmSensorId)) {
+          this.log.info(`Removing orphaned pump RPM sensor accessory: ${accessory.displayName} (${pumpRpmSensorId})`);
           shouldRemove = true;
         }
       }
@@ -741,6 +798,29 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
 
     this.subscribeForUpdates(sensor, [PROBE_KEY]);
+  }
+
+  discoverPumpRpmSensor(panel: Panel, pump: Pump) {
+    const pumpRpmSensorId = `${pump.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(pumpRpmSensorId);
+
+    const existingAccessory = this.accessoryMap.get(uuid);
+
+    if (existingAccessory) {
+      this.log.debug(`Restoring existing pump RPM sensor from cache: ${existingAccessory.displayName}`);
+      existingAccessory.context.pump = pump;
+      existingAccessory.context.panel = panel;
+      this.api.updatePlatformAccessories([existingAccessory]);
+      new PumpRpmAccessory(this, existingAccessory);
+    } else {
+      this.log.debug(`Adding new pump RPM sensor: ${pump.name} RPM`);
+      const accessory = new this.api.platformAccessory(`${pump.name} RPM`, uuid);
+      accessory.context.pump = pump;
+      accessory.context.panel = panel;
+      new PumpRpmAccessory(this, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessoryMap.set(accessory.UUID, accessory);
+    }
   }
 
   subscribeForUpdates(circuit: BaseCircuit, keys: ReadonlyArray<string>) {
