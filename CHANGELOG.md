@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0-beta.2] - 2025-06-19
+
+### Fixed
+- **Pump RPM Detection**: Fixed issue where RPM sensors would show incorrect values when switching between different pump speed settings
+  - Improved logic to detect the highest/active RPM from multiple pump circuits
+  - Resolves issue where switching from SPA (1800 RPM) to SPA JETS (3400 RPM) wouldn't update the RPM sensor display
+  - Now correctly shows the maximum RPM across all pump circuits for that pump
+
 ## [2.7.0-beta.1] - 2025-06-19
 
 ### Added

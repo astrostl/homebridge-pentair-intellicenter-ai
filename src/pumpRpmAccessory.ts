@@ -45,10 +45,20 @@ export class PumpRpmAccessory {
    * Get current RPM from pump circuits
    */
   private getCurrentRpm(): number {
-    // Find the first active pump circuit to get current RPM
-    // In VSP systems, there's typically one active circuit at a time
-    const activePumpCircuit = this.pump.circuits?.find(circuit => circuit.speed && circuit.speed > 0);
-    return activePumpCircuit?.speed || 0;
+    if (!this.pump.circuits || this.pump.circuits.length === 0) {
+      return 0;
+    }
+
+    // Find the pump circuit with the highest RPM (most likely the active one)
+    // In VSP systems, when multiple circuits are configured, the highest RPM typically indicates the active setting
+    let maxRpm = 0;
+    for (const circuit of this.pump.circuits) {
+      if (circuit.speed && circuit.speed > maxRpm) {
+        maxRpm = circuit.speed;
+      }
+    }
+
+    return maxRpm;
   }
 
   /**
