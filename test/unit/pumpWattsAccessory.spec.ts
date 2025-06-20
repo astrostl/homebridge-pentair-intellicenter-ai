@@ -126,8 +126,7 @@ describe('PumpWattsAccessory', () => {
 
       // WATTS should be calculated based on highest active circuit speed (1800 RPM from CIR01)
       // not the updateSpeed parameter, since the new implementation uses active circuit detection
-      const rpmRatio = 1800 / 3450; // Highest active circuit speed
-      const expectedWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1489);
+      const expectedWatts = 217; // Fourth-degree polynomial: exact match at 1800 RPM
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
     });
@@ -199,8 +198,7 @@ describe('PumpWattsAccessory', () => {
       wattsAccessory.updateSpeed(3450); // updateSpeed parameter irrelevant since using active circuit detection
 
       // Should use highest active speed (3000 RPM from CIR02)
-      const rpmRatio = 3000 / 3450;
-      const expectedWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1489);
+      const expectedWatts = 994; // Fourth-degree polynomial calculation
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
     });
@@ -212,8 +210,7 @@ describe('PumpWattsAccessory', () => {
       const watts = await wattsAccessory.getWatts();
 
       // Should calculate WATTS based on highest active circuit (1800 RPM from CIR01)
-      const rpmRatio = 1800 / 3450;
-      const expectedWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1489);
+      const expectedWatts = 217; // Fourth-degree polynomial: exact match at 1800 RPM
       expect(watts).toBe(expectedWatts);
     });
   });
@@ -277,8 +274,7 @@ describe('PumpWattsAccessory', () => {
 
       // Test VSF WATTS calculation - should use active circuit speed (2000 RPM)
       vsfWattsAccessory.updateSpeed(1500); // Parameter irrelevant
-      const rpmRatio = 2000 / 3450; // Using active circuit speed
-      const expectedVsfWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1310); // VSF curve
+      const expectedVsfWatts = 262; // VSF fourth-degree polynomial at 2000 RPM
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedVsfWatts);
     });

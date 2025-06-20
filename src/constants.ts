@@ -71,10 +71,15 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // Calibrated to actual IntelliCenter readings: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W
-      // Formula derived from four real data points: exponent 3.0, multiplier 1489 (max power)
-      const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 3.0) * 1489);
+      // Fourth-degree polynomial calibrated to actual IntelliCenter readings: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W
+      // Polynomial: W = a*r^4 + b*r^3 + c*r^2 + d*r where r = RPM/3450
+      // Coefficients solved for zero deviation at all calibration points
+      const r = rpm / 3450;
+      const a = -550.41263283;
+      const b = 2479.51028739;
+      const c = -542.03492079;
+      const d = 101.93726623;
+      return Math.round(a * Math.pow(r, 4) + b * Math.pow(r, 3) + c * Math.pow(r, 2) + d * r);
     },
   },
   VSF: {
@@ -101,10 +106,14 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // VSF pumps are ~12% more efficient than standard VS pumps (1489W * 0.88 = 1310W max)
-      // Calibrated based on actual VS pump data with efficiency adjustment
-      const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 3.0) * 1310);
+      // Fourth-degree polynomial derived from VS pump with 12% efficiency improvement
+      // VSF pumps are ~12% more efficient than standard VS pumps (1310W max vs 1489W)
+      const r = rpm / 3450;
+      const a = -484.36311689;
+      const b = 2181.9690529;
+      const c = -476.9907303;
+      const d = 89.70479428;
+      return Math.round(a * Math.pow(r, 4) + b * Math.pow(r, 3) + c * Math.pow(r, 2) + d * r);
     },
   },
   VF: {
@@ -127,9 +136,14 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // VF pumps similar efficiency to VSF (1324W max, slightly higher than VSF)
-      const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 3.0) * 1324);
+      // Fourth-degree polynomial derived from VS pump with 11% efficiency improvement
+      // VF pumps are similar to VSF but slightly less efficient (1325W max vs 1489W)
+      const r = rpm / 3450;
+      const a = -489.86724322;
+      const b = 2206.76415578;
+      const c = -482.4110795;
+      const d = 90.72416694;
+      return Math.round(a * Math.pow(r, 4) + b * Math.pow(r, 3) + c * Math.pow(r, 2) + d * r);
     },
   },
 } as const;
