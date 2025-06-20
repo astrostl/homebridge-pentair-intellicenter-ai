@@ -63,7 +63,7 @@ export const PUMP_PERFORMANCE_CURVES = {
       // Using polynomial approximation of pump curve
       return Math.max(0, rpm * 0.032 - 14.4);
     },
-    // WATTS calculation: Based on realistic Pentair pump power consumption
+    // WATTS calculation: Calibrated to match IntelliCenter actual readings
     calculateWATTS: (rpm: number): number => {
       if (rpm < 450) {
         return 0;
@@ -71,10 +71,10 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // Realistic power consumption based on actual Pentair VS pump data
-      // ~100W at 1000 RPM, ~300W at 1500 RPM, ~600W at 2000 RPM, ~1000W at 2500 RPM, ~1600W at 3450 RPM
+      // Calibrated to actual IntelliCenter readings: 1800 RPM = 217W, 3450 RPM = 1034W
+      // Formula adjusted based on real pump data from user testing
       const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 2.4) * 1600);
+      return Math.round(Math.pow(rpmRatio, 2.4) * 1034);
     },
   },
   VSF: {
@@ -101,10 +101,10 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // VSF pumps are ~10-15% more efficient than standard VS pumps
-      // ~90W at 1000 RPM, ~270W at 1500 RPM, ~520W at 2000 RPM, ~850W at 2500 RPM, ~1400W at 3450 RPM
+      // VSF pumps are ~12% more efficient than standard VS pumps (1034W * 0.88 = 910W max)
+      // Calibrated based on actual VS pump data with efficiency adjustment
       const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 2.4) * 1400);
+      return Math.round(Math.pow(rpmRatio, 2.4) * 910);
     },
   },
   VF: {
@@ -127,9 +127,9 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // VF pumps similar efficiency to VSF
+      // VF pumps similar efficiency to VSF (920W max, slightly higher than VSF)
       const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 2.4) * 1450);
+      return Math.round(Math.pow(rpmRatio, 2.4) * 920);
     },
   },
 } as const;

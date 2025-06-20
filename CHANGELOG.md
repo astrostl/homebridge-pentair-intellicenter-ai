@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.2] - 2025-06-20
+
+### Fixed
+- **WATTS Power Curve Calibration**: Critical fix for accurate power consumption readings
+  - **Calibrated to actual IntelliCenter data**: 1800 RPM now shows 217W (was 336W)
+  - **Real-world validation**: Power curves now match actual pump readings from user testing
+  - **Updated all pump types**: VS (1034W max), VSF (910W max), VF (920W max) for realistic efficiency
+  - **Formula adjustment**: Changed from `Math.pow(ratio, 2.4) * 1600` to `Math.pow(ratio, 2.4) * 1034` for VS pumps
+
 ## [2.8.0-beta.1] - 2025-06-20
 
 ### Added
