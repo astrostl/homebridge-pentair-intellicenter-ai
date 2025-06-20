@@ -195,10 +195,29 @@ describe('PumpWattsAccessory', () => {
       (mockPlatform.accessoryMap as Map<string, any>).set('CIR01', activeAccessory1);
       (mockPlatform.accessoryMap as Map<string, any>).set('CIR02', activeAccessory2);
 
-      wattsAccessory.updateSpeed(3450); // updateSpeed parameter irrelevant since using active circuit detection
+      wattsAccessory.updateSpeed(3450); // updateSpeed parameter will override since it's higher than active circuits
 
-      // Should use highest active speed (3000 RPM from CIR02)
-      const expectedWatts = 994; // Fourth-degree polynomial calculation
+      // Should use updateSpeed value (3450 RPM) since it's higher than active circuits (3000 RPM)
+      const expectedWatts = 1489; // Fourth-degree polynomial calculation at 3450 RPM
+
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
+    });
+
+    it('should use updateSpeed value when higher than active circuits (heater scenario)', () => {
+      // Set one circuit active at lower speed (1800 RPM)
+      const activeAccessory = {
+        context: {
+          circuit: { id: 'CIR01', status: CircuitStatus.On },
+        },
+      };
+
+      (mockPlatform.accessoryMap as Map<string, any>).set('CIR01', activeAccessory);
+
+      // Simulate heater turning on and driving pump to 3000 RPM (higher than active circuits)
+      wattsAccessory.updateSpeed(3000);
+
+      // Should use updateSpeed value (3000 RPM) since it's higher than active circuits (1800 RPM)
+      const expectedWatts = 994; // Fourth-degree polynomial calculation at 3000 RPM
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
     });

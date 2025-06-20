@@ -49,25 +49,40 @@ export class PumpWattsAccessory {
   }
 
   /**
-   * Calculate current WATTS from highest active pump circuit speed
+   * Calculate current WATTS from highest active pump circuit speed or latest updateSpeed call
    */
   private getCurrentWatts(): number {
     // Find the highest speed from all active pump circuits
     const highestActiveRpm = this.getHighestActivePumpSpeed();
 
-    if (highestActiveRpm <= 0) {
+    // Strategy: Use active circuit detection when available, but allow updateSpeed() to override
+    // when it indicates a higher speed (e.g., heater-driven speed changes)
+    let effectiveRpm = highestActiveRpm;
+
+    // If updateSpeed was called with a higher value than active circuits, use it
+    // This handles cases like heater activation that may not show up as "active circuits"
+    if (this.currentRpm > highestActiveRpm) {
+      effectiveRpm = this.currentRpm;
+      this.platform.log.debug(
+        `${this.accessory.displayName}: Using updateSpeed value ${this.currentRpm} RPM ` +
+          `(higher than active circuits: ${highestActiveRpm} RPM) - likely heater/system driven`,
+      );
+    }
+
+    if (effectiveRpm <= 0) {
       return 0.0001; // HomeKit Light Sensor minimum value for inactive pumps
     }
 
     const pumpCurve = PUMP_PERFORMANCE_CURVES[this.pumpType as keyof typeof PUMP_PERFORMANCE_CURVES];
     if (!pumpCurve) {
       this.platform.log.warn(`Unknown pump type: ${this.pumpType} for pump ${this.pump.name}. Using VS curves.`);
-      return PUMP_PERFORMANCE_CURVES.VS.calculateWATTS(highestActiveRpm);
+      return PUMP_PERFORMANCE_CURVES.VS.calculateWATTS(effectiveRpm);
     }
 
-    const calculatedWatts = pumpCurve.calculateWATTS(highestActiveRpm);
+    const calculatedWatts = pumpCurve.calculateWATTS(effectiveRpm);
     this.platform.log.debug(
-      `${this.accessory.displayName}: Calculating WATTS for ${this.pumpType} pump at ${highestActiveRpm} RPM = ${calculatedWatts} WATTS`,
+      `${this.accessory.displayName}: Calculating WATTS for ${this.pumpType} pump at ${effectiveRpm} RPM ` +
+        `(active circuits: ${highestActiveRpm} RPM, latest update: ${this.currentRpm} RPM) = ${calculatedWatts} WATTS`,
     );
 
     return Math.max(0.0001, calculatedWatts); // Ensure minimum HomeKit value
