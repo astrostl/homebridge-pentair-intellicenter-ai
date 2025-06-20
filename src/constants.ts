@@ -71,10 +71,10 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // Calibrated to actual IntelliCenter readings: 1800 RPM = 217W, 3450 RPM = 1034W
-      // Formula adjusted based on real pump data from user testing
+      // Calibrated to actual IntelliCenter readings: 1800 RPM = 217W, 2300 RPM = 453W
+      // Formula derived from two real data points: exponent 3.0, multiplier 1530
       const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 2.4) * 1034);
+      return Math.round(Math.pow(rpmRatio, 3.0) * 1530);
     },
   },
   VSF: {
@@ -101,10 +101,10 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // VSF pumps are ~12% more efficient than standard VS pumps (1034W * 0.88 = 910W max)
+      // VSF pumps are ~12% more efficient than standard VS pumps (1530W * 0.88 = 1346W max)
       // Calibrated based on actual VS pump data with efficiency adjustment
       const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 2.4) * 910);
+      return Math.round(Math.pow(rpmRatio, 3.0) * 1346);
     },
   },
   VF: {
@@ -127,9 +127,9 @@ export const PUMP_PERFORMANCE_CURVES = {
       if (rpm > 3450) {
         rpm = 3450;
       }
-      // VF pumps similar efficiency to VSF (920W max, slightly higher than VSF)
+      // VF pumps similar efficiency to VSF (1360W max, slightly higher than VSF)
       const rpmRatio = rpm / 3450;
-      return Math.round(Math.pow(rpmRatio, 2.4) * 920);
+      return Math.round(Math.pow(rpmRatio, 3.0) * 1360);
     },
   },
 } as const;
