@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.6] - 2025-06-20
+
+### Fixed
+- **WATTS Sensor Heater Detection**: Fixed WATTS sensor to properly detect heater-driven speed changes
+  - **Smart speed detection**: WATTS sensor now uses the higher of active circuit speed OR updateSpeed parameter
+  - **Heater speed capture**: When heater turns on and changes pump to 3000 RPM, WATTS sensor correctly reflects that power
+  - **Fallback logic**: Preserves active circuit detection while allowing system-driven speed overrides
+  - **Enhanced logging**: Added debug logs to show which speed source is being used (active circuits vs system updates)
+  - **Test coverage**: Added specific test case for heater scenario (568 tests passing)
+
 ## [2.8.0-beta.5] - 2025-06-20
 
 ### Enhanced
