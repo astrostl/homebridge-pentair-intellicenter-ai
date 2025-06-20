@@ -32,6 +32,21 @@ This file provides comprehensive guidance for Claude Code (claude.ai/code) and h
 
 **MANUAL RELEASE SYSTEM**: This repository uses manual releases for full control and reliability.
 
+### Branch and Version Consistency
+
+**CRITICAL**: Always ensure branch names match release versions to maintain clear git flow:
+
+- **Beta branches**: `beta/vX.Y.Z` for version `X.Y.Z-beta.N` releases
+  - Example: `beta/v2.8.0` branch for `2.8.0-beta.1`, `2.8.0-beta.2`, etc.
+- **Stable releases**: Work on `master` branch for stable `X.Y.Z` releases
+- **Never mix**: Don't work on `beta/v2.7.0` branch while releasing `2.8.0-beta.x` versions
+
+**Before any release work**:
+1. Check current branch: `git branch` 
+2. Verify branch name matches target version
+3. Create correct branch if needed: `git checkout -b beta/vX.Y.Z`
+4. Push branch to origin: `git push origin beta/vX.Y.Z`
+
 ### Pre-Release Quality Gates
 
 Before any release, ensure all quality checks pass:
@@ -44,23 +59,24 @@ Before any release, ensure all quality checks pass:
 
 ### Beta Release Process
 
-1. **Create beta branch**: `git checkout -b beta/vX.X.X` from master
-2. **Make changes**: Implement features, tests, bug fixes on beta branch
-3. **Version bump**: Update package.json to `X.X.X-beta.Y`
-4. **Quality check**: Run `npm run prepublishOnly` (must pass)
-5. **Commit and push**: `git push origin beta/vX.X.X`
-6. **Publish to npm**: `npm publish --tag beta`
-7. **Create GitHub release**: `gh release create vX.X.X-beta.Y --prerelease`
+1. **Create beta branch**: `git checkout -b beta/vX.Y.Z` from master
+2. **Verify branch consistency**: Ensure branch name `beta/vX.Y.Z` matches target version `X.Y.Z-beta.N`
+3. **Make changes**: Implement features, tests, bug fixes on beta branch
+4. **Version bump**: Update package.json to `X.Y.Z-beta.N`
+5. **Quality check**: Run `npm run prepublishOnly` (must pass)
+6. **Commit and push**: `git push origin beta/vX.Y.Z`
+7. **Publish to npm**: `npm publish --tag beta`
+8. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease`
 
 ### Stable Release Process
 
-1. **Merge to master**: `git checkout master && git merge beta/vX.X.X`
-2. **Version bump**: Update package.json to `X.X.X` (remove beta suffix)
+1. **Merge to master**: `git checkout master && git merge beta/vX.Y.Z`
+2. **Version bump**: Update package.json to `X.Y.Z` (remove beta suffix)
 3. **Quality check**: Run `npm run prepublishOnly` (must pass)
 4. **Commit and push**: `git push origin master`
-5. **Create git tag**: `git tag vX.X.X && git push origin vX.X.X`
+5. **Create git tag**: `git tag vX.Y.Z && git push origin vX.Y.Z`
 6. **Publish to npm**: `npm publish` (defaults to latest tag)
-7. **Create GitHub release**: `gh release create vX.X.X --title "vX.X.X - Description"`
+7. **Create GitHub release**: `gh release create vX.Y.Z --title "vX.Y.Z - Description"`
 
 ### Release Quality Requirements
 
