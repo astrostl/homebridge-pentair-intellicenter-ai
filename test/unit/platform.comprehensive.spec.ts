@@ -716,9 +716,11 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const currentSensorIds = new Set(['S0001']);
       const currentHeaterIds = new Set(['H0001.B1101']);
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
+      // Combine all discovered accessory IDs into a single set
+      const discoveredAccessoryIds = new Set([...currentCircuitIds, ...currentSensorIds, ...currentHeaterIds]);
+      platform.cleanupOrphanedAccessories(discoveredAccessoryIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned circuit accessory'));
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned accessory: Orphaned Circuit'));
       expect(mockAPI.unregisterPlatformAccessories).toHaveBeenCalledWith(PLUGIN_NAME, PLATFORM_NAME, [orphanedAccessory]);
     });
 
@@ -737,9 +739,11 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const currentSensorIds = new Set(['S0001']);
       const currentHeaterIds = new Set(['H0001.B1101']);
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
+      // Combine all discovered accessory IDs into a single set
+      const discoveredAccessoryIds = new Set([...currentCircuitIds, ...currentSensorIds, ...currentHeaterIds]);
+      platform.cleanupOrphanedAccessories(discoveredAccessoryIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned sensor accessory'));
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned accessory: Orphaned Sensor'));
     });
 
     it('should clean up orphaned heater accessories', () => {
@@ -759,9 +763,11 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const currentSensorIds = new Set(['S0001']);
       const currentHeaterIds = new Set(['H0001.B1101']);
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
+      // Combine all discovered accessory IDs into a single set
+      const discoveredAccessoryIds = new Set([...currentCircuitIds, ...currentSensorIds, ...currentHeaterIds]);
+      platform.cleanupOrphanedAccessories(discoveredAccessoryIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned heater accessory'));
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned accessory: Orphaned Heater'));
     });
   });
 

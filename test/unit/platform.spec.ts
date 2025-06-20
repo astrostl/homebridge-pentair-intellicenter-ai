@@ -48,6 +48,15 @@ jest.mock('../../src/temperatureAccessory', () => ({
   TemperatureAccessory: jest.fn().mockImplementation(() => mockTemperatureAccessory),
 }));
 
+const mockPumpRpmAccessory = {
+  constructor: jest.fn(),
+  updateRpm: jest.fn(),
+};
+
+jest.mock('../../src/pumpRpmAccessory', () => ({
+  PumpRpmAccessory: jest.fn().mockImplementation(() => mockPumpRpmAccessory),
+}));
+
 // Mock types
 jest.mock('../../src/types', () => ({
   ...jest.requireActual('../../src/types'),
@@ -897,6 +906,54 @@ describe('PentairPlatform', () => {
       expect(mockAPI.updatePlatformAccessories).toHaveBeenCalledWith([mockAccessory]);
     });
 
+    it('should update heater RPM sensors when pump circuit speeds change', () => {
+      // Setup pump accessory
+      const mockPumpAccessory = {
+        UUID: 'pump-uuid',
+        context: {
+          pumpCircuit: {
+            id: 'PC003',
+            speed: 2800,
+            speedType: 'RPM',
+          },
+        },
+      } as unknown as PlatformAccessory;
+
+      // Setup heater RPM sensor accessory that uses the same pump circuit
+      const mockHeaterRpmAccessory = {
+        UUID: 'heater-rpm-uuid',
+        displayName: 'Gas Heater RPM',
+        context: {
+          feature: {
+            id: 'H0002',
+            name: 'Gas Heater',
+            bodyId: 'B1202',
+          },
+          pumpCircuit: {
+            id: 'PC003',
+            speed: 3000, // Old speed
+            speedType: 'RPM',
+          },
+        },
+      } as unknown as PlatformAccessory;
+
+      // Add the heater RPM sensor to the accessory map
+      platform.accessoryMap.set('heater-rpm-uuid', mockHeaterRpmAccessory);
+
+      const updateCircuitSpy = jest.spyOn(require('../../src/util'), 'updateCircuit').mockImplementation();
+      const updatePumpSpy = jest.spyOn(require('../../src/util'), 'updatePump').mockImplementation();
+      const updateHeaterRpmSensorsSpy = jest.spyOn(platform as any, 'updateHeaterRpmSensorsForPumpCircuit').mockImplementation();
+
+      const mockParams = { SPEED: '2800' };
+
+      platform.updatePump(mockPumpAccessory, mockParams as never);
+
+      expect(updateCircuitSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit, mockParams);
+      expect(updatePumpSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit, mockParams);
+      expect(updateHeaterRpmSensorsSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit);
+      expect(mockAPI.updatePlatformAccessories).toHaveBeenCalledWith([mockPumpAccessory]);
+    });
+
     it('should update temperature sensors', () => {
       const mockAccessory = {
         UUID: 'sensor-uuid',
@@ -934,6 +991,91 @@ describe('PentairPlatform', () => {
       platform.updateSensor(mockAccessory, mockParams as never);
 
       expect(mockLogger.warn).toHaveBeenCalledWith('Invalid probe value received for sensor Pool Temp: invalid, skipping update');
+    });
+
+    it('should update heater RPM sensors using updateHeaterRpmSensorsForPumpCircuit', () => {
+      // Setup a heater RPM sensor accessory with proper mock methods
+      const mockHeaterRpmAccessory = {
+        UUID: 'heater-rpm-uuid',
+        displayName: 'Gas Heater RPM',
+        context: {
+          feature: {
+            id: 'H0002',
+            name: 'Gas Heater',
+            bodyId: 'B1202',
+          },
+          pumpCircuit: {
+            id: 'PC003',
+            speed: 3000, // Old speed
+            speedType: 'RPM',
+          },
+        },
+        getService: jest.fn().mockReturnValue({
+          setCharacteristic: jest.fn().mockReturnThis(),
+          getCharacteristic: jest.fn().mockReturnValue({
+            onGet: jest.fn().mockReturnThis(),
+          }),
+          updateCharacteristic: jest.fn().mockReturnThis(),
+        }),
+        addService: jest.fn().mockReturnValue({
+          setCharacteristic: jest.fn().mockReturnThis(),
+          getCharacteristic: jest.fn().mockReturnValue({
+            onGet: jest.fn().mockReturnThis(),
+          }),
+          updateCharacteristic: jest.fn().mockReturnThis(),
+        }),
+      } as unknown as PlatformAccessory;
+
+      // Add to accessory map
+      platform.accessoryMap.set('heater-rpm-uuid', mockHeaterRpmAccessory);
+
+      // Create updated pump circuit with new speed
+      const updatedPumpCircuit = {
+        id: 'PC003',
+        speed: 2800, // New speed
+        speedType: 'RPM',
+      };
+
+      // Call the function under test
+      (platform as any).updateHeaterRpmSensorsForPumpCircuit(updatedPumpCircuit);
+
+      // Verify the heater RPM sensor was updated
+      expect(mockAPI.updatePlatformAccessories).toHaveBeenCalledWith([mockHeaterRpmAccessory]);
+      expect(mockLogger.debug).toHaveBeenCalledWith('Updating heater RPM sensor pump circuit for Gas Heater RPM: 2800 RPM (was 3000 RPM)');
+    });
+
+    it('should not update non-heater RPM sensors in updateHeaterRpmSensorsForPumpCircuit', () => {
+      // Setup a regular feature RPM sensor (not a heater)
+      const mockFeatureRpmAccessory = {
+        UUID: 'feature-rpm-uuid',
+        displayName: 'Spa Jets RPM',
+        context: {
+          feature: {
+            id: 'F001',
+            name: 'Spa Jets',
+          },
+          pumpCircuit: {
+            id: 'PC003',
+            speed: 3000,
+            speedType: 'RPM',
+          },
+        },
+      } as unknown as PlatformAccessory;
+
+      platform.accessoryMap.set('feature-rpm-uuid', mockFeatureRpmAccessory);
+
+      const updatedPumpCircuit = {
+        id: 'PC003',
+        speed: 2800,
+        speedType: 'RPM',
+      };
+
+      // Call the function under test
+      (platform as any).updateHeaterRpmSensorsForPumpCircuit(updatedPumpCircuit);
+
+      // Verify the regular feature RPM sensor was NOT updated (since it's not a heater)
+      // We expect only heater RPM sensors to be updated by this function
+      expect(mockAPI.updatePlatformAccessories).not.toHaveBeenCalledWith([mockFeatureRpmAccessory]);
     });
   });
 
@@ -1515,6 +1657,7 @@ describe('PentairPlatform', () => {
         displayName: 'Pool Heater',
         context: {
           body: { id: 'B01' },
+          heater: { id: 'H01', name: 'Pool Heater' },
         },
       } as unknown as PlatformAccessory;
 
@@ -1946,9 +2089,11 @@ describe('PentairPlatform', () => {
       const currentSensorIds = new Set<string>();
       const currentHeaterIds = new Set<string>();
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
+      // Combine all discovered accessory IDs into a single set
+      const discoveredAccessoryIds = new Set<string>([...currentCircuitIds, ...currentSensorIds, ...currentHeaterIds]);
+      platform.cleanupOrphanedAccessories(discoveredAccessoryIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned circuit accessory: Pool Light (C01)'));
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned accessory: Pool Light'));
       expect(mockAPI.unregisterPlatformAccessories).toHaveBeenCalled();
     });
 
@@ -1967,9 +2112,11 @@ describe('PentairPlatform', () => {
       const currentSensorIds = new Set<string>(['S02']); // Different ID to trigger removal
       const currentHeaterIds = new Set<string>();
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
+      // Combine all discovered accessory IDs into a single set
+      const discoveredAccessoryIds = new Set<string>([...currentCircuitIds, ...currentSensorIds, ...currentHeaterIds]);
+      platform.cleanupOrphanedAccessories(discoveredAccessoryIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned sensor accessory: Pool Temp (S01)'));
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned accessory: Pool Temp'));
     });
 
     it('should handle cleanupOrphanedAccessories for heater accessories', () => {
@@ -1989,9 +2136,11 @@ describe('PentairPlatform', () => {
       const currentSensorIds = new Set<string>();
       const currentHeaterIds = new Set<string>(['H01.B02']); // Different body ID to trigger removal
 
-      platform.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, new Set<string>());
+      // Combine all discovered accessory IDs into a single set
+      const discoveredAccessoryIds = new Set<string>([...currentCircuitIds, ...currentSensorIds, ...currentHeaterIds]);
+      platform.cleanupOrphanedAccessories(discoveredAccessoryIds);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned heater accessory: Pool Heater (H01.B01)'));
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Removing orphaned accessory: Pool Heater'));
     });
 
     it('should handle discoverTemperatureSensor with non-air temperature', () => {
