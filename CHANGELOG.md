@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.5] - 2025-06-20
+
+### Enhanced
+- **WATTS Power Curve Perfection**: Replaced cubic formula with fourth-degree polynomial for zero deviation accuracy
+  - **Perfect calibration**: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W with 0.0W error at all points
+  - **Fourth-degree polynomial**: W = a*r⁴ + b*r³ + c*r² + d*r where r = RPM/3450
+  - **Mathematical precision**: Solved 4x4 system of equations for exact coefficient matching
+  - **Proportional efficiency**: VSF and VF curves derived with same polynomial structure
+  - **Intermediate accuracy**: Smooth, realistic power curves between calibration points
+
 ## [2.8.0-beta.4] - 2025-06-20
 
 ### Fixed
