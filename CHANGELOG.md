@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.3] - 2025-06-20
+
+### Fixed
+- **WATTS Power Curve Re-calibration**: Final calibration using two data points for perfect accuracy
+  - **Two-point calibration**: 1800 RPM = 217W, 2300 RPM = 453W (both exact matches)
+  - **Updated formula**: Changed to `Math.pow(ratio, 3.0) * 1530` for mathematically precise curve
+  - **Higher RPM accuracy**: 2300 RPM now shows 453W (was 391W) matching IntelliCenter exactly
+  - **Updated all pump types**: VS (1530W max), VSF (1346W max), VF (1360W max)
+
 ## [2.8.0-beta.2] - 2025-06-20
 
 ### Fixed

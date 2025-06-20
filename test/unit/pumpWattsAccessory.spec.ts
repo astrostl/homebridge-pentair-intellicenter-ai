@@ -127,7 +127,7 @@ describe('PumpWattsAccessory', () => {
       // WATTS should be calculated based on highest active circuit speed (1800 RPM from CIR01)
       // not the updateSpeed parameter, since the new implementation uses active circuit detection
       const rpmRatio = 1800 / 3450; // Highest active circuit speed
-      const expectedWatts = Math.round(Math.pow(rpmRatio, 2.4) * 1034);
+      const expectedWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1530);
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
     });
@@ -200,7 +200,7 @@ describe('PumpWattsAccessory', () => {
 
       // Should use highest active speed (3000 RPM from CIR02)
       const rpmRatio = 3000 / 3450;
-      const expectedWatts = Math.round(Math.pow(rpmRatio, 2.4) * 1034);
+      const expectedWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1530);
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
     });
@@ -213,7 +213,7 @@ describe('PumpWattsAccessory', () => {
 
       // Should calculate WATTS based on highest active circuit (1800 RPM from CIR01)
       const rpmRatio = 1800 / 3450;
-      const expectedWatts = Math.round(Math.pow(rpmRatio, 2.4) * 1034);
+      const expectedWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1530);
       expect(watts).toBe(expectedWatts);
     });
   });
@@ -278,7 +278,7 @@ describe('PumpWattsAccessory', () => {
       // Test VSF WATTS calculation - should use active circuit speed (2000 RPM)
       vsfWattsAccessory.updateSpeed(1500); // Parameter irrelevant
       const rpmRatio = 2000 / 3450; // Using active circuit speed
-      const expectedVsfWatts = Math.round(Math.pow(rpmRatio, 2.4) * 910); // VSF curve
+      const expectedVsfWatts = Math.round(Math.pow(rpmRatio, 3.0) * 1346); // VSF curve
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedVsfWatts);
     });
