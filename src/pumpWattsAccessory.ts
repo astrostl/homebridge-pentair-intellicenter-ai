@@ -17,6 +17,8 @@ export class PumpWattsAccessory {
   private pump: Pump;
   private pumpType: string;
   private currentRpm = 0;
+  private systemDrivenRpm = 0; // Track heater/system driven speeds separately
+  private lastSystemUpdate = 0; // Timestamp of last system update
 
   constructor(
     private readonly platform: PentairPlatform,
@@ -49,23 +51,34 @@ export class PumpWattsAccessory {
   }
 
   /**
-   * Calculate current WATTS from highest active pump circuit speed or latest updateSpeed call
+   * Calculate current WATTS from highest active pump circuit speed or system-driven speed
    */
   private getCurrentWatts(): number {
     // Find the highest speed from all active pump circuits
     const highestActiveRpm = this.getHighestActivePumpSpeed();
 
-    // Strategy: Use active circuit detection when available, but allow updateSpeed() to override
-    // when it indicates a higher speed (e.g., heater-driven speed changes)
+    // Strategy: Use system-driven speeds (heater) if recent, otherwise use active circuits
     let effectiveRpm = highestActiveRpm;
+    let source = 'active circuits';
 
-    // If updateSpeed was called with a higher value than active circuits, use it
-    // This handles cases like heater activation that may not show up as "active circuits"
-    if (this.currentRpm > highestActiveRpm) {
-      effectiveRpm = this.currentRpm;
+    // Check if we have a recent system-driven speed update (within last 30 seconds)
+    const now = Date.now();
+    const systemUpdateAge = now - this.lastSystemUpdate;
+    const isSystemUpdateRecent = systemUpdateAge < 30000; // 30 seconds
+
+    if (isSystemUpdateRecent && this.systemDrivenRpm > 0) {
+      effectiveRpm = this.systemDrivenRpm;
+      source = `system update (${Math.round(systemUpdateAge / 1000)}s ago)`;
       this.platform.log.debug(
-        `${this.accessory.displayName}: Using updateSpeed value ${this.currentRpm} RPM ` +
-          `(higher than active circuits: ${highestActiveRpm} RPM) - likely heater/system driven`,
+        `${this.accessory.displayName}: Using system-driven speed ${this.systemDrivenRpm} RPM ` +
+          `(age: ${Math.round(systemUpdateAge / 1000)}s, active circuits: ${highestActiveRpm} RPM)`,
+      );
+    } else if (this.systemDrivenRpm > 0 && !isSystemUpdateRecent) {
+      // System update is old, fall back to active circuits
+      this.systemDrivenRpm = 0; // Clear old system speed
+      this.platform.log.debug(
+        `${this.accessory.displayName}: System update too old (${Math.round(systemUpdateAge / 1000)}s), ` +
+          `falling back to active circuits: ${highestActiveRpm} RPM`,
       );
     }
 
@@ -82,7 +95,7 @@ export class PumpWattsAccessory {
     const calculatedWatts = pumpCurve.calculateWATTS(effectiveRpm);
     this.platform.log.debug(
       `${this.accessory.displayName}: Calculating WATTS for ${this.pumpType} pump at ${effectiveRpm} RPM ` +
-        `(active circuits: ${highestActiveRpm} RPM, latest update: ${this.currentRpm} RPM) = ${calculatedWatts} WATTS`,
+        `(source: ${source}) = ${calculatedWatts} WATTS`,
     );
 
     return Math.max(0.0001, calculatedWatts); // Ensure minimum HomeKit value
@@ -156,13 +169,26 @@ export class PumpWattsAccessory {
   }
 
   /**
-   * Update the current RPM and recalculate WATTS
+   * Update the current RPM and recalculate WATTS (for circuit-driven updates)
    */
   updateSpeed(rpm: number) {
+    this.platform.log.debug(`${this.pump.name} updateSpeed called with ${rpm} RPM (previous: ${this.currentRpm} RPM)`);
     this.currentRpm = rpm;
     const newWatts = this.getCurrentWatts();
     this.updateWatts(newWatts);
     this.platform.log.debug(`${this.pump.name} speed updated to ${rpm} RPM, calculated WATTS: ${newWatts}`);
+  }
+
+  /**
+   * Update system-driven RPM (for heater/standalone pump updates)
+   */
+  updateSystemSpeed(rpm: number) {
+    this.platform.log.debug(`${this.pump.name} updateSystemSpeed called with ${rpm} RPM (previous system: ${this.systemDrivenRpm} RPM)`);
+    this.systemDrivenRpm = rpm;
+    this.lastSystemUpdate = Date.now();
+    const newWatts = this.getCurrentWatts();
+    this.updateWatts(newWatts);
+    this.platform.log.debug(`${this.pump.name} system speed updated to ${rpm} RPM, calculated WATTS: ${newWatts}`);
   }
 
   /**

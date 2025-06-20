@@ -195,15 +195,15 @@ describe('PumpWattsAccessory', () => {
       (mockPlatform.accessoryMap as Map<string, any>).set('CIR01', activeAccessory1);
       (mockPlatform.accessoryMap as Map<string, any>).set('CIR02', activeAccessory2);
 
-      wattsAccessory.updateSpeed(3450); // updateSpeed parameter will override since it's higher than active circuits
+      wattsAccessory.updateSpeed(3450); // updateSpeed for circuit updates, should use highest active circuit (3000 RPM)
 
-      // Should use updateSpeed value (3450 RPM) since it's higher than active circuits (3000 RPM)
-      const expectedWatts = 1489; // Fourth-degree polynomial calculation at 3450 RPM
+      // Should use highest active circuit speed (3000 RPM) since updateSpeed is for circuit updates
+      const expectedWatts = 994; // Fourth-degree polynomial calculation at 3000 RPM
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
     });
 
-    it('should use updateSpeed value when higher than active circuits (heater scenario)', () => {
+    it('should use updateSystemSpeed for heater-driven speed changes', () => {
       // Set one circuit active at lower speed (1800 RPM)
       const activeAccessory = {
         context: {
@@ -213,10 +213,10 @@ describe('PumpWattsAccessory', () => {
 
       (mockPlatform.accessoryMap as Map<string, any>).set('CIR01', activeAccessory);
 
-      // Simulate heater turning on and driving pump to 3000 RPM (higher than active circuits)
-      wattsAccessory.updateSpeed(3000);
+      // Simulate heater turning on and driving pump to 3000 RPM (system-driven)
+      (wattsAccessory as any).updateSystemSpeed(3000);
 
-      // Should use updateSpeed value (3000 RPM) since it's higher than active circuits (1800 RPM)
+      // Should use system-driven speed (3000 RPM) which overrides active circuits (1800 RPM)
       const expectedWatts = 994; // Fourth-degree polynomial calculation at 3000 RPM
 
       expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentAmbientLightLevel', expectedWatts);
