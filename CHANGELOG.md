@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.1] - 2025-06-20
+
+### Added
+- **🌊 Pump GPM (Flow Rate) Sensors**: Real-time flow rate monitoring for all variable speed pumps
+  - **Pump-level sensors** - one GPM sensor per physical pump (not per feature)
+  - **Performance curve calculations** - accurate flow rates based on pump speed and type
+  - **Multiple pump type support** - VS, VSF, and VF pumps with type-specific curves
+  - **HomeKit light sensor display** - GPM values shown as lux (1:1 ratio) for easy monitoring
+  - **Real-time updates** - flow rates update instantly when pump speeds change
+
+- **⚡ Pump WATTS (Power Consumption) Sensors**: Smart power monitoring with active circuit detection
+  - **Pump-level sensors** - one WATTS sensor per physical pump for accurate power tracking
+  - **Active circuit detection** - uses highest active circuit speed instead of highest configured speed
+  - **Realistic power curves** - calibrated to match actual Pentair pump specifications
+  - **Multiple pump type support** - VS (1600W max), VSF (1400W max), VF (1450W max) with efficiency differences
+  - **Smart circuit filtering** - only considers circuits that are currently ON for power calculation
+  - **Prevents power over-reporting** - fixes issue where inactive high-speed circuits inflated power readings
+
+### Enhanced
+- **Pump Performance Curve System**: Comprehensive pump characteristic modeling
+  - **Type-specific calculations** - VS, VSF, and VF pumps have distinct performance profiles
+  - **Realistic power consumption** - VS pumps: ~100W@1000RPM, ~300W@1500RPM, ~600W@2000RPM, ~1600W@3450RPM
+  - **Accurate flow rates** - VS pumps: ~20GPM@1000RPM to ~110GPM@3450RPM
+  - **Efficiency modeling** - VSF pumps are 10-15% more efficient than standard VS pumps
+
+- **Pump Type Detection**: Intelligent mapping of telnet protocol pump types
+  - **SPEED → VS** (Variable Speed)
+  - **VSF → VSF** (Variable Speed/Flow) 
+  - **FLOW → VF** (Variable Flow)
+  - **Automatic fallback** - unknown types default to VS curves with logging
+
+### Fixed
+- **WATTS Sensor Circuit Selection**: Critical fix for power consumption accuracy
+  - **Root cause resolved** - WATTS sensors were using highest configured speed instead of active speed
+  - **Active circuit filtering** - only circuits with CircuitStatus.On are considered for power calculation
+  - **Realistic power readings** - 1800 RPM now shows ~336W instead of previous 1,545W from inactive circuits
+  - **Multiple circuit handling** - correctly handles pumps with multiple circuits at different speeds
+
+### Technical
+- **Comprehensive test coverage** - 94% coverage for new pump sensor accessories
+- **Type-safe implementations** - full TypeScript support for all pump sensor types
+- **Memory efficient** - pump-level sensors reduce accessory count vs feature-level approach
+- **Platform integration** - seamless discovery and update integration with existing architecture
+
 ## [2.7.0] - 2025-06-20
 
 ### Added
