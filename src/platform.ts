@@ -1395,9 +1395,9 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const wattsAccessory = this.accessoryMap.get(wattsUuid);
 
     if (wattsAccessory) {
-      this.log.debug(`Found WATTS sensor ${wattsSensorId}, updating to ${speedValue} RPM`);
+      this.log.debug(`Found WATTS sensor ${wattsSensorId}, updating to ${speedValue} RPM (system-driven)`);
       const wattsSensor = new PumpWattsAccessory(this, wattsAccessory);
-      wattsSensor.updateSpeed(speedValue);
+      wattsSensor.updateSystemSpeed(speedValue);
     } else {
       this.log.debug(`WATTS sensor not found for ${wattsSensorId} (UUID: ${wattsUuid})`);
     }

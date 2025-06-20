@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.7] - 2025-06-20
+
+### Fixed  
+- **WATTS Sensor Persistence Issue**: Fixed WATTS sensor getting stuck at 217W after heater speed changes
+  - **Separate update paths**: Distinguished between circuit-driven updates (`updateSpeed`) and system-driven updates (`updateSystemSpeed`)
+  - **Persistent heater speeds**: System-driven speeds (heater) persist for 30 seconds and override circuit detection
+  - **Smart fallback**: After 30 seconds, automatically falls back to active circuit detection
+  - **Enhanced logging**: Added detailed debug logs showing speed source and timing
+  - **Prevents conflicts**: Circuit updates no longer overwrite heater-driven speeds immediately
+
 ## [2.8.0-beta.6] - 2025-06-20
 
 ### Fixed
