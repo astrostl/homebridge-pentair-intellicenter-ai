@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0-beta.4] - 2025-06-20
+
+### Fixed
+- **WATTS Power Curve Final Calibration**: Achieved maximum accuracy using four real data points
+  - **Four-point calibration**: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W for precise curve fitting
+  - **Updated formula**: Changed multiplier from 1530 to 1489 for exact 3450 RPM match
+  - **High accuracy results**: 1800→211W (±6W), 2300→441W (±12W), 3100→1080W (±14W), 3450→1489W (exact)
+  - **Proportional VSF/VF updates**: VSF (1310W max), VF (1324W max) maintaining efficiency ratios
+
 ## [2.8.0-beta.3] - 2025-06-20
 
 ### Fixed
