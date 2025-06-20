@@ -7,6 +7,7 @@ import {
   BaseCircuit,
   Body,
   Circuit,
+  CircuitStatus,
   CircuitStatusMessage,
   CircuitTypes,
   DiscoveryAnswer,
@@ -21,7 +22,6 @@ import {
   Module,
   ObjectType,
   Panel,
-  Pump,
   PumpCircuit,
   Sensor,
   SensorTypes,
@@ -401,9 +401,10 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
                   if (speed && select) {
                     // This appears to be a pump sending updates
-                    this.log.debug(
-                      `Standalone pump ${change.objnam} update: ${speed} ${select} ` + '(not associated with any circuit, updates ignored)',
-                    );
+                    this.log.debug(`Standalone pump ${change.objnam} update: ${speed} ${select}`);
+
+                    // Check if any heater RPM sensors need to be updated for this standalone pump
+                    this.updateHeaterRpmSensorsForStandalonePump(change.objnam, String(speed), String(select));
                   } else {
                     this.log.warn(
                       `Device ${change.objnam} sending updates but not registered as accessory. ` +
@@ -446,8 +447,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
 
-    // Update the corresponding pump RPM sensor
-    this.updatePumpRpmSensor(accessory.context.pumpCircuit);
+    // Update the corresponding feature RPM sensor (if this pump circuit has an associated feature)
+    this.updateFeatureRpmSensorForPumpCircuit(accessory.context.pumpCircuit);
+
+    // Update heater RPM sensors that use this pump circuit
+    this.updateHeaterRpmSensorsForPumpCircuit(accessory.context.pumpCircuit);
   }
 
   updateCircuit(accessory: PlatformAccessory, params: IntelliCenterParams) {
@@ -459,6 +463,10 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
+
+    // Update feature RPM sensor if this circuit change affects a feature with pump circuit
+    // This is needed because feature RPM calculations depend on feature states
+    this.updateFeatureRpmSensorForCircuit(accessory.context.circuit);
   }
 
   updateSensor(accessory: PlatformAccessory, params: IntelliCenterParams) {
@@ -480,38 +488,89 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     this.api.updatePlatformAccessories([accessory]);
   }
 
-  updatePumpRpmSensor(pumpCircuit: PumpCircuit) {
-    // Guard against pump circuit without pump reference (can happen in tests)
-    if (!pumpCircuit.pump || !pumpCircuit.pump.id) {
-      this.log.debug('Skipping pump RPM sensor update: pump circuit has no pump reference');
-      return;
+  updateFeatureRpmSensorForPumpCircuit(pumpCircuit: PumpCircuit) {
+    // Find the feature RPM sensor for this pump circuit
+    // Try both the pump circuit's circuitId and any circuit that matches the pump circuit ID
+    let featureRpmAccessory: PlatformAccessory | undefined;
+    let matchedSensorId: string;
+
+    // First try with the pump circuit's circuitId
+    const primarySensorId = `${pumpCircuit.circuitId}-rpm`;
+    let uuid = this.api.hap.uuid.generate(primarySensorId);
+    featureRpmAccessory = this.accessoryMap.get(uuid);
+    matchedSensorId = primarySensorId;
+
+    this.log.debug(
+      `Looking for feature RPM sensor with ID: ${primarySensorId} (pump circuit: ${pumpCircuit.id} -> circuit: ${pumpCircuit.circuitId})`,
+    );
+
+    // If not found, search through all RPM sensors to find one that uses this pump circuit
+    if (!featureRpmAccessory) {
+      this.log.debug(`Primary sensor ID not found, searching for RPM sensor that uses pump circuit ${pumpCircuit.id}`);
+
+      this.accessoryMap.forEach((accessory, _accessoryUuid) => {
+        if (
+          accessory.context.feature &&
+          accessory.context.pumpCircuit &&
+          accessory.context.pumpCircuit.id === pumpCircuit.id &&
+          accessory.displayName?.includes('RPM') &&
+          !accessory.displayName?.includes('Heater') &&
+          !accessory.displayName?.includes('Gas')
+        ) {
+          featureRpmAccessory = accessory;
+          matchedSensorId = `${accessory.context.feature.id}-rpm`;
+          this.log.debug(`Found matching RPM sensor: ${accessory.displayName} (ID: ${matchedSensorId})`);
+        }
+      });
     }
 
-    // Find the pump RPM sensor accessory for this pump
-    const pumpRpmSensorId = `${pumpCircuit.pump.id}-rpm`;
-    const uuid = this.api.hap.uuid.generate(pumpRpmSensorId);
-    const pumpRpmAccessory = this.accessoryMap.get(uuid);
+    if (featureRpmAccessory && featureRpmAccessory.context.feature && featureRpmAccessory.context.pumpCircuit) {
+      this.log.debug(`Found and updating feature RPM sensor for ${featureRpmAccessory.context.feature.name}: ${pumpCircuit.speed} RPM`);
 
-    if (pumpRpmAccessory && pumpRpmAccessory.context.pump) {
-      this.log.debug(`Updating pump RPM sensor for ${pumpCircuit.pump.name}: ${pumpCircuit.speed} RPM`);
-
-      // Update the pump data in the accessory context
-      const pump = pumpRpmAccessory.context.pump as Pump;
-
-      // Find the pump circuit in the pump's circuits and update its properties
-      if (pump.circuits) {
-        const circuitToUpdate = pump.circuits.find((c: PumpCircuit) => c.id === pumpCircuit.id);
-        if (circuitToUpdate) {
-          circuitToUpdate.speed = pumpCircuit.speed;
-          circuitToUpdate.speedType = pumpCircuit.speedType;
-          circuitToUpdate.status = pumpCircuit.status;
-          this.log.debug(`Updated pump circuit ${circuitToUpdate.id}: speed=${circuitToUpdate.speed}, status=${circuitToUpdate.status}`);
-        }
-      }
+      // Update the pump circuit data in the accessory context
+      featureRpmAccessory.context.pumpCircuit = pumpCircuit;
 
       // Update the accessory and refresh the RPM display
-      this.api.updatePlatformAccessories([pumpRpmAccessory]);
-      new PumpRpmAccessory(this, pumpRpmAccessory);
+      this.api.updatePlatformAccessories([featureRpmAccessory]);
+
+      // Create new PumpRpmAccessory instance and trigger immediate RPM update
+      const rpmAccessory = new PumpRpmAccessory(this, featureRpmAccessory);
+
+      // Trigger immediate update if feature is active and has speed
+      if (featureRpmAccessory.context.feature.status === CircuitStatus.On && pumpCircuit.speed > 0) {
+        rpmAccessory.updateRpm(pumpCircuit.speed);
+      } else {
+        rpmAccessory.updateRpm(0.0001); // HomeKit minimum for inactive
+      }
+    } else {
+      this.log.debug(
+        `No feature RPM sensor found for pump circuit ${pumpCircuit.id} -> circuit ${pumpCircuit.circuitId} ` +
+          `(tried both direct ID ${primarySensorId} and pump circuit matching)`,
+      );
+    }
+  }
+
+  updateFeatureRpmSensorForCircuit(circuit: Circuit) {
+    // Find the feature RPM sensor for this circuit
+    const featureRpmSensorId = `${circuit.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(featureRpmSensorId);
+    const featureRpmAccessory = this.accessoryMap.get(uuid);
+
+    if (featureRpmAccessory && featureRpmAccessory.context.feature && featureRpmAccessory.context.pumpCircuit) {
+      this.log.debug(`Updating feature RPM sensor for circuit change: ${circuit.name}`);
+
+      // Update the feature data in the accessory context
+      featureRpmAccessory.context.feature = circuit;
+
+      // Refresh the RPM display (pump circuit data is already current)
+      const rpmAccessory = new PumpRpmAccessory(this, featureRpmAccessory);
+
+      // Trigger immediate RPM update based on current status
+      if (circuit.status === CircuitStatus.On && featureRpmAccessory.context.pumpCircuit?.speed > 0) {
+        rpmAccessory.updateRpm(featureRpmAccessory.context.pumpCircuit.speed);
+      } else {
+        rpmAccessory.updateRpm(0.0001); // HomeKit minimum for inactive
+      }
     }
   }
 
@@ -522,10 +581,134 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         heaterAccessory.context.body = body;
         this.api.updatePlatformAccessories([heaterAccessory]);
         new HeaterAccessory(this, heaterAccessory);
+
+        // Update the corresponding heater RPM sensor
+        this.updateHeaterRpmSensor(heaterAccessory.context.heater, body);
       } else {
         this.log.debug(
           `Not updating heater because body id of heater ${heaterAccessory.context.body?.id} ` + `doesn't match input body ID ${body.id}`,
         );
+      }
+    });
+  }
+
+  updateHeaterRpmSensor(heater: Heater, body: Body) {
+    // Guard against undefined heater or body
+    if (!heater || !body) {
+      this.log.warn(`Cannot update heater RPM sensor: heater or body is undefined (heater: ${heater}, body: ${body})`);
+      return;
+    }
+
+    // Find the heater RPM sensor for this heater and body
+    const heaterRpmSensorId = `${heater.id}.${body.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(heaterRpmSensorId);
+    const heaterRpmAccessory = this.accessoryMap.get(uuid);
+
+    if (heaterRpmAccessory && heaterRpmAccessory.context.feature && heaterRpmAccessory.context.pumpCircuit) {
+      this.log.debug(`Updating heater RPM sensor for ${heater.name}: checking heater status`);
+
+      // Determine if this heater is currently active for this body
+      // A heater is active if it's selected for the body and the body is on
+      const isHeaterActive = body.heaterId === heater.id && body.status === CircuitStatus.On;
+
+      // Update the feature status to reflect the heater's active state
+      heaterRpmAccessory.context.feature.status = isHeaterActive ? CircuitStatus.On : CircuitStatus.Off;
+
+      this.log.debug(
+        `  Heater ${heater.name} active: ${isHeaterActive} ` +
+          `(body status: ${body.status}, body heaterId: ${body.heaterId}, heater id: ${heater.id})`,
+      );
+
+      // Update the accessory and refresh the RPM display
+      this.api.updatePlatformAccessories([heaterRpmAccessory]);
+      new PumpRpmAccessory(this, heaterRpmAccessory);
+    }
+  }
+
+  updateHeaterRpmSensorsForPumpCircuit(pumpCircuit: PumpCircuit) {
+    // Find all heater RPM sensors that use this pump circuit by matching the pump circuit ID
+    this.accessoryMap.forEach((accessory, _uuid) => {
+      // Check if this is a heater RPM sensor by examining the context
+      if (
+        accessory.context.feature &&
+        accessory.context.pumpCircuit &&
+        accessory.context.feature.bodyId &&
+        (accessory.displayName?.includes('Heater') || accessory.displayName?.includes('Gas'))
+      ) {
+        // Check if this heater RPM sensor uses the same pump circuit by ID
+        // This is more reliable than matching by speed since IDs are unique
+        if (accessory.context.pumpCircuit.id === pumpCircuit.id) {
+          this.log.debug(
+            `Updating heater RPM sensor pump circuit for ${accessory.displayName}: ${pumpCircuit.speed} RPM ` +
+              `(was ${accessory.context.pumpCircuit.speed} RPM)`,
+          );
+
+          // Update the pump circuit data in the accessory context
+          accessory.context.pumpCircuit = { ...pumpCircuit };
+
+          // Update the accessory and refresh the RPM display
+          this.api.updatePlatformAccessories([accessory]);
+
+          // Create new PumpRpmAccessory instance to refresh the display with updated data
+          const rpmAccessory = new PumpRpmAccessory(this, accessory);
+
+          // If the heater is currently active, also trigger an immediate RPM update
+          if (accessory.context.feature.status === CircuitStatus.On && pumpCircuit.speed > 0) {
+            rpmAccessory.updateRpm(pumpCircuit.speed);
+          }
+        }
+      }
+    });
+  }
+
+  updateHeaterRpmSensorsForStandalonePump(pumpId: string, speed: string, speedType: string) {
+    // Convert speed to number
+    const speedValue = parseInt(speed, 10);
+    if (isNaN(speedValue)) {
+      this.log.warn(`Invalid speed value for standalone pump ${pumpId}: ${speed}`);
+      return;
+    }
+
+    this.log.debug(`Checking heater RPM sensors for standalone pump ${pumpId} at ${speedValue} ${speedType}`);
+
+    // Find all heater RPM sensors and check if they should be updated based on this standalone pump
+    this.accessoryMap.forEach((accessory, _uuid) => {
+      // Check if this is a heater RPM sensor
+      if (
+        accessory.context.feature &&
+        accessory.context.pumpCircuit &&
+        accessory.context.feature.bodyId &&
+        (accessory.displayName?.includes('Heater') || accessory.displayName?.includes('Gas'))
+      ) {
+        // For heater RPM sensors, we need to check if this standalone pump update
+        // corresponds to the heater's speed requirement. This is tricky because
+        // standalone pumps don't have direct circuit associations.
+
+        // Strategy: Update heater RPM sensors for any pump speed in heater range
+        // Update both when heater is active (show RPM) and inactive (show 0.0001)
+        if (speedValue >= 2000 && speedValue <= 3500 && speedType === 'RPM') {
+          this.log.debug(
+            `Updating heater RPM sensor ${accessory.displayName} with standalone pump ${pumpId}: ${speedValue} RPM ` +
+              `(heater ${accessory.context.feature.status})`,
+          );
+
+          // Update the pump circuit speed in the accessory context
+          accessory.context.pumpCircuit.speed = speedValue;
+          accessory.context.pumpCircuit.speedType = speedType;
+
+          // Update the accessory and refresh the RPM display
+          this.api.updatePlatformAccessories([accessory]);
+
+          // Create new PumpRpmAccessory instance and trigger immediate update
+          const rpmAccessory = new PumpRpmAccessory(this, accessory);
+
+          // Show RPM if heater is active, otherwise show minimum value
+          if (accessory.context.feature.status === CircuitStatus.On) {
+            rpmAccessory.updateRpm(speedValue);
+          } else {
+            rpmAccessory.updateRpm(0.0001);
+          }
+        }
       }
     });
   }
@@ -582,28 +765,27 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const panels = transformPanels(this.discoveryBuffer as Record<string, unknown>, this.getConfig().includeAllCircuits, this.log);
     this.log.debug(`Transformed panels from IntelliCenter: ${this.json(panels)}`);
 
-    // Track current circuits to clean up orphaned accessories
-    const currentCircuitIds = new Set<string>();
-    const currentSensorIds = new Set<string>();
-    const currentHeaterIds = new Set<string>();
-    const currentPumpRpmSensorIds = new Set<string>();
+    // Track ALL accessories that should exist (generic approach)
+    const discoveredAccessoryIds = new Set<string>();
 
     this.pumpIdToCircuitMap.clear();
     const circuitIdPumpMap = new Map<string, PumpCircuit>();
     const bodyIdMap = new Map<string, Body>();
     let heaters = [] as ReadonlyArray<Heater>;
+    let currentPanel: Panel | null = null;
     for (const panel of panels) {
+      currentPanel = panel;
       for (const sensor of panel.sensors) {
-        currentSensorIds.add(sensor.id);
+        discoveredAccessoryIds.add(sensor.id);
         this.discoverTemperatureSensor(panel, null, sensor);
       }
       for (const pump of panel.pumps) {
         this.log.debug(`Processing pump: ${pump.name} (ID: ${pump.id}) with ${pump.circuits?.length || 0} circuits`);
 
-        // Create RPM sensor for each pump
-        const pumpRpmSensorId = `${pump.id}-rpm`;
-        currentPumpRpmSensorIds.add(pumpRpmSensorId);
-        this.discoverPumpRpmSensor(panel, pump);
+        // Store pump circuits for later feature-based RPM sensor creation
+        for (const pumpCircuit of pump.circuits as ReadonlyArray<PumpCircuit>) {
+          circuitIdPumpMap.set(pumpCircuit.circuitId, pumpCircuit);
+        }
 
         for (const pumpCircuit of pump.circuits as ReadonlyArray<PumpCircuit>) {
           this.log.debug(
@@ -616,80 +798,209 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       }
       for (const module of panel.modules) {
         for (const body of module.bodies) {
-          currentCircuitIds.add(body.id);
-          this.discoverCircuit(panel, module, body, circuitIdPumpMap.get(body.circuit?.id as string));
+          discoveredAccessoryIds.add(body.id);
+          const pumpCircuit = circuitIdPumpMap.get(body.circuit?.id as string);
+          this.discoverCircuit(panel, module, body, pumpCircuit);
+
+          // Create RPM sensor if this body has a pump circuit (e.g., Pool, Spa)
+          if (pumpCircuit) {
+            const bodyRpmSensorId = `${body.id}-rpm`;
+            discoveredAccessoryIds.add(bodyRpmSensorId);
+            this.log.debug(`Creating RPM sensor for body: ${body.name} RPM (ID: ${bodyRpmSensorId})`);
+            this.discoverBodyRpmSensor(panel, body, pumpCircuit);
+          }
+
           this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, MODE_KEY]);
           bodyIdMap.set(body.id, body);
         }
         for (const feature of module.features) {
-          currentCircuitIds.add(feature.id);
-          this.discoverCircuit(panel, module, feature, circuitIdPumpMap.get(feature.id));
+          discoveredAccessoryIds.add(feature.id);
+          const pumpCircuit = circuitIdPumpMap.get(feature.id);
+          this.log.debug(
+            `Module feature: ${feature.name} (${feature.id}) - pump circuit: ` +
+              `${pumpCircuit ? `${pumpCircuit.id} (${pumpCircuit.speed} RPM)` : 'none'}`,
+          );
+          this.discoverCircuit(panel, module, feature, pumpCircuit);
+
+          // Create RPM sensor if this feature has a pump circuit
+          if (pumpCircuit) {
+            const featureRpmSensorId = `${feature.id}-rpm`;
+            discoveredAccessoryIds.add(featureRpmSensorId);
+            this.log.debug(`Creating RPM sensor: ${feature.name} RPM (ID: ${featureRpmSensorId})`);
+            this.discoverFeatureRpmSensor(panel, feature, pumpCircuit);
+          }
+
           this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
         }
         heaters = heaters.concat(module.heaters);
       }
       for (const feature of panel.features) {
-        currentCircuitIds.add(feature.id);
-        this.discoverCircuit(panel, null, feature, circuitIdPumpMap.get(feature.id));
+        discoveredAccessoryIds.add(feature.id);
+        const pumpCircuit = circuitIdPumpMap.get(feature.id);
+        this.log.debug(
+          `Panel feature: ${feature.name} (${feature.id}) - pump circuit: ` +
+            `${pumpCircuit ? `${pumpCircuit.id} (${pumpCircuit.speed} RPM)` : 'none'}`,
+        );
+        this.discoverCircuit(panel, null, feature, pumpCircuit);
+
+        // Create RPM sensor if this feature has a pump circuit
+        if (pumpCircuit) {
+          const featureRpmSensorId = `${feature.id}-rpm`;
+          discoveredAccessoryIds.add(featureRpmSensorId);
+          this.log.debug(`Creating RPM sensor: ${feature.name} RPM (ID: ${featureRpmSensorId})`);
+          this.discoverFeatureRpmSensor(panel, feature, pumpCircuit);
+        }
+
         this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
       }
     }
     for (const heater of heaters) {
       heater.bodyIds.forEach(bodyId => {
-        currentHeaterIds.add(`${heater.id}.${bodyId}`);
+        discoveredAccessoryIds.add(`${heater.id}.${bodyId}`);
+
+        // Check if this heater has a pump circuit
+        // Find the correct pump circuit for this heater's speed requirement
+        this.log.debug(`Checking heater: ${heater.name} (${heater.id}) for body ${bodyId}`);
+        const body = bodyIdMap.get(bodyId);
+
+        // Find the heater-specific pump circuit using smart detection
+        let heaterPumpCircuit: PumpCircuit | null = null;
+        const heaterRpmCandidates: Array<{ circuit: PumpCircuit; priority: number }> = [];
+
+        for (const [circuitId, pumpCircuit] of circuitIdPumpMap.entries()) {
+          this.log.debug(`  Checking pump circuit: ${circuitId} -> ${pumpCircuit.id} (${pumpCircuit.speed} ${pumpCircuit.speedType})`);
+
+          // Only consider RPM circuits for heater operations (skip GPM circuits)
+          if (pumpCircuit.speedType !== 'RPM') {
+            this.log.debug(`    Skipping non-RPM circuit: ${pumpCircuit.speedType}`);
+            continue;
+          }
+
+          // Skip very low speed circuits (likely cleaning or low-speed operations)
+          if (pumpCircuit.speed < 1000) {
+            this.log.debug(`    Skipping low-speed circuit: ${pumpCircuit.speed} RPM`);
+            continue;
+          }
+
+          let priority = 0;
+
+          // Priority 1: Look for circuits with "heater" in the name (highest priority)
+          if (pumpCircuit.pump?.name?.toLowerCase().includes('heater') || body?.name?.toLowerCase().includes('heater')) {
+            priority = 100;
+            this.log.debug(`    High priority (heater name): ${pumpCircuit.speed} RPM`);
+          } else if (pumpCircuit.speed >= 2500 && pumpCircuit.speed <= 3200) {
+            // Priority 2: High heater range speeds (3000 RPM range - most likely heater requirement)
+            priority = 90;
+            this.log.debug(`    Very high priority (high heater range): ${pumpCircuit.speed} RPM`);
+          } else if (pumpCircuit.speed >= 2000 && pumpCircuit.speed < 2500) {
+            // Priority 3: Lower heater range speeds
+            priority = 85;
+            this.log.debug(`    High priority (lower heater range): ${pumpCircuit.speed} RPM`);
+          } else if (body?.circuit?.id === circuitId) {
+            // Priority 4: Look for body-specific circuits (lower priority than heater speeds)
+            priority = 70;
+            this.log.debug(`    Medium priority (body circuit): ${pumpCircuit.speed} RPM`);
+          } else if (pumpCircuit.speed > 1500) {
+            // Priority 5: Higher speeds but not in heater range (fallback)
+            priority = 40;
+            this.log.debug(`    Lower priority (high speed fallback): ${pumpCircuit.speed} RPM`);
+          }
+
+          if (priority > 0) {
+            heaterRpmCandidates.push({ circuit: pumpCircuit, priority });
+          }
+        }
+
+        // Sort by priority (highest first), then by speed preference for heaters (mid-range preferred)
+        heaterRpmCandidates.sort((a, b) => {
+          if (a.priority !== b.priority) {
+            return b.priority - a.priority; // Higher priority first
+          }
+          // For same priority, prefer speeds in heater range (2500-3200) over very high speeds
+          const aInHeaterRange = a.circuit.speed >= 2500 && a.circuit.speed <= 3200;
+          const bInHeaterRange = b.circuit.speed >= 2500 && b.circuit.speed <= 3200;
+
+          if (aInHeaterRange && !bInHeaterRange) {
+            return -1;
+          }
+          if (!aInHeaterRange && bInHeaterRange) {
+            return 1;
+          }
+
+          // If both in range or both out of range, prefer lower speed (avoid spa jets)
+          return a.circuit.speed - b.circuit.speed;
+        });
+
+        if (heaterRpmCandidates.length > 0) {
+          const selectedCandidate = heaterRpmCandidates[0]!; // Safe because length > 0
+          heaterPumpCircuit = selectedCandidate.circuit;
+          this.log.debug(`  Selected heater pump circuit: ${heaterPumpCircuit.speed} RPM (priority: ${selectedCandidate.priority})`);
+
+          // Log all candidates for debugging
+          this.log.debug(`  All candidates: ${heaterRpmCandidates.map(c => `${c.circuit.speed}RPM(p${c.priority})`).join(', ')}`);
+        } else {
+          this.log.debug('  No suitable RPM pump circuits found for heater');
+        }
+
+        if (heater.name.toLowerCase().includes('heater') && heaterPumpCircuit) {
+          const heaterRpmSensorId = `${heater.id}.${bodyId}-rpm`;
+          discoveredAccessoryIds.add(heaterRpmSensorId);
+          this.log.debug(
+            `Creating RPM sensor for heater: ${heater.name} RPM (ID: ${heaterRpmSensorId}) ` +
+              `with heater speed: ${heaterPumpCircuit.speed} RPM`,
+          );
+          this.discoverHeaterRpmSensor(currentPanel!, heater, body!, heaterPumpCircuit);
+        } else {
+          this.log.debug(`No suitable pump circuit found for heater: ${heater.name}`);
+        }
       });
       this.discoverHeater(heater, bodyIdMap);
     }
 
-    // Clean up orphaned accessories
-    this.cleanupOrphanedAccessories(currentCircuitIds, currentSensorIds, currentHeaterIds, currentPumpRpmSensorIds);
+    // Clean up orphaned accessories (generic approach)
+    this.cleanupOrphanedAccessories(discoveredAccessoryIds);
   }
 
-  cleanupOrphanedAccessories(
-    currentCircuitIds: Set<string>,
-    currentSensorIds: Set<string>,
-    currentHeaterIds: Set<string>,
-    currentPumpRpmSensorIds: Set<string>,
-  ) {
+  cleanupOrphanedAccessories(discoveredAccessoryIds: Set<string>) {
     const accessoriesToRemove: PlatformAccessory[] = [];
 
-    this.accessoryMap.forEach((accessory, uuid) => {
-      let shouldRemove = false;
+    this.accessoryMap.forEach((accessory, accessoryUuid) => {
+      // Get the ID that should have been discovered for this accessory
+      let expectedId: string | null = null;
 
-      // Check if it's a circuit accessory
       if (accessory.context.circuit) {
-        const circuitId = accessory.context.circuit.id;
-        if (!currentCircuitIds.has(circuitId)) {
-          this.log.info(`Removing orphaned circuit accessory: ${accessory.displayName} (${circuitId})`);
-          shouldRemove = true;
-        }
+        expectedId = accessory.context.circuit.id;
       } else if (accessory.context.sensor) {
-        // Check if it's a sensor accessory
-        const sensorId = accessory.context.sensor.id;
-        if (!currentSensorIds.has(sensorId)) {
-          this.log.info(`Removing orphaned sensor accessory: ${accessory.displayName} (${sensorId})`);
-          shouldRemove = true;
-        }
+        expectedId = accessory.context.sensor.id;
       } else if (accessory.context.heater && accessory.context.body) {
-        // Check if it's a heater accessory
-        const heaterId = `${accessory.context.heater.id}.${accessory.context.body.id}`;
-        if (!currentHeaterIds.has(heaterId)) {
-          this.log.info(`Removing orphaned heater accessory: ${accessory.displayName} (${heaterId})`);
-          shouldRemove = true;
+        expectedId = `${accessory.context.heater.id}.${accessory.context.body.id}`;
+      } else if (accessory.context.feature && accessory.context.pumpCircuit) {
+        // Feature-based, body-based, or heater-based RPM sensors
+        if (accessory.displayName?.includes('Heater') || accessory.displayName?.includes('Gas')) {
+          // Heater RPM sensors use heater.id.bodyId-rpm format
+          const bodyId = accessory.context.feature.bodyId;
+          if (bodyId) {
+            expectedId = `${accessory.context.feature.id}.${bodyId}-rpm`;
+          } else {
+            // If bodyId is missing, this is likely an orphaned accessory that should be removed
+            this.log.warn(`Heater RPM sensor ${accessory.displayName} missing bodyId, marking for removal`);
+            expectedId = 'REMOVE_HEATER_RPM_WITHOUT_BODYID';
+          }
+        } else {
+          // Regular feature or body RPM sensors use id-rpm format
+          expectedId = `${accessory.context.feature.id}-rpm`;
         }
-      } else if (accessory.context.pump) {
-        // Check if it's a pump RPM sensor accessory
-        const pumpRpmSensorId = `${accessory.context.pump.id}-rpm`;
-        if (!currentPumpRpmSensorIds.has(pumpRpmSensorId)) {
-          this.log.info(`Removing orphaned pump RPM sensor accessory: ${accessory.displayName} (${pumpRpmSensorId})`);
-          shouldRemove = true;
-        }
+      } else if (accessory.context.pumpCircuit || (accessory.context.pump && accessory.displayName?.includes('RPM'))) {
+        // Old pump circuit and pump-level RPM sensors - always remove (no longer supported)
+        expectedId = 'REMOVE_OLD_RPM_SENSORS';
       }
 
-      if (shouldRemove) {
+      // If we have an expected ID and it wasn't discovered, remove the accessory
+      if (expectedId && !discoveredAccessoryIds.has(expectedId)) {
+        this.log.info(`Removing orphaned accessory: ${accessory.displayName} (expected ID: ${expectedId})`);
         accessoriesToRemove.push(accessory);
-        this.accessoryMap.delete(uuid);
-        this.heaters.delete(uuid);
+        this.accessoryMap.delete(accessoryUuid);
+        this.heaters.delete(accessoryUuid);
       }
     });
 
@@ -806,22 +1117,88 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     this.subscribeForUpdates(sensor, [PROBE_KEY]);
   }
 
-  discoverPumpRpmSensor(panel: Panel, pump: Pump) {
-    const pumpRpmSensorId = `${pump.id}-rpm`;
-    const uuid = this.api.hap.uuid.generate(pumpRpmSensorId);
+  discoverFeatureRpmSensor(panel: Panel, feature: Circuit, pumpCircuit: PumpCircuit) {
+    const featureRpmSensorId = `${feature.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(featureRpmSensorId);
 
     const existingAccessory = this.accessoryMap.get(uuid);
 
+    // Use the feature name directly - much cleaner!
+    const displayName = `${feature.name} RPM`;
+
     if (existingAccessory) {
-      this.log.debug(`Restoring existing pump RPM sensor from cache: ${existingAccessory.displayName}`);
-      existingAccessory.context.pump = pump;
+      this.log.debug(`Restoring existing feature RPM sensor from cache: ${existingAccessory.displayName}`);
+      existingAccessory.context.feature = feature;
+      existingAccessory.context.pumpCircuit = pumpCircuit;
       existingAccessory.context.panel = panel;
       this.api.updatePlatformAccessories([existingAccessory]);
       new PumpRpmAccessory(this, existingAccessory);
     } else {
-      this.log.debug(`Adding new pump RPM sensor: ${pump.name} RPM`);
-      const accessory = new this.api.platformAccessory(`${pump.name} RPM`, uuid);
-      accessory.context.pump = pump;
+      this.log.debug(`Adding new feature RPM sensor: ${displayName}`);
+      const accessory = new this.api.platformAccessory(displayName, uuid);
+      accessory.context.feature = feature;
+      accessory.context.pumpCircuit = pumpCircuit;
+      accessory.context.panel = panel;
+      new PumpRpmAccessory(this, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessoryMap.set(accessory.UUID, accessory);
+    }
+  }
+
+  discoverBodyRpmSensor(panel: Panel, body: Body, pumpCircuit: PumpCircuit) {
+    const bodyRpmSensorId = `${body.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(bodyRpmSensorId);
+
+    const existingAccessory = this.accessoryMap.get(uuid);
+
+    // Use the body name directly (e.g., "Pool RPM", "Spa RPM")
+    const displayName = `${body.name} RPM`;
+
+    if (existingAccessory) {
+      this.log.debug(`Restoring existing body RPM sensor from cache: ${existingAccessory.displayName}`);
+      existingAccessory.context.feature = body; // Bodies act like features for RPM sensors
+      existingAccessory.context.pumpCircuit = pumpCircuit;
+      existingAccessory.context.panel = panel;
+      this.api.updatePlatformAccessories([existingAccessory]);
+      new PumpRpmAccessory(this, existingAccessory);
+    } else {
+      this.log.debug(`Adding new body RPM sensor: ${displayName}`);
+      const accessory = new this.api.platformAccessory(displayName, uuid);
+      accessory.context.feature = body; // Bodies act like features for RPM sensors
+      accessory.context.pumpCircuit = pumpCircuit;
+      accessory.context.panel = panel;
+      new PumpRpmAccessory(this, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessoryMap.set(accessory.UUID, accessory);
+    }
+  }
+
+  discoverHeaterRpmSensor(panel: Panel, heater: Heater, body: Body, pumpCircuit: PumpCircuit) {
+    const heaterRpmSensorId = `${heater.id}.${body.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(heaterRpmSensorId);
+
+    const existingAccessory = this.accessoryMap.get(uuid);
+
+    // Use the heater name directly (e.g., "Spa Gas Heater RPM")
+    const displayName = `${heater.name} RPM`;
+
+    // Determine initial heater status - active if heater is selected for this body and body is on
+    const initialStatus = body.heaterId === heater.id && body.status === CircuitStatus.On ? CircuitStatus.On : CircuitStatus.Off;
+
+    if (existingAccessory) {
+      this.log.debug(`Restoring existing heater RPM sensor from cache: ${existingAccessory.displayName}`);
+      // Create feature-like object with bodyId
+      existingAccessory.context.feature = { id: heater.id, name: heater.name, status: initialStatus, bodyId: body.id };
+      existingAccessory.context.pumpCircuit = pumpCircuit;
+      existingAccessory.context.panel = panel;
+      this.api.updatePlatformAccessories([existingAccessory]);
+      new PumpRpmAccessory(this, existingAccessory);
+    } else {
+      this.log.debug(`Adding new heater RPM sensor: ${displayName}`);
+      const accessory = new this.api.platformAccessory(displayName, uuid);
+      // Create feature-like object with bodyId
+      accessory.context.feature = { id: heater.id, name: heater.name, status: initialStatus, bodyId: body.id };
+      accessory.context.pumpCircuit = pumpCircuit;
       accessory.context.panel = panel;
       new PumpRpmAccessory(this, accessory);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
