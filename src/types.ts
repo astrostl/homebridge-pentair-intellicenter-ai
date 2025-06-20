@@ -50,6 +50,8 @@ export type PumpParams = {
   SPEED?: number;
   RPM?: number;
   GPM?: number;
+  WATTS?: number;
+  SELECT?: string;
   [key: string]: string | number | boolean | undefined;
 };
 
@@ -134,6 +136,9 @@ export type Pump = {
   minFlow: number;
   maxFlow: number;
   circuits?: ReadonlyArray<PumpCircuit>;
+  rpm?: number;
+  gpm?: number;
+  watts?: number;
   [key: string]: unknown;
 } & Circuit;
 
@@ -144,6 +149,9 @@ export type PumpCircuit = {
   speed: number;
   speedType: string;
   status?: CircuitStatus;
+  rpm?: number;
+  gpm?: number;
+  watts?: number;
 } & BaseCircuit;
 
 export type Sensor = {

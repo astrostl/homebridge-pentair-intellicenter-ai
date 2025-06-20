@@ -35,6 +35,7 @@ function isIntelliCenterObject(obj: unknown): obj is IntelliCenterObject {
 import {
   CIRCUIT_KEY,
   CIRCUITS_KEY,
+  GPM_KEY,
   LAST_TEMP_KEY,
   OBJ_ID_KEY,
   OBJ_LIST_KEY,
@@ -46,9 +47,11 @@ import {
   OBJ_SUBTYPE_KEY,
   OBJ_TYPE_KEY,
   PARAMS_KEY,
+  RPM_KEY,
   SELECT_KEY,
   SPEED_KEY,
   VARIABLE_SPEED_PUMP_SUBTYPES,
+  WATTS_KEY,
 } from './constants';
 
 const transformHeaters = (heaters: unknown[]): ReadonlyArray<Heater> => {
@@ -89,6 +92,9 @@ const bodyParams = new Map([
 const pumpParams = new Map([
   ['speedType', SELECT_KEY],
   ['speed', SPEED_KEY],
+  ['rpm', RPM_KEY],
+  ['gpm', GPM_KEY],
+  ['watts', WATTS_KEY],
 ]) as ReadonlyMap<string, string>;
 
 export const updateCircuit = (circuit: Circuit | Body, params: IntelliCenterParams): void => {
