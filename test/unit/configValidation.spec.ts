@@ -562,4 +562,161 @@ describe('ConfigValidator', () => {
       expect(result6.warnings.some(warning => warning.includes('potentially unsafe characters'))).toBe(true);
     });
   });
+
+  describe('Temperature Unit Consistency Validation', () => {
+    describe('validateTemperatureUnitConsistency', () => {
+      it('should return consistent when no readings provided', () => {
+        const result = ConfigValidator.validateTemperatureUnitConsistency([], TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.detectedUnit).toBe(null);
+        expect(result.configuredUnit).toBe(TemperatureUnits.F);
+        expect(result.analysisCount).toBe(0);
+        expect(result.warning).toBeUndefined();
+      });
+
+      it('should return consistent when insufficient valid readings', () => {
+        const result = ConfigValidator.validateTemperatureUnitConsistency([78, NaN], TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.detectedUnit).toBe(null);
+        expect(result.analysisCount).toBe(1);
+      });
+
+      it('should detect Fahrenheit temperatures correctly', () => {
+        const fahrenheitReadings = [78, 82, 85, 79, 81, 83]; // Typical pool temperatures in F
+        const result = ConfigValidator.validateTemperatureUnitConsistency(fahrenheitReadings, TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.detectedUnit).toBe(TemperatureUnits.F);
+        expect(result.configuredUnit).toBe(TemperatureUnits.F);
+        expect(result.analysisCount).toBe(6);
+        expect(result.warning).toBeUndefined();
+      });
+
+      it('should detect Celsius temperatures correctly', () => {
+        const celsiusReadings = [26, 28, 29, 27, 26.5, 28.5]; // Typical pool temperatures in C
+        const result = ConfigValidator.validateTemperatureUnitConsistency(celsiusReadings, TemperatureUnits.C);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.detectedUnit).toBe(TemperatureUnits.C);
+        expect(result.configuredUnit).toBe(TemperatureUnits.C);
+        expect(result.analysisCount).toBe(6);
+        expect(result.warning).toBeUndefined();
+      });
+
+      it('should detect Fahrenheit/Celsius mismatch with high confidence', () => {
+        const fahrenheitReadings = [78, 82, 85, 79, 81, 83]; // F readings
+        const result = ConfigValidator.validateTemperatureUnitConsistency(fahrenheitReadings, TemperatureUnits.C);
+
+        expect(result.isConsistent).toBe(false);
+        expect(result.detectedUnit).toBe(TemperatureUnits.F);
+        expect(result.configuredUnit).toBe(TemperatureUnits.C);
+        expect(result.warning).toContain('Temperature unit mismatch detected');
+        expect(result.warning).toContain('Configured: C');
+        expect(result.warning).toContain('but readings appear to be in F');
+      });
+
+      it('should detect Celsius/Fahrenheit mismatch with high confidence', () => {
+        const celsiusReadings = [26, 28, 29, 27, 26.5, 28.5]; // C readings
+        const result = ConfigValidator.validateTemperatureUnitConsistency(celsiusReadings, TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(false);
+        expect(result.detectedUnit).toBe(TemperatureUnits.C);
+        expect(result.configuredUnit).toBe(TemperatureUnits.F);
+        expect(result.warning).toContain('Temperature unit mismatch detected');
+        expect(result.warning).toContain('Configured: F');
+        expect(result.warning).toContain('but readings appear to be in C');
+      });
+
+      it('should handle spa temperatures in Fahrenheit', () => {
+        const spaFahrenheitReadings = [101, 103, 102, 104, 100, 102]; // Spa temperatures in F
+        const result = ConfigValidator.validateTemperatureUnitConsistency(spaFahrenheitReadings, TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.detectedUnit).toBe(TemperatureUnits.F);
+        expect(result.analysisCount).toBe(6);
+      });
+
+      it('should handle spa temperatures in Celsius', () => {
+        const spaCelsiusReadings = [38, 39, 38.5, 39.5, 37.5, 38]; // Spa temperatures in C
+        const result = ConfigValidator.validateTemperatureUnitConsistency(spaCelsiusReadings, TemperatureUnits.C);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.detectedUnit).toBe(TemperatureUnits.C);
+        expect(result.analysisCount).toBe(6);
+      });
+
+      it('should handle ambiguous temperature ranges', () => {
+        const ambiguousReadings = [50, 51, 49, 52, 50.5]; // Could be hot C or cold F
+        const result = ConfigValidator.validateTemperatureUnitConsistency(ambiguousReadings, TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true); // Assumes correct when ambiguous
+        expect(result.detectedUnit).toBe(null);
+        expect(result.warning).toBeUndefined();
+      });
+
+      it('should filter out invalid temperature readings', () => {
+        const mixedReadings = [78, NaN, -100, 300, 82, 85]; // Mix of valid and invalid
+        const result = ConfigValidator.validateTemperatureUnitConsistency(mixedReadings, TemperatureUnits.F);
+
+        expect(result.analysisCount).toBe(3); // Only valid readings counted
+        expect(result.detectedUnit).toBe(TemperatureUnits.F);
+      });
+
+      it('should handle extreme but valid temperature readings', () => {
+        const extremeReadings = [120, 118, 115, 117]; // Very hot but valid F readings
+        const result = ConfigValidator.validateTemperatureUnitConsistency(extremeReadings, TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.analysisCount).toBe(4);
+      });
+
+      it('should not report mismatch with low confidence', () => {
+        const edgeCaseReadings = [60, 61, 62, 63]; // Edge case temperatures
+        const result = ConfigValidator.validateTemperatureUnitConsistency(edgeCaseReadings, TemperatureUnits.C);
+
+        // Should not report mismatch due to low confidence
+        expect(result.isConsistent).toBe(true);
+        expect(result.warning).toBeUndefined();
+      });
+
+      it('should handle confidence calculations for Fahrenheit ranges', () => {
+        // Test the specific confidence calculation ranges for Fahrenheit (lines 447-448, 450-452, etc.)
+
+        // Test mid-range for 0.6 confidence (lines 450-452)
+        const midRangeF = [64, 66, 68]; // Average ~66F, should hit the 60-115 range for 0.6 confidence
+        const result1 = ConfigValidator.validateTemperatureUnitConsistency(midRangeF, TemperatureUnits.F);
+        expect(result1.isConsistent).toBe(true);
+
+        // Test lower edge for 0.3 confidence (line 452 return)
+        const lowRangeF = [55, 57, 59]; // Average ~57F, should hit the default 0.3 confidence
+        const result2 = ConfigValidator.validateTemperatureUnitConsistency(lowRangeF, TemperatureUnits.F);
+        expect(result2.isConsistent).toBe(true);
+      });
+
+      it('should handle confidence calculations for Celsius ranges', () => {
+        // Test the specific confidence calculation ranges for Celsius (lines 459-460, 462-465)
+
+        // Test mid-range for 0.6 confidence (lines 462-465)
+        const midRangeC = [17, 19, 20]; // Average ~18.7C, should hit the 15-45 range for 0.6 confidence
+        const result1 = ConfigValidator.validateTemperatureUnitConsistency(midRangeC, TemperatureUnits.C);
+        expect(result1.isConsistent).toBe(true);
+
+        // Test lower edge for 0.3 confidence (line 464 return)
+        const lowRangeC = [10, 12, 14]; // Average ~12C, should hit the default 0.3 confidence
+        const result2 = ConfigValidator.validateTemperatureUnitConsistency(lowRangeC, TemperatureUnits.C);
+        expect(result2.isConsistent).toBe(true);
+      });
+
+      it('should handle empty readings array for confidence calculation', () => {
+        // Test empty array handling (lines 436-437)
+        const emptyReadings: number[] = [];
+        const result = ConfigValidator.validateTemperatureUnitConsistency(emptyReadings, TemperatureUnits.F);
+
+        expect(result.isConsistent).toBe(true);
+        expect(result.analysisCount).toBe(0);
+      });
+    });
+  });
 });
