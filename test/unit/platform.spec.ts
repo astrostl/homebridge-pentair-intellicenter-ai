@@ -901,9 +901,15 @@ describe('PentairPlatform', () => {
 
       platform.updatePump(mockAccessory, mockParams as never);
 
-      expect(updateCircuitSpy).toHaveBeenCalledWith(mockAccessory.context.pumpCircuit, mockParams);
-      expect(updatePumpSpy).toHaveBeenCalledWith(mockAccessory.context.pumpCircuit, mockParams);
+      // updatePump method now directly updates pump circuit properties instead of calling updateCircuit
+      // This is correct behavior since pump circuits have different properties than regular circuits
+      expect(updateCircuitSpy).not.toHaveBeenCalled();
+      // updatePump utility is only called if the parent pump exists (which it doesn't in this test)
+      expect(updatePumpSpy).not.toHaveBeenCalled();
       expect(mockAPI.updatePlatformAccessories).toHaveBeenCalledWith([mockAccessory]);
+
+      // Verify the pump circuit was updated directly
+      expect(mockAccessory.context.pumpCircuit.speed).toBe('75');
     });
 
     it('should update heater RPM sensors when pump circuit speeds change', () => {
@@ -942,15 +948,22 @@ describe('PentairPlatform', () => {
 
       const updateCircuitSpy = jest.spyOn(require('../../src/util'), 'updateCircuit').mockImplementation();
       const updatePumpSpy = jest.spyOn(require('../../src/util'), 'updatePump').mockImplementation();
-      const updateHeaterRpmSensorsSpy = jest.spyOn(platform as any, 'updateHeaterRpmSensorsForPumpCircuit').mockImplementation();
+      const updatePumpSensorsSpy = jest.spyOn(platform as any, 'updateAllPumpSensorsForChangedCircuit').mockImplementation();
 
       const mockParams = { SPEED: '2800' };
 
       platform.updatePump(mockPumpAccessory, mockParams as never);
 
-      expect(updateCircuitSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit, mockParams);
-      expect(updatePumpSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit, mockParams);
-      expect(updateHeaterRpmSensorsSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit);
+      // updatePump method now directly updates pump circuit properties instead of calling updateCircuit
+      expect(updateCircuitSpy).not.toHaveBeenCalled();
+      // updatePump utility is only called if the parent pump exists (which it doesn't in this test)
+      expect(updatePumpSpy).not.toHaveBeenCalled();
+
+      // Verify the pump circuit was updated directly
+      expect(mockPumpAccessory.context.pumpCircuit.speed).toBe('2800');
+
+      // Should still call pump sensor updates
+      expect(updatePumpSensorsSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit);
       expect(mockAPI.updatePlatformAccessories).toHaveBeenCalledWith([mockPumpAccessory]);
     });
 
@@ -1623,7 +1636,7 @@ describe('PentairPlatform', () => {
 
       platform.handleUpdate(notifyResponse);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith('Update is for pump ID P01. Updating circuit C01');
+      expect(mockLogger.debug).toHaveBeenCalledWith('Update is for pump circuit P01 -> Circuit C01 (controlled by pump unknown)');
       expect(updatePumpSpy).toHaveBeenCalledWith(mockAccessory, { SPEED: '1500' });
     });
 

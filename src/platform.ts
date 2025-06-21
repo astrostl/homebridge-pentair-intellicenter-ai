@@ -1,4 +1,5 @@
 import { API, Characteristic, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
+import * as net from 'net';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { CircuitAccessory } from './circuitAccessory';
@@ -38,6 +39,7 @@ import {
   LAST_TEMP_KEY,
   MODE_KEY,
   PROBE_KEY,
+  PUMP_TYPE_MAPPING,
   SELECT_KEY,
   SPEED_KEY,
   STATUS_KEY,
@@ -69,9 +71,27 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private readonly connection!: Telnet;
   private readonly maxBufferSize!: number;
   private readonly discoverCommandsSent!: Array<string>;
+  private readonly discoverCommandsFailed!: Array<string>;
   private discoveryBuffer: DiscoveryAnswer | null = null;
+  private discoveryTimeout: NodeJS.Timeout | null = null;
   private buffer = '';
   private readonly pumpIdToCircuitMap!: Map<string, Circuit>;
+
+  // New pump-circuit association mappings
+  private readonly pumpToCircuitsMap!: Map<string, Set<string>>; // PMP01 -> {C0006, C0001, ...}
+  private readonly circuitToPumpMap!: Map<string, string>; // C0006 -> PMP01
+  private readonly pumpCircuitToPumpMap!: Map<string, string>; // p0101 -> PMP01
+
+  // Track pump circuits and their current data for highest RPM calculation
+  private readonly activePumpCircuits!: Map<string, PumpCircuit>; // pumpCircuitId -> PumpCircuit
+
+  // Track if shutdown handlers have been setup to prevent duplicates
+  private static shutdownHandlersSetup = false;
+
+  // Temperature unit validation tracking
+  private temperatureReadings: number[] = [];
+  private temperatureUnitValidated = false;
+  private temperatureValidationInterval: NodeJS.Timeout | null = null;
 
   // Telnet connection status
   private lastMessageReceived = Date.now();
@@ -132,8 +152,19 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
     this.maxBufferSize = this.validatedConfig.maxBufferSize;
     this.discoverCommandsSent = [];
+    this.discoverCommandsFailed = [];
     this.discoveryBuffer = null;
+    this.discoveryTimeout = null;
     this.pumpIdToCircuitMap = new Map<string, Circuit>();
+
+    // Initialize new pump-circuit association mappings
+    this.pumpToCircuitsMap = new Map<string, Set<string>>();
+    this.circuitToPumpMap = new Map<string, string>();
+    this.pumpCircuitToPumpMap = new Map<string, string>();
+    this.activePumpCircuits = new Map<string, PumpCircuit>();
+
+    // Setup graceful shutdown handlers
+    this.setupGracefulShutdown();
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -158,6 +189,60 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }, 60000);
   }
 
+  /**
+   * Validate network connectivity to IntelliCenter before attempting Telnet connection
+   */
+  private async validateNetworkConnectivity(host: string, port: number): Promise<boolean> {
+    return new Promise(resolve => {
+      const socket = new net.Socket();
+      const timeout = 5000; // 5 second timeout
+
+      let hasResolved = false;
+
+      const cleanup = () => {
+        if (!hasResolved) {
+          hasResolved = true;
+          socket.destroy();
+        }
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        this.log.warn(`Network connectivity check timeout for ${host}:${port}`);
+        resolve(false);
+      }, timeout);
+
+      socket.on('connect', () => {
+        if (!hasResolved) {
+          hasResolved = true;
+          clearTimeout(timer);
+          socket.destroy();
+          this.log.debug(`Network connectivity confirmed for ${host}:${port}`);
+          resolve(true);
+        }
+      });
+
+      socket.on('error', error => {
+        if (!hasResolved) {
+          hasResolved = true;
+          clearTimeout(timer);
+          socket.destroy();
+          this.log.warn(`Network connectivity check failed for ${host}:${port}: ${error.message}`);
+          resolve(false);
+        }
+      });
+
+      try {
+        socket.connect(port, host);
+      } catch (error) {
+        cleanup();
+        clearTimeout(timer);
+        this.log.warn(`Network connectivity check error for ${host}:${port}: ${error instanceof Error ? error.message : String(error)}`);
+        resolve(false);
+      }
+    });
+  }
+
   async connectToIntellicenter() {
     if (!this.validatedConfig) {
       this.log.error('Cannot connect: Configuration validation failed');
@@ -173,6 +258,23 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       username: this.validatedConfig.username,
       password: this.validatedConfig.password,
     };
+
+    // Skip network validation in test environments to avoid timeouts
+    /* eslint-disable-next-line no-undef */
+    const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+    if (!isTestEnvironment) {
+      // Validate network connectivity before attempting Telnet connection
+      this.log.debug(`Validating network connectivity to ${telnetParams.host}:${telnetParams.port}...`);
+      const isReachable = await this.validateNetworkConnectivity(telnetParams.host, telnetParams.port);
+
+      if (!isReachable) {
+        const errorMessage =
+          `IntelliCenter at ${telnetParams.host}:${telnetParams.port} is not reachable. ` + 'Check network connectivity and configuration.';
+        this.log.error(errorMessage);
+        this.healthMonitor.recordFailure(errorMessage);
+        return;
+      }
+    }
 
     try {
       const startTime = Date.now();
@@ -380,10 +482,18 @@ export class PentairPlatform implements DynamicPlatformPlugin {
               this.log.debug(`Handling update for ${change.objnam}`);
               const circuit = this.pumpIdToCircuitMap.get(change.objnam);
               if (circuit) {
-                this.log.debug(`Update is for pump ID ${change.objnam}. Updating circuit ${circuit.id}`);
+                // Get the pump that controls this pump circuit
+                const controllingPumpId = this.getPumpForPumpCircuit(change.objnam);
+                this.log.debug(
+                  `Update is for pump circuit ${change.objnam} -> Circuit ${circuit.id} ` +
+                    `(controlled by pump ${controllingPumpId || 'unknown'})`,
+                );
 
                 // Log comprehensive pump circuit update before calling updatePump
-                this.log.info(`[PUMP CIRCUIT UPDATE] ${change.objnam} -> Circuit ${circuit.id}: Initial parameter data:`);
+                this.log.info(
+                  `[PUMP CIRCUIT UPDATE] ${change.objnam} -> Circuit ${circuit.id} ` +
+                    `(Pump: ${controllingPumpId || 'unknown'}): Initial parameter data:`,
+                );
                 this.log.info(`  - STATUS: ${change.params['STATUS'] || 'N/A'}`);
                 this.log.info(`  - SPEED: ${change.params['SPEED'] || 'N/A'}`);
                 this.log.info(`  - SELECT: ${change.params['SELECT'] || 'N/A'}`);
@@ -414,12 +524,19 @@ export class PentairPlatform implements DynamicPlatformPlugin {
                   const select = change.params['SELECT'];
 
                   if (speed && select) {
+                    // Get the pump that this standalone pump update belongs to
+                    const controllingPumpId = this.getPumpForPumpCircuit(change.objnam);
+
                     // This appears to be a pump sending updates
-                    this.log.debug(`Standalone pump ${change.objnam} update: ${speed} ${select}`);
+                    this.log.debug(
+                      `Standalone pump ${change.objnam} update: ${speed} ${select} (controlled by pump ${controllingPumpId || 'unknown'})`,
+                    );
                     this.log.debug(`All pump parameters for ${change.objnam}: ${JSON.stringify(change.params)}`);
 
                     // Log comprehensive standalone pump parameters including GPM and WATTS data
-                    this.log.info(`[STANDALONE PUMP UPDATE] ${change.objnam}: Full parameter data:`);
+                    this.log.info(
+                      `[STANDALONE PUMP UPDATE] ${change.objnam} (Pump: ${controllingPumpId || 'unknown'}): Full parameter data:`,
+                    );
                     this.log.info(`  - STATUS: ${change.params['STATUS'] || 'N/A'}`);
                     this.log.info(`  - SPEED: ${change.params['SPEED'] || 'N/A'}`);
                     this.log.info(`  - SELECT: ${change.params['SELECT'] || 'N/A'}`);
@@ -428,11 +545,31 @@ export class PentairPlatform implements DynamicPlatformPlugin {
                     this.log.info(`  - WATTS: ${change.params['WATTS'] || 'N/A'}`);
                     this.log.info(`  - All parameters: ${this.json(change.params)}`);
 
-                    // Check if any heater RPM sensors need to be updated for this standalone pump
-                    this.updateHeaterRpmSensorsForStandalonePump(change.objnam, String(speed), String(select));
+                    // Update pump sensors when standalone pump circuit changes
+                    if (controllingPumpId) {
+                      this.log.info(
+                        `[STANDALONE PUMP SENSOR UPDATE] Updating sensors for pump ${controllingPumpId} ` +
+                          `due to circuit ${change.objnam} change`,
+                      );
 
-                    // Update pump-level GPM and WATTS sensors for standalone pump
-                    this.updatePumpGpmAndWattsSensorsForStandalonePump(change.objnam, String(speed), String(select));
+                      // Create a minimal pump circuit object for the update
+                      const pumpCircuit = {
+                        id: change.objnam,
+                        speed: parseInt(speed as string, 10),
+                        speedType: select as string,
+                        circuitId: (change.params['CIRCUIT'] as string) || 'unknown',
+                        pump: {} as Pump, // Minimal pump object for typing
+                      } as PumpCircuit;
+
+                      // Update the activePumpCircuits map with the new speed
+                      this.activePumpCircuits.set(change.objnam, pumpCircuit);
+                      this.log.debug(`Updated activePumpCircuits map for ${change.objnam} with new speed ${speed}`);
+
+                      // Also update the pump object's circuits array so sensors can access the latest data
+                      this.updatePumpObjectCircuits(controllingPumpId, change.objnam, parseInt(speed as string, 10));
+
+                      this.updateAllPumpSensorsForChangedCircuit(pumpCircuit);
+                    }
                   } else {
                     this.log.warn(
                       `Device ${change.objnam} sending updates but not registered as accessory. ` +
@@ -478,10 +615,30 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     this.log.info(`  - WATTS: ${params['WATTS'] || 'N/A'}`);
     this.log.info(`  - All parameters: ${this.json(params)}`);
 
-    updateCircuit(accessory.context.pumpCircuit, params);
-    updatePump(accessory.context.pumpCircuit, params);
+    // Update pump circuit specific properties directly (don't use updateCircuit for pump circuits)
+    if (params['STATUS']) {
+      accessory.context.pumpCircuit.status = params['STATUS'];
+    }
+    if (params['SPEED']) {
+      accessory.context.pumpCircuit.speed = params['SPEED'];
+    }
+    if (params['RPM']) {
+      accessory.context.pumpCircuit.rpm = params['RPM'];
+    }
+    if (params['GPM']) {
+      accessory.context.pumpCircuit.gpm = params['GPM'];
+    }
+    if (params['WATTS']) {
+      accessory.context.pumpCircuit.watts = params['WATTS'];
+    }
+
+    // Update the parent pump if it exists
+    if (accessory.context.pumpCircuit.pump) {
+      updatePump(accessory.context.pumpCircuit.pump, params);
+    }
     this.log.debug(
-      `After update - pump circuit status: ${accessory.context.pumpCircuit.status}, speed: ${accessory.context.pumpCircuit.speed}`,
+      `After update - pump circuit status: ${accessory.context.pumpCircuit.status}, ` +
+        `speed: ${accessory.context.pumpCircuit.speed}, rpm: ${accessory.context.pumpCircuit.rpm}`,
     );
 
     // Log updated pump circuit values after processing
@@ -495,29 +652,60 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
 
-    // Update the corresponding feature RPM sensor (if this pump circuit has an associated feature)
-    this.updateFeatureRpmSensorForPumpCircuit(accessory.context.pumpCircuit);
-
-    // Update heater RPM sensors that use this pump circuit
-    this.updateHeaterRpmSensorsForPumpCircuit(accessory.context.pumpCircuit);
-
-    // Update pump-level GPM and WATTS sensors
-    this.updatePumpGpmAndWattsSensors(accessory.context.pumpCircuit);
+    // Update pump-level RPM, GPM and WATTS sensors when any circuit changes
+    this.updateAllPumpSensorsForChangedCircuit(accessory.context.pumpCircuit);
   }
 
   updateCircuit(accessory: PlatformAccessory, params: IntelliCenterParams) {
+    this.log.info(`[CIRCUIT UPDATE] ${accessory.context.circuit.id}: Processing circuit update`);
+    this.log.info(`  - Circuit Type: ${accessory.context.circuit.objectType}`);
+    this.log.info(`  - Update params: ${JSON.stringify(params)}`);
+
     updateCircuit(accessory.context.circuit, params);
     if (accessory.context.circuit.objectType === ObjectType.Body) {
       const body = accessory.context.circuit as Body;
       updateBody(body, params);
+
+      // Collect temperature reading for unit validation
+      if (body.temperature !== undefined && body.temperature !== null) {
+        this.collectTemperatureReading(body.temperature);
+      }
+
       this.updateHeaterStatuses(body);
     }
     this.api.updatePlatformAccessories([accessory]);
     new CircuitAccessory(this, accessory);
 
-    // Update feature RPM sensor if this circuit change affects a feature with pump circuit
-    // This is needed because feature RPM calculations depend on feature states
-    this.updateFeatureRpmSensorForCircuit(accessory.context.circuit);
+    // Check if this circuit has a corresponding pump circuit that might need sensor updates
+    const circuitId = accessory.context.circuit.id;
+    const pumpId = this.getPumpForCircuit(circuitId);
+
+    if (pumpId) {
+      this.log.info(`  - Circuit ${circuitId} is controlled by pump ${pumpId}, triggering sensor updates`);
+      // Find the pump circuit ID for this circuit
+      const pumpCircuitId = this.findPumpCircuitForCircuit(circuitId);
+      if (pumpCircuitId) {
+        // Create a minimal pump circuit object for the update
+        const pumpCircuit = { id: pumpCircuitId } as PumpCircuit;
+        this.updateAllPumpSensorsForChangedCircuit(pumpCircuit);
+      }
+    } else {
+      // Special case: if this is a body circuit with a heater, we should still update pump sensors
+      // because heater status changes can affect pump speeds through internal heater circuits
+      if (accessory.context.circuit.objectType === ObjectType.Body) {
+        const body = accessory.context.circuit as Body;
+        if (body.heaterId && body.heaterId !== '00000') {
+          this.log.info(`  - Body circuit ${circuitId} has heater ${body.heaterId}, triggering sensor updates for all pumps`);
+
+          // Update all pump sensors since we don't know which pump is affected by the heater
+          this.updateAllPumpSensorsForHeaterChange();
+        } else {
+          this.log.info(`  - Circuit ${circuitId} is not controlled by any pump, no sensor updates needed`);
+        }
+      } else {
+        this.log.info(`  - Circuit ${circuitId} is not controlled by any pump, no sensor updates needed`);
+      }
+    }
   }
 
   updateSensor(accessory: PlatformAccessory, params: IntelliCenterParams) {
@@ -532,6 +720,10 @@ export class PentairPlatform implements DynamicPlatformPlugin {
             return;
           }
           sensor.probe = probeValue;
+
+          // Collect temperature reading for unit validation
+          this.collectTemperatureReading(probeValue);
+
           new TemperatureAccessory(this, accessory).updateTemperature(probeValue);
         }
       }
@@ -790,10 +982,71 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       arguments: deviceType,
       messageID: uuidv4(),
     } as IntelliCenterRequest;
+
+    // Set discovery timeout for this command
+    this.discoveryTimeout = setTimeout(() => {
+      this.handleDiscoveryTimeout(deviceType);
+    }, 30000); // 30 second timeout per discovery command
+
     this.sendCommandNoWait(command);
   }
 
+  /**
+   * Handle discovery command timeout
+   */
+  private handleDiscoveryTimeout(deviceType: string) {
+    this.log.warn(`Discovery command timeout for device type: ${deviceType}`);
+
+    // Add to failed commands list for potential retry
+    if (!this.discoverCommandsFailed.includes(deviceType)) {
+      this.discoverCommandsFailed.push(deviceType);
+    }
+
+    // Clear timeout
+    this.discoveryTimeout = null;
+
+    // Continue with next command if available
+    const nextCommandIndex = this.discoverCommandsSent.length;
+    if (nextCommandIndex < DISCOVER_COMMANDS.length) {
+      this.log.debug('Timeout occurred, continuing with next discovery command...');
+      setTimeout(() => {
+        const nextCommand = DISCOVER_COMMANDS[nextCommandIndex];
+        if (nextCommand) {
+          this.discoverDeviceType(nextCommand);
+        }
+      }, 1000);
+    } else {
+      // All commands sent, check if we have enough data to proceed
+      this.completeDiscoveryWithPartialData();
+    }
+  }
+
+  /**
+   * Complete discovery even with partial data from failed commands
+   */
+  private completeDiscoveryWithPartialData() {
+    if (this.discoverCommandsFailed.length > 0) {
+      this.log.warn(
+        `Discovery completed with partial data. Failed commands: ${this.discoverCommandsFailed.join(', ')}. ` +
+          'Proceeding with available device data.',
+      );
+    }
+
+    this.log.debug(`Discovery commands completed with partial data. Response: ${this.json(this.discoveryBuffer)}`);
+
+    const panels = transformPanels(this.discoveryBuffer as Record<string, unknown>, this.getConfig().includeAllCircuits, this.log);
+    this.log.debug(`Transformed panels from IntelliCenter: ${this.json(panels)}`);
+
+    this.registerDiscoveredAccessories(panels);
+  }
+
   handleDiscoveryResponse(response: IntelliCenterResponse) {
+    // Clear discovery timeout since we received a response
+    if (this.discoveryTimeout) {
+      clearTimeout(this.discoveryTimeout);
+      this.discoveryTimeout = null;
+    }
+
     this.log.debug(
       `Discovery response from IntelliCenter: ${this.json(response)} ` +
         `of type ${this.discoverCommandsSent[this.discoverCommandsSent.length - 1]}`,
@@ -804,12 +1057,17 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       mergeResponse(this.discoveryBuffer as Record<string, unknown>, response.answer as Record<string, unknown>);
     }
 
-    if (this.discoverCommandsSent.length !== DISCOVER_COMMANDS.length) {
+    // Check if we've sent all commands (including retries for failed ones)
+    const totalExpectedCommands = DISCOVER_COMMANDS.length;
+    const completedCommands = this.discoverCommandsSent.length;
+    const failedCommands = this.discoverCommandsFailed.length;
+
+    if (completedCommands < totalExpectedCommands) {
       // Send next discovery command and return until we're done.
-      this.log.debug(`Merged ${this.discoverCommandsSent.length} of ${DISCOVER_COMMANDS.length} so far. Sending next command..`);
+      this.log.debug(`Merged ${completedCommands} of ${totalExpectedCommands} so far. Sending next command..`);
       // Add conservative delay between discovery commands to avoid overwhelming IntelliCenter
       setTimeout(() => {
-        const nextCommand = DISCOVER_COMMANDS[this.discoverCommandsSent.length];
+        const nextCommand = DISCOVER_COMMANDS[completedCommands];
         if (nextCommand) {
           this.discoverDeviceType(nextCommand);
         }
@@ -817,21 +1075,51 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       return;
     }
 
+    // Check if we need to retry failed commands (max 1 retry per command)
+    if (failedCommands > 0 && completedCommands === totalExpectedCommands) {
+      for (const failedCommand of this.discoverCommandsFailed) {
+        // Only retry each command once
+        const retryAttempts = this.discoverCommandsSent.filter(cmd => cmd === failedCommand).length;
+        if (retryAttempts === 1) {
+          this.log.warn(`Retrying failed discovery command: ${failedCommand}`);
+          setTimeout(() => {
+            this.discoverDeviceType(failedCommand);
+          }, 1000);
+          return;
+        }
+      }
+    }
+
     this.log.debug(`Discovery commands completed. Response: ${this.json(this.discoveryBuffer)}`);
 
     const panels = transformPanels(this.discoveryBuffer as Record<string, unknown>, this.getConfig().includeAllCircuits, this.log);
     this.log.debug(`Transformed panels from IntelliCenter: ${this.json(panels)}`);
 
+    this.registerDiscoveredAccessories(panels);
+
+    // Start temperature unit validation monitoring after discovery
+    this.startTemperatureUnitValidation();
+  }
+
+  /**
+   * Register discovered accessories with HomeKit
+   */
+  private registerDiscoveredAccessories(panels: readonly Panel[]) {
     // Track ALL accessories that should exist (generic approach)
     const discoveredAccessoryIds = new Set<string>();
 
     this.pumpIdToCircuitMap.clear();
+
+    // Clear new pump-circuit association mappings
+    this.pumpToCircuitsMap.clear();
+    this.circuitToPumpMap.clear();
+    this.pumpCircuitToPumpMap.clear();
+    this.activePumpCircuits.clear();
+
     const circuitIdPumpMap = new Map<string, PumpCircuit>();
     const bodyIdMap = new Map<string, Body>();
     let heaters = [] as ReadonlyArray<Heater>;
-    let currentPanel: Panel | null = null;
     for (const panel of panels) {
-      currentPanel = panel;
       for (const sensor of panel.sensors) {
         discoveredAccessoryIds.add(sensor.id);
         this.discoverTemperatureSensor(panel, null, sensor);
@@ -850,35 +1138,62 @@ export class PentairPlatform implements DynamicPlatformPlugin {
               `Speed: ${pumpCircuit.speed} ${pumpCircuit.speedType}`,
           );
           circuitIdPumpMap.set(pumpCircuit.circuitId, pumpCircuit);
+
+          // Store pump circuit in active pump circuits map for RPM tracking
+          this.activePumpCircuits.set(pumpCircuit.id, pumpCircuit);
+
           this.subscribeForUpdates(pumpCircuit, [STATUS_KEY, ACT_KEY, SPEED_KEY, SELECT_KEY, 'RPM', 'GPM', 'WATTS']);
+
+          // Build new pump-circuit associations
+          this.buildPumpCircuitAssociations(pump.id, pumpCircuit);
         }
 
-        // Create pump-level GPM and WATTS sensors (one per physical pump)
+        // Log comprehensive pump discovery mapping
+        this.logPumpDiscoveryMapping(pump, panel);
+
+        // Create pump-level RPM, GPM and WATTS sensors (one per physical pump)
+        const pumpRpmSensorId = `${pump.id}-rpm`;
         const pumpGpmSensorId = `${pump.id}-gpm`;
         const pumpWattsSensorId = `${pump.id}-watts`;
+        discoveredAccessoryIds.add(pumpRpmSensorId);
         discoveredAccessoryIds.add(pumpGpmSensorId);
         discoveredAccessoryIds.add(pumpWattsSensorId);
 
         this.log.debug(`Creating pump-level sensors for ${pump.name}:`);
+        this.log.debug(`  RPM sensor: ${pump.name} RPM (ID: ${pumpRpmSensorId})`);
         this.log.debug(`  GPM sensor: ${pump.name} GPM (ID: ${pumpGpmSensorId})`);
         this.log.debug(`  WATTS sensor: ${pump.name} WATTS (ID: ${pumpWattsSensorId})`);
 
+        this.discoverPumpRpmSensor(panel, pump);
         this.discoverPumpGpmSensor(panel, pump);
         this.discoverPumpWattsSensor(panel, pump);
       }
+
+      // Log pump-circuit associations after all pumps are processed
+      this.logPumpCircuitAssociations();
+
       for (const module of panel.modules) {
         for (const body of module.bodies) {
           discoveredAccessoryIds.add(body.id);
           const pumpCircuit = circuitIdPumpMap.get(body.circuit?.id as string);
           this.discoverCircuit(panel, module, body, pumpCircuit);
 
-          // Create RPM sensor if this body has a pump circuit (e.g., Pool, Spa)
-          if (pumpCircuit) {
-            const bodyRpmSensorId = `${body.id}-rpm`;
-            discoveredAccessoryIds.add(bodyRpmSensorId);
-            this.log.debug(`Creating RPM sensor for body: ${body.name} RPM (ID: ${bodyRpmSensorId})`);
-            this.discoverBodyRpmSensor(panel, body, pumpCircuit);
+          // If this body has a pump circuit, also associate the body's ID with the pump
+          if (pumpCircuit && body.circuit?.id) {
+            const pumpId = this.getPumpForPumpCircuit(pumpCircuit.id);
+            if (pumpId) {
+              this.log.debug(`Associating body circuit ${body.circuit.id} (${body.name}) with pump ${pumpId}`);
+              this.circuitToPumpMap.set(body.circuit.id, pumpId);
+
+              // Also add to pump-to-circuits mapping
+              if (!this.pumpToCircuitsMap.has(pumpId)) {
+                this.pumpToCircuitsMap.set(pumpId, new Set<string>());
+              }
+              this.pumpToCircuitsMap.get(pumpId)!.add(body.circuit.id);
+            }
           }
+
+          // RPM sensors are now at pump level, not body level
 
           this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, MODE_KEY]);
           bodyIdMap.set(body.id, body);
@@ -892,13 +1207,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           );
           this.discoverCircuit(panel, module, feature, pumpCircuit);
 
-          // Create RPM sensor if this feature has a pump circuit
-          if (pumpCircuit) {
-            const featureRpmSensorId = `${feature.id}-rpm`;
-            discoveredAccessoryIds.add(featureRpmSensorId);
-            this.log.debug(`Creating RPM sensor: ${feature.name} RPM (ID: ${featureRpmSensorId})`);
-            this.discoverFeatureRpmSensor(panel, feature, pumpCircuit);
-          }
+          // RPM sensors are now at pump level, not feature level
 
           this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
         }
@@ -913,13 +1222,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         );
         this.discoverCircuit(panel, null, feature, pumpCircuit);
 
-        // Create RPM sensor if this feature has a pump circuit
-        if (pumpCircuit) {
-          const featureRpmSensorId = `${feature.id}-rpm`;
-          discoveredAccessoryIds.add(featureRpmSensorId);
-          this.log.debug(`Creating RPM sensor: ${feature.name} RPM (ID: ${featureRpmSensorId})`);
-          this.discoverFeatureRpmSensor(panel, feature, pumpCircuit);
-        }
+        // RPM sensors are now at pump level, not feature level
 
         this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
       }
@@ -1012,17 +1315,8 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           this.log.debug('  No suitable RPM pump circuits found for heater');
         }
 
-        if (heater.name.toLowerCase().includes('heater') && heaterPumpCircuit) {
-          const heaterRpmSensorId = `${heater.id}.${bodyId}-rpm`;
-          discoveredAccessoryIds.add(heaterRpmSensorId);
-          this.log.debug(
-            `Creating RPM sensor for heater: ${heater.name} RPM (ID: ${heaterRpmSensorId}) ` +
-              `with heater speed: ${heaterPumpCircuit.speed} RPM`,
-          );
-          this.discoverHeaterRpmSensor(currentPanel!, heater, body!, heaterPumpCircuit);
-        } else {
-          this.log.debug(`No suitable pump circuit found for heater: ${heater.name}`);
-        }
+        // RPM sensors are now at pump level, not heater level
+        this.log.debug(`Heater ${heater.name} will use pump-level RPM sensor from controlling pump`);
       });
       this.discoverHeater(heater, bodyIdMap);
     }
@@ -1045,24 +1339,29 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       } else if (accessory.context.heater && accessory.context.body) {
         expectedId = `${accessory.context.heater.id}.${accessory.context.body.id}`;
       } else if (accessory.context.feature && accessory.context.pumpCircuit) {
-        // Feature-based, body-based, or heater-based RPM sensors
-        if (accessory.displayName?.includes('Heater') || accessory.displayName?.includes('Gas')) {
-          // Heater RPM sensors use heater.id.bodyId-rpm format
-          const bodyId = accessory.context.feature.bodyId;
-          if (bodyId) {
-            expectedId = `${accessory.context.feature.id}.${bodyId}-rpm`;
-          } else {
-            // If bodyId is missing, this is likely an orphaned accessory that should be removed
-            this.log.warn(`Heater RPM sensor ${accessory.displayName} missing bodyId, marking for removal`);
-            expectedId = 'REMOVE_HEATER_RPM_WITHOUT_BODYID';
-          }
+        // Old feature/circuit/heater RPM sensors - remove (now pump-level)
+        this.log.info(`Removing old feature/circuit RPM sensor (now pump-level): ${accessory.displayName}`);
+        expectedId = 'REMOVE_OLD_FEATURE_RPM_SENSORS';
+      } else if (accessory.context.pump && accessory.displayName?.includes('GPM')) {
+        // Check if this is a VS or VF pump GPM sensor that should be removed
+        const pumpType = PUMP_TYPE_MAPPING.get(accessory.context.pump.type) || accessory.context.pump.type;
+        if (pumpType === 'VF' || pumpType === 'VS') {
+          this.log.info(`Removing ${pumpType} pump GPM sensor (no longer supported): ${accessory.displayName}`);
+          expectedId = 'REMOVE_VS_VF_GPM_SENSORS';
         } else {
-          // Regular feature or body RPM sensors use id-rpm format
-          expectedId = `${accessory.context.feature.id}-rpm`;
+          // Keep only VSF pump GPM sensors
+          expectedId = `${accessory.context.pump.id}-gpm`;
         }
-      } else if (accessory.context.pumpCircuit || (accessory.context.pump && accessory.displayName?.includes('RPM'))) {
-        // Old pump circuit and pump-level RPM sensors - always remove (no longer supported)
-        expectedId = 'REMOVE_OLD_RPM_SENSORS';
+      } else if (accessory.context.pump && accessory.displayName?.includes('RPM')) {
+        // Keep new pump-level RPM sensors
+        expectedId = `${accessory.context.pump.id}-rpm`;
+      } else if (accessory.context.pump && accessory.displayName?.includes('WATTS')) {
+        // Keep pump-level WATTS sensors
+        expectedId = `${accessory.context.pump.id}-watts`;
+      } else if (accessory.context.pumpCircuit) {
+        // Old pump circuit sensors - remove (no longer used)
+        this.log.info(`Removing old pump circuit sensor: ${accessory.displayName}`);
+        expectedId = 'REMOVE_OLD_PUMP_CIRCUIT_SENSORS';
       }
 
       // If we have an expected ID and it wasn't discovered, remove the accessory
@@ -1116,21 +1415,26 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
     const existingAccessory = this.accessoryMap.get(uuid);
 
+    // Get pump association for this circuit
+    const controllingPumpId = this.getPumpForCircuit(circuit.id);
+
     if (existingAccessory) {
       this.log.debug(`Restoring existing circuit from cache: ${existingAccessory.displayName}`);
       existingAccessory.context.circuit = circuit;
       existingAccessory.context.module = module;
       existingAccessory.context.panel = panel;
       existingAccessory.context.pumpCircuit = pumpCircuit;
+      existingAccessory.context.controllingPumpId = controllingPumpId;
       this.api.updatePlatformAccessories([existingAccessory]);
       new CircuitAccessory(this, existingAccessory);
     } else {
-      this.log.debug(`Adding new circuit: ${circuit.name}`);
+      this.log.debug(`Adding new circuit: ${circuit.name}${controllingPumpId ? ` (controlled by pump ${controllingPumpId})` : ''}`);
       const accessory = new this.api.platformAccessory(circuit.name, uuid);
       accessory.context.circuit = circuit;
       accessory.context.module = module;
       accessory.context.panel = panel;
       accessory.context.pumpCircuit = pumpCircuit;
+      accessory.context.controllingPumpId = controllingPumpId;
       new CircuitAccessory(this, accessory);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.accessoryMap.set(accessory.UUID, accessory);
@@ -1277,6 +1581,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   discoverPumpGpmSensor(panel: Panel, pump: Pump) {
+    // Skip GPM sensors for VS and VF pumps - only create for VSF pumps
+    const pumpType = PUMP_TYPE_MAPPING.get(pump.type) || pump.type;
+    if (pumpType === 'VF' || pumpType === 'VS') {
+      this.log.debug(`Skipping GPM sensor creation for ${pumpType} pump: ${pump.name} (type: ${pump.type})`);
+      return;
+    }
+
     const pumpGpmSensorId = `${pump.id}-gpm`;
     const uuid = this.api.hap.uuid.generate(pumpGpmSensorId);
     const existingAccessory = this.accessoryMap.get(uuid);
@@ -1292,6 +1603,27 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       accessory.context.pump = pump;
       accessory.context.panel = panel;
       new PumpGpmAccessory(this, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessoryMap.set(accessory.UUID, accessory);
+    }
+  }
+
+  discoverPumpRpmSensor(panel: Panel, pump: Pump) {
+    const pumpRpmSensorId = `${pump.id}-rpm`;
+    const uuid = this.api.hap.uuid.generate(pumpRpmSensorId);
+    const existingAccessory = this.accessoryMap.get(uuid);
+
+    if (existingAccessory) {
+      this.log.info('Restoring existing pump RPM sensor from cache:', existingAccessory.displayName);
+      existingAccessory.context.pump = pump;
+      existingAccessory.context.panel = panel;
+      new PumpRpmAccessory(this, existingAccessory);
+    } else {
+      this.log.info('Adding new pump RPM sensor:', `${pump.name} RPM`);
+      const accessory = new this.api.platformAccessory(`${pump.name} RPM`, uuid);
+      accessory.context.pump = pump;
+      accessory.context.panel = panel;
+      new PumpRpmAccessory(this, accessory);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.accessoryMap.set(accessory.UUID, accessory);
     }
@@ -1318,21 +1650,201 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  updatePumpGpmAndWattsSensors(pumpCircuit: PumpCircuit) {
-    if (!pumpCircuit || !pumpCircuit.speed) {
-      this.log.debug(`Skipping GPM/WATTS update - no pump circuit or speed: ${pumpCircuit?.id}, speed: ${pumpCircuit?.speed}`);
-      return;
-    }
+  updatePumpSensors(pumpCircuit: PumpCircuit) {
+    this.log.info(`[PUMP SENSOR UPDATE] Processing pump circuit ${pumpCircuit.id}:`);
+    this.log.info(`  - Status: ${pumpCircuit.status}`);
+    this.log.info(`  - RPM: ${pumpCircuit.rpm}`);
+    this.log.info(`  - Speed: ${pumpCircuit.speed}`);
+    this.log.info(`  - Speed Type: ${pumpCircuit.speedType}`);
+    this.log.info(`  - WATTS: ${pumpCircuit.watts}`);
+    this.log.info(`  - GPM: ${pumpCircuit.gpm}`);
+
+    // Store/update the pump circuit data
+    this.activePumpCircuits.set(pumpCircuit.id, pumpCircuit);
+    this.log.info(`  - Stored in activePumpCircuits map (total: ${this.activePumpCircuits.size})`);
 
     // Find the pump that contains this pump circuit
-    const pumpId = this.findPumpIdForPumpCircuit(pumpCircuit.id);
+    const pumpId = this.getPumpForPumpCircuit(pumpCircuit.id);
     if (!pumpId) {
-      this.log.warn(`No pump found for pump circuit ${pumpCircuit.id} - cannot update GPM/WATTS sensors`);
+      this.log.warn(`No pump found for pump circuit ${pumpCircuit.id} - cannot update pump sensors`);
+      return;
+    }
+    this.log.info(`  - Associated with pump: ${pumpId}`);
+
+    // Get the highest RPM among all enabled circuits for this pump
+    const highestRpm = this.getHighestRpmForPump(pumpId);
+    if (!highestRpm) {
+      this.log.info(`No active circuits found for pump ${pumpId}, setting sensors to minimum`);
+      // Set sensors to minimum values when no circuits are active
+      this.updatePumpSensorsWithRpm(pumpId, 0.0001);
       return;
     }
 
-    const rpm = pumpCircuit.speed;
-    this.log.debug(`Updating pump ${pumpId} GPM/WATTS sensors with speed: ${rpm} RPM`);
+    this.log.info(`Updating pump ${pumpId} sensors with highest active RPM: ${highestRpm}`);
+
+    // Update all pump sensors with the highest RPM
+    this.updatePumpSensorsWithRpm(pumpId, highestRpm);
+  }
+
+  /**
+   * Update all pump sensors when any circuit changes for that pump
+   */
+  async updateAllPumpSensorsForChangedCircuit(pumpCircuit: PumpCircuit) {
+    // Find the pump that contains this pump circuit
+    const pumpId = this.getPumpForPumpCircuit(pumpCircuit.id);
+    if (!pumpId) {
+      this.log.warn(`No pump found for pump circuit ${pumpCircuit.id} - cannot update pump sensors`);
+      return;
+    }
+
+    this.log.info(`[PUMP SENSOR UPDATE] Circuit ${pumpCircuit.id} changed, updating all sensors for pump ${pumpId}`);
+
+    // Find and update RPM sensor
+    const rpmSensorId = `${pumpId}-rpm`;
+    const rpmUuid = this.api.hap.uuid.generate(rpmSensorId);
+    const rpmAccessory = this.accessoryMap.get(rpmUuid);
+
+    if (rpmAccessory) {
+      // Get fresh RPM value from the sensor's dynamic calculation
+      const rpmSensor = new PumpRpmAccessory(this, rpmAccessory);
+      const currentRpm = await rpmSensor.getRpm();
+      rpmSensor.updateRpm(currentRpm);
+      this.log.info(`  Updated RPM sensor: ${currentRpm} RPM`);
+    }
+
+    // Find and update GPM sensor (only for VSF pumps)
+    const gpmSensorId = `${pumpId}-gpm`;
+    const gpmUuid = this.api.hap.uuid.generate(gpmSensorId);
+    const gpmAccessory = this.accessoryMap.get(gpmUuid);
+
+    if (gpmAccessory) {
+      // Get fresh GPM value from the sensor's dynamic calculation
+      const gpmSensor = new PumpGpmAccessory(this, gpmAccessory);
+      const currentGpm = await gpmSensor.getGpm();
+      gpmSensor.updateGpm(currentGpm);
+      this.log.info(`  Updated GPM sensor: ${currentGpm} GPM`);
+    }
+
+    // Find and update WATTS sensor
+    const wattsSensorId = `${pumpId}-watts`;
+    const wattsUuid = this.api.hap.uuid.generate(wattsSensorId);
+    const wattsAccessory = this.accessoryMap.get(wattsUuid);
+
+    if (wattsAccessory) {
+      // Get fresh WATTS value from the sensor's dynamic calculation
+      const wattsSensor = new PumpWattsAccessory(this, wattsAccessory);
+      const currentWatts = await wattsSensor.getWatts();
+      wattsSensor.updateWatts(currentWatts);
+      this.log.info(`  Updated WATTS sensor: ${currentWatts} WATTS`);
+    }
+  }
+
+  /**
+   * Get the highest RPM among all enabled circuits for a given pump
+   */
+  getHighestRpmForPump(pumpId: string): number | null {
+    let highestRpm = 0;
+    let activeCircuitCount = 0;
+
+    this.log.info(`[RPM CALCULATION] Finding highest RPM for pump ${pumpId}`);
+
+    // Find the pump object by ID in discovered accessories
+    let pumpObject: Pump | null = null;
+    for (const [, accessory] of this.accessoryMap) {
+      if (accessory.context.pump && accessory.context.pump.id === pumpId) {
+        pumpObject = accessory.context.pump;
+        break;
+      }
+    }
+
+    if (!pumpObject || !pumpObject.circuits || pumpObject.circuits.length === 0) {
+      this.log.info(`  No pump object or circuits found for pump ${pumpId}`);
+      return null;
+    }
+
+    this.log.info(`  Found pump ${pumpObject.name} with ${pumpObject.circuits.length} circuits`);
+
+    // Check all pump circuits and find active ones with their speeds (same logic as WATTS sensor)
+    for (const pumpCircuit of pumpObject.circuits) {
+      const rpm = pumpCircuit.rpm || pumpCircuit.speed || 0;
+
+      this.log.info(`  Checking pump circuit ${pumpCircuit.id} (circuitId: ${pumpCircuit.circuitId}):`);
+      this.log.info(`    - RPM: ${pumpCircuit.rpm}`);
+      this.log.info(`    - Speed: ${pumpCircuit.speed}`);
+      this.log.info(`    - Final RPM: ${rpm}`);
+
+      if (rpm > 0) {
+        // Check if this circuit is active by finding the corresponding accessory
+        const isActive = this.isPumpCircuitActive(pumpCircuit.circuitId);
+        this.log.info(`    - Is Active: ${isActive}`);
+
+        if (isActive) {
+          activeCircuitCount++;
+          if (rpm > highestRpm) {
+            highestRpm = rpm;
+            this.log.info(`    - NEW HIGHEST RPM: ${highestRpm} from circuit ${pumpCircuit.circuitId}`);
+          }
+        }
+      } else {
+        this.log.info(`    - Circuit has no/zero RPM (${rpm})`);
+      }
+    }
+
+    this.log.info(`[RPM RESULT] Pump ${pumpId}: ${activeCircuitCount} active circuits, highest RPM: ${highestRpm}`);
+    return highestRpm > 0 ? highestRpm : null;
+  }
+
+  /**
+   * Check if a pump circuit is currently active by looking for corresponding feature/circuit status
+   * (Same logic as WATTS sensor)
+   */
+  private isPumpCircuitActive(circuitId: string): boolean {
+    // Search through all discovered accessories to find the one with this circuit ID
+    for (const [, accessory] of this.accessoryMap) {
+      if (accessory.context.circuit && accessory.context.circuit.id === circuitId) {
+        const isOn = accessory.context.circuit.status === CircuitStatus.On;
+        this.log.info(`    Found circuit ${circuitId}: status = ${accessory.context.circuit.status}, active = ${isOn}`);
+        return isOn;
+      }
+      // Also check feature contexts
+      if (accessory.context.feature && accessory.context.feature.id === circuitId) {
+        const isOn = accessory.context.feature.status === CircuitStatus.On;
+        this.log.info(`    Found feature ${circuitId}: status = ${accessory.context.feature.status}, active = ${isOn}`);
+        return isOn;
+      }
+      // Also check body contexts (for Pool, Spa, etc.)
+      if (accessory.context.body && accessory.context.body.circuit?.id === circuitId) {
+        const isOn = accessory.context.body.status === CircuitStatus.On;
+        this.log.info(`    Found body circuit ${circuitId}: status = ${accessory.context.body.status}, active = ${isOn}`);
+        return isOn;
+      }
+    }
+
+    // If we can't find the circuit, assume it's inactive
+    this.log.info(`    Circuit ${circuitId} not found in accessories, assuming inactive`);
+    return false;
+  }
+
+  /**
+   * Update all pump sensors (RPM, GPM, WATTS) with the specified RPM value
+   */
+  updatePumpSensorsWithRpm(pumpId: string, rpm: number) {
+    // Update RPM sensor
+    const rpmSensorId = `${pumpId}-rpm`;
+    const rpmUuid = this.api.hap.uuid.generate(rpmSensorId);
+    const rpmAccessory = this.accessoryMap.get(rpmUuid);
+
+    if (rpmAccessory) {
+      this.log.debug(`Found RPM sensor ${rpmSensorId}, updating to ${rpm} RPM`);
+      // Update the pump's RPM value
+      if (rpmAccessory.context.pump) {
+        rpmAccessory.context.pump.rpm = rpm;
+      }
+      const rpmSensor = new PumpRpmAccessory(this, rpmAccessory);
+      rpmSensor.updateRpm(rpm);
+    } else {
+      this.log.debug(`RPM sensor not found for ${rpmSensorId} (UUID: ${rpmUuid})`);
+    }
 
     // Update GPM sensor
     const gpmSensorId = `${pumpId}-gpm`;
@@ -1340,8 +1852,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const gpmAccessory = this.accessoryMap.get(gpmUuid);
 
     if (gpmAccessory) {
+      this.log.debug(`Found GPM sensor ${gpmSensorId}, updating to ${rpm} RPM`);
       const gpmSensor = new PumpGpmAccessory(this, gpmAccessory);
       gpmSensor.updateSpeed(rpm);
+    } else {
+      this.log.debug(`GPM sensor not found for ${gpmSensorId} (UUID: ${gpmUuid})`);
     }
 
     // Update WATTS sensor
@@ -1350,19 +1865,22 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const wattsAccessory = this.accessoryMap.get(wattsUuid);
 
     if (wattsAccessory) {
+      this.log.debug(`Found WATTS sensor ${wattsSensorId}, updating to ${rpm} RPM`);
       const wattsSensor = new PumpWattsAccessory(this, wattsAccessory);
       wattsSensor.updateSpeed(rpm);
+    } else {
+      this.log.debug(`WATTS sensor not found for ${wattsSensorId} (UUID: ${wattsUuid})`);
     }
   }
 
-  updatePumpGpmAndWattsSensorsForStandalonePump(pumpId: string, speed: string, speedType: string) {
+  updatePumpSensorsForStandalonePump(pumpId: string, speed: string, speedType: string) {
     const speedValue = parseInt(speed);
     if (!speedValue || speedType !== 'RPM') {
-      this.log.debug(`Skipping standalone pump ${pumpId} GPM/WATTS update - invalid speed: ${speed} ${speedType}`);
+      this.log.debug(`Skipping standalone pump ${pumpId} sensors update - invalid speed: ${speed} ${speedType}`);
       return;
     }
 
-    this.log.debug(`Updating standalone pump ${pumpId} GPM/WATTS sensors with speed: ${speedValue} RPM`);
+    this.log.debug(`Updating standalone pump ${pumpId} sensors with speed: ${speedValue} RPM`);
 
     // Try to map standalone pump ID to platform pump ID format
     // e.g., "p0102" might need to be mapped to "PMP01" or "PMP02"
@@ -1376,17 +1894,38 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       }
     }
 
+    // Update RPM sensor using mapped pump ID
+    const rpmSensorId = `${mappedPumpId}-rpm`;
+    const rpmUuid = this.api.hap.uuid.generate(rpmSensorId);
+    const rpmAccessory = this.accessoryMap.get(rpmUuid);
+
+    if (rpmAccessory) {
+      this.log.debug(`Found RPM sensor ${rpmSensorId}, updating to ${speedValue} RPM (standalone pump)`);
+      // Update the pump's RPM value
+      if (rpmAccessory.context.pump) {
+        rpmAccessory.context.pump.rpm = speedValue;
+      }
+      const rpmSensor = new PumpRpmAccessory(this, rpmAccessory);
+      rpmSensor.updateRpm(speedValue);
+    } else {
+      this.log.debug(`RPM sensor not found for ${rpmSensorId} (UUID: ${rpmUuid})`);
+    }
+
     // Update GPM sensor using mapped pump ID
     const gpmSensorId = `${mappedPumpId}-gpm`;
     const gpmUuid = this.api.hap.uuid.generate(gpmSensorId);
     const gpmAccessory = this.accessoryMap.get(gpmUuid);
 
     if (gpmAccessory) {
-      this.log.debug(`Found GPM sensor ${gpmSensorId}, updating to ${speedValue} RPM`);
+      this.log.debug(`Found GPM sensor ${gpmSensorId}, updating to ${speedValue} RPM (standalone pump)`);
       const gpmSensor = new PumpGpmAccessory(this, gpmAccessory);
       gpmSensor.updateSpeed(speedValue);
     } else {
-      this.log.debug(`GPM sensor not found for ${gpmSensorId} (UUID: ${gpmUuid})`);
+      this.log.debug(
+        `GPM sensor not found for ${gpmSensorId} (UUID: ${gpmUuid}). Available accessories: ${Array.from(this.accessoryMap.keys())
+          .map(k => this.accessoryMap.get(k)?.displayName)
+          .join(', ')}`,
+      );
     }
 
     // Update WATTS sensor using mapped pump ID
@@ -1401,22 +1940,6 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     } else {
       this.log.debug(`WATTS sensor not found for ${wattsSensorId} (UUID: ${wattsUuid})`);
     }
-  }
-
-  findPumpIdForPumpCircuit(pumpCircuitId: string): string | null {
-    // Search through all discovered pumps to find which one contains this pump circuit
-    // This method needs to search the discovery data to map pump circuit to pump
-    // For now, extract pump ID from pump circuit ID pattern (e.g., "p0201" -> "PMP02")
-
-    // Common pattern: pump circuit IDs like "p0101", "p0201" map to pump IDs like "PMP01", "PMP02"
-    const match = pumpCircuitId.match(/^p(\d{2})(\d{2})$/);
-    if (match) {
-      const pumpNum = match[1];
-      return `PMP${pumpNum}`;
-    }
-
-    this.log.warn(`Could not determine pump ID for pump circuit: ${pumpCircuitId}`);
-    return null;
   }
 
   subscribeForUpdates(circuit: BaseCircuit, keys: ReadonlyArray<string>) {
@@ -1637,13 +2160,438 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   /**
-   * Cleanup method for tests and graceful shutdown
-   * Clears the heartbeat interval to prevent timer leaks
+   * Build pump-circuit associations for proper device management
+   * Maps pumps to their controlled circuits and vice versa
    */
-  cleanup() {
+  private buildPumpCircuitAssociations(pumpId: string, pumpCircuit: PumpCircuit): void {
+    this.log.debug(`Building associations for pump ${pumpId} -> circuit ${pumpCircuit.circuitId} (pump circuit: ${pumpCircuit.id})`);
+
+    // Map pump circuit ID to pump ID (e.g., "p0101" -> "PMP01")
+    this.pumpCircuitToPumpMap.set(pumpCircuit.id, pumpId);
+
+    // Map circuit ID to pump ID (e.g., "C0006" -> "PMP01")
+    this.circuitToPumpMap.set(pumpCircuit.circuitId, pumpId);
+
+    // Map pump ID to set of circuit IDs (e.g., "PMP01" -> {"C0006", "C0001", ...})
+    if (!this.pumpToCircuitsMap.has(pumpId)) {
+      this.pumpToCircuitsMap.set(pumpId, new Set<string>());
+    }
+    this.pumpToCircuitsMap.get(pumpId)!.add(pumpCircuit.circuitId);
+
+    this.log.debug(`  Associations built: pump ${pumpId} now controls ${this.pumpToCircuitsMap.get(pumpId)?.size || 0} circuits`);
+  }
+
+  /**
+   * Get the pump ID that controls a specific circuit
+   */
+  getPumpForCircuit(circuitId: string): string | undefined {
+    return this.circuitToPumpMap.get(circuitId);
+  }
+
+  /**
+   * Get all circuit IDs controlled by a specific pump
+   */
+  getCircuitsForPump(pumpId: string): Set<string> | undefined {
+    return this.pumpToCircuitsMap.get(pumpId);
+  }
+
+  /**
+   * Get the pump ID for a specific pump circuit
+   */
+  getPumpForPumpCircuit(pumpCircuitId: string): string | undefined {
+    return this.pumpCircuitToPumpMap.get(pumpCircuitId);
+  }
+
+  /**
+   * Find the pump circuit ID that controls a specific circuit
+   */
+  findPumpCircuitForCircuit(circuitId: string): string | undefined {
+    // Search through all pump circuits to find one that controls this circuit
+    for (const [pumpCircuitId] of this.pumpCircuitToPumpMap) {
+      // Check if this pump circuit is associated with our circuit
+      for (const [, accessory] of this.accessoryMap) {
+        if (accessory.context.pumpCircuit?.circuitId === circuitId && accessory.context.pumpCircuit?.id === pumpCircuitId) {
+          return pumpCircuitId;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Log detailed pump discovery mapping in requested format
+   */
+  logPumpDiscoveryMapping(pump: Pump, panel: Panel): void {
+    // Get circuit names by looking up in all features and bodies
+    const getCircuitName = (circuitId: string): string => {
+      // Search in panel features first
+      for (const feature of panel.features) {
+        if (feature.id === circuitId) {
+          return feature.name;
+        }
+      }
+
+      // Search in module features and bodies
+      for (const module of panel.modules) {
+        for (const feature of module.features) {
+          if (feature.id === circuitId) {
+            return feature.name;
+          }
+        }
+        for (const body of module.bodies) {
+          if (body.id === circuitId) {
+            return body.name;
+          }
+        }
+      }
+
+      return circuitId; // fallback to ID if name not found
+    };
+
+    // Build circuit descriptions with names and speeds
+    const circuitDescriptions: string[] = [];
+    (pump.circuits || []).forEach((pumpCircuit, index) => {
+      const circuitName = getCircuitName(pumpCircuit.circuitId);
+      const speedType = pumpCircuit.speedType || 'RPM';
+      const speed = pumpCircuit.speed || 0;
+      const speedDesc = speedType === 'RPM' ? `${speed}rpm` : `${speed}${speedType.toLowerCase()}`;
+
+      circuitDescriptions.push(`circuit${index + 1}: ${circuitName} (${speedDesc})`);
+    });
+
+    // Format final discovery message
+    const circuitList = circuitDescriptions.join('. ');
+    const pumpTypeDisplay = (pump.type || 'unknown').toLowerCase();
+
+    this.log.debug(`Found pump. name: ${pump.name || 'unknown'}. type: ${pumpTypeDisplay}. ${circuitList}.`);
+  }
+
+  /**
+   * Log current pump-circuit associations for debugging
+   */
+  logPumpCircuitAssociations(): void {
+    this.log.info('=== Pump-Circuit Associations ===');
+    this.pumpToCircuitsMap.forEach((circuits, pumpId) => {
+      this.log.info(`Pump ${pumpId} controls circuits: ${Array.from(circuits).join(', ')}`);
+    });
+    this.log.info('=== Circuit-to-Pump Mappings ===');
+    this.circuitToPumpMap.forEach((pumpId, circuitId) => {
+      this.log.info(`Circuit ${circuitId} is controlled by pump ${pumpId}`);
+    });
+  }
+
+  /**
+   * Update all pump sensors when heater status changes
+   */
+  private updateAllPumpSensorsForHeaterChange() {
+    this.log.info('[HEATER CHANGE] Updating all pump sensors due to heater status change');
+
+    // Find all pump sensors and trigger their updates directly
+    for (const [, accessory] of this.accessoryMap) {
+      if (accessory.context.pump) {
+        const pumpId = accessory.context.pump.id;
+        this.log.debug(`Updating sensors for pump ${pumpId} due to heater change`);
+
+        // Directly update pump sensors by finding them in the accessory map
+        this.updatePumpSensorsDirectly(pumpId);
+      }
+    }
+  }
+
+  /**
+   * Directly update pump sensors by pump ID (used for heater changes)
+   */
+  private updatePumpSensorsDirectly(pumpId: string) {
+    this.log.debug(`[DIRECT PUMP UPDATE] Updating sensors for pump ${pumpId}`);
+
+    // Update RPM sensor
+    const rpmSensorId = `${pumpId}-rpm`;
+    const rpmUuid = this.api.hap.uuid.generate(rpmSensorId);
+    const rpmAccessory = this.accessoryMap.get(rpmUuid);
+
+    if (rpmAccessory) {
+      this.log.debug(`Found RPM sensor ${rpmSensorId}, triggering update`);
+      const rpmSensor = new PumpRpmAccessory(this, rpmAccessory);
+      rpmSensor.getRpm().then(currentRpm => {
+        rpmSensor.updateRpm(currentRpm);
+        this.log.info(`  Updated RPM sensor: ${currentRpm} RPM`);
+      });
+    }
+
+    // Update GPM sensor
+    const gpmSensorId = `${pumpId}-gpm`;
+    const gpmUuid = this.api.hap.uuid.generate(gpmSensorId);
+    const gpmAccessory = this.accessoryMap.get(gpmUuid);
+
+    if (gpmAccessory) {
+      this.log.debug(`Found GPM sensor ${gpmSensorId}, triggering update`);
+      const gpmSensor = new PumpGpmAccessory(this, gpmAccessory);
+      gpmSensor.getGpm().then(currentGpm => {
+        gpmSensor.updateGpm(currentGpm);
+        this.log.info(`  Updated GPM sensor: ${currentGpm} GPM`);
+      });
+    }
+
+    // Update WATTS sensor
+    const wattsSensorId = `${pumpId}-watts`;
+    const wattsUuid = this.api.hap.uuid.generate(wattsSensorId);
+    const wattsAccessory = this.accessoryMap.get(wattsUuid);
+
+    if (wattsAccessory) {
+      this.log.debug(`Found WATTS sensor ${wattsSensorId}, triggering update`);
+      const wattsSensor = new PumpWattsAccessory(this, wattsAccessory);
+      wattsSensor.getWatts().then(currentWatts => {
+        wattsSensor.updateWatts(currentWatts);
+        this.log.info(`  Updated WATTS sensor: ${currentWatts} WATTS`);
+      });
+    }
+  }
+
+  /**
+   * Update pump object circuits array when standalone pump circuit changes
+   */
+  private updatePumpObjectCircuits(pumpId: string, pumpCircuitId: string, newSpeed: number) {
+    this.log.debug(`Updating pump ${pumpId} circuits array - circuit ${pumpCircuitId} speed to ${newSpeed}`);
+
+    // Find the pump accessory and update its circuits array
+    for (const [, accessory] of this.accessoryMap) {
+      if (accessory.context.pump && accessory.context.pump.id === pumpId) {
+        const pump = accessory.context.pump as Pump;
+
+        // Find the specific circuit in the pump's circuits array and update its speed
+        if (pump.circuits) {
+          for (const circuit of pump.circuits) {
+            if (circuit.id === pumpCircuitId) {
+              this.log.debug(`Found circuit ${pumpCircuitId} in pump ${pumpId}, updating speed from ${circuit.speed} to ${newSpeed}`);
+              circuit.speed = newSpeed;
+
+              // Update the accessory context
+              this.api.updatePlatformAccessories([accessory]);
+              return;
+            }
+          }
+        }
+
+        this.log.debug(`Circuit ${pumpCircuitId} not found in pump ${pumpId} circuits array`);
+        return;
+      }
+    }
+
+    this.log.debug(`Pump ${pumpId} not found in accessory map`);
+  }
+
+  /**
+   * Start temperature unit validation monitoring
+   */
+  private startTemperatureUnitValidation() {
+    // Skip validation in test environments
+    /* eslint-disable-next-line no-undef */
+    const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+
+    if (isTestEnvironment || this.temperatureUnitValidated) {
+      return;
+    }
+
+    // Monitor temperature readings every 30 seconds for first 5 minutes
+    this.temperatureValidationInterval = setInterval(() => {
+      this.validateTemperatureUnits();
+    }, 30000);
+
+    // Stop monitoring after 5 minutes
+    setTimeout(() => {
+      if (this.temperatureValidationInterval) {
+        clearInterval(this.temperatureValidationInterval);
+        this.temperatureValidationInterval = null;
+      }
+    }, 300000); // 5 minutes
+  }
+
+  /**
+   * Collect temperature reading for validation
+   */
+  private collectTemperatureReading(temperature: number) {
+    if (this.temperatureUnitValidated || this.temperatureReadings.length >= 50) {
+      return;
+    }
+
+    if (!isNaN(temperature) && temperature !== null && temperature !== undefined) {
+      this.temperatureReadings.push(temperature);
+    }
+  }
+
+  /**
+   * Validate temperature unit consistency with IntelliCenter readings
+   */
+  private validateTemperatureUnits() {
+    if (this.temperatureUnitValidated || this.temperatureReadings.length < 3) {
+      return;
+    }
+
+    const validation = ConfigValidator.validateTemperatureUnitConsistency(this.temperatureReadings, this.getConfig().temperatureUnits);
+
+    if (!validation.isConsistent && validation.warning) {
+      this.log.warn(validation.warning);
+      this.temperatureUnitValidated = true; // Only warn once
+
+      // Stop monitoring after validation
+      if (this.temperatureValidationInterval) {
+        clearInterval(this.temperatureValidationInterval);
+        this.temperatureValidationInterval = null;
+      }
+    } else if (validation.analysisCount >= 10 && validation.isConsistent) {
+      // Stop monitoring after successful validation with sufficient data
+      this.log.debug(
+        `Temperature unit validation successful. Analyzed ${validation.analysisCount} readings. ` +
+          `Detected unit: ${validation.detectedUnit || 'unknown'}, Configured: ${validation.configuredUnit}`,
+      );
+      this.temperatureUnitValidated = true;
+
+      if (this.temperatureValidationInterval) {
+        clearInterval(this.temperatureValidationInterval);
+        this.temperatureValidationInterval = null;
+      }
+    }
+  }
+
+  /**
+   * Setup graceful shutdown handlers for SIGTERM and SIGINT signals
+   */
+  private setupGracefulShutdown() {
+    // Prevent duplicate listeners being added
+    if (PentairPlatform.shutdownHandlersSetup) {
+      return;
+    }
+    PentairPlatform.shutdownHandlersSetup = true;
+
+    /* eslint-disable no-undef */
+    const shutdownHandler = (signal: string) => {
+      this.log.info(`Received ${signal}, performing graceful shutdown...`);
+      this.cleanup()
+        .then(() => {
+          this.log.info('Graceful shutdown completed');
+          process.exit(0);
+        })
+        .catch(error => {
+          this.log.error(`Error during graceful shutdown: ${error instanceof Error ? error.message : String(error)}`);
+          process.exit(1);
+        });
+    };
+
+    // Handle graceful shutdown signals
+    process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+    process.on('SIGINT', () => shutdownHandler('SIGINT'));
+
+    // Handle uncaught exceptions and unhandled rejections
+    process.on('uncaughtException', error => {
+      this.log.error(`Uncaught Exception: ${error.message}`);
+      this.log.debug(`Stack trace: ${error.stack}`);
+      this.cleanup()
+        .then(() => process.exit(1))
+        .catch(() => process.exit(1));
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      this.log.error(`Unhandled Promise Rejection at: ${promise}, reason: ${reason}`);
+      this.cleanup()
+        .then(() => process.exit(1))
+        .catch(() => process.exit(1));
+    });
+    /* eslint-enable no-undef */
+  }
+
+  /**
+   * Cleanup method for tests and graceful shutdown
+   * Clears intervals, closes connections, and removes event listeners
+   */
+  async cleanup() {
+    this.log.debug('Starting cleanup process...');
+
+    // Clear heartbeat interval
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
+      this.log.debug('Heartbeat interval cleared');
     }
+
+    // Clear discovery timeout
+    if (this.discoveryTimeout) {
+      clearTimeout(this.discoveryTimeout);
+      this.discoveryTimeout = null;
+      this.log.debug('Discovery timeout cleared');
+    }
+
+    // Clear temperature validation interval
+    if (this.temperatureValidationInterval) {
+      clearInterval(this.temperatureValidationInterval);
+      this.temperatureValidationInterval = null;
+      this.log.debug('Temperature validation interval cleared');
+    }
+
+    // Remove all event listeners from connection to prevent memory leaks
+    if (this.connection) {
+      try {
+        this.log.debug('Removing connection event listeners...');
+        this.connection.removeAllListeners();
+        this.log.debug('Connection event listeners removed');
+      } catch (error) {
+        this.log.warn(`Error removing connection event listeners: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Close Telnet connection gracefully
+    if (this.connection && this.isSocketAlive) {
+      try {
+        this.log.debug('Closing Telnet connection...');
+        this.connection.destroy();
+        this.isSocketAlive = false;
+        this.log.debug('Telnet connection closed');
+      } catch (error) {
+        this.log.warn(`Error closing Telnet connection: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Clear command queue and reset processing flag
+    this.commandQueue = [];
+    this.processingQueue = false;
+
+    // Clear data structures to free memory
+    this.accessoryMap?.clear();
+    this.heaters?.clear();
+    this.pumpIdToCircuitMap?.clear();
+    this.pumpToCircuitsMap?.clear();
+    this.circuitToPumpMap?.clear();
+    this.pumpCircuitToPumpMap?.clear();
+    this.activePumpCircuits?.clear();
+
+    // Reset buffer and discovery state
+    this.buffer = '';
+    this.discoveryBuffer = null;
+    if (this.discoverCommandsSent) {
+      this.discoverCommandsSent.length = 0;
+    }
+    if (this.discoverCommandsFailed) {
+      this.discoverCommandsFailed.length = 0;
+    }
+
+    // Reset connection state
+    this.reconnecting = false;
+    this.parseErrorCount = 0;
+
+    // Reset temperature validation state
+    this.temperatureReadings = [];
+    this.temperatureUnitValidated = false;
+
+    // Reset error handling components to free memory
+    if (this.circuitBreaker) {
+      this.circuitBreaker.reset();
+    }
+    if (this.healthMonitor) {
+      this.healthMonitor.reset();
+    }
+    if (this.deadLetterQueue) {
+      this.deadLetterQueue.clear();
+    }
+
+    this.log.debug('Cleanup process completed');
   }
 }

@@ -12,6 +12,14 @@ export interface ValidationResult {
   sanitizedConfig?: PentairConfig;
 }
 
+export interface TemperatureUnitValidationResult {
+  isConsistent: boolean;
+  detectedUnit: TemperatureUnits | null;
+  configuredUnit: TemperatureUnits;
+  analysisCount: number;
+  warning?: string;
+}
+
 export type PentairConfig = {
   ipAddress: string;
   username: string;
@@ -334,5 +342,126 @@ export class ConfigValidator {
       .trim()
       .replace(/[<>"'&]/g, '') // Remove potentially dangerous characters
       .substring(0, 200); // Limit length
+  }
+
+  /**
+   * Runtime validation of temperature unit consistency with IntelliCenter
+   * Analyzes temperature readings to detect if they match the configured units
+   */
+  static validateTemperatureUnitConsistency(
+    temperatureReadings: number[],
+    configuredUnit: TemperatureUnits,
+  ): TemperatureUnitValidationResult {
+    if (temperatureReadings.length === 0) {
+      return {
+        isConsistent: true, // No data to analyze yet
+        detectedUnit: null,
+        configuredUnit,
+        analysisCount: 0,
+      };
+    }
+
+    // Filter out invalid readings
+    const validReadings = temperatureReadings.filter(
+      temp => !isNaN(temp) && temp !== null && temp !== undefined && temp > -50 && temp < 200,
+    );
+
+    if (validReadings.length < 3) {
+      return {
+        isConsistent: true, // Insufficient data for reliable analysis
+        detectedUnit: null,
+        configuredUnit,
+        analysisCount: validReadings.length,
+      };
+    }
+
+    const avgTemp = validReadings.reduce((sum, temp) => sum + temp, 0) / validReadings.length;
+    const minTemp = Math.min(...validReadings);
+    const maxTemp = Math.max(...validReadings);
+
+    // Determine likely temperature unit based on typical pool/spa temperature ranges
+    let detectedUnit: TemperatureUnits;
+    let confidence = 0;
+
+    // Fahrenheit detection (typical pool: 70-90°F, spa: 95-104°F)
+    if (avgTemp >= 65 && avgTemp <= 110 && minTemp >= 50 && maxTemp <= 120) {
+      detectedUnit = TemperatureUnits.F;
+      confidence = this.calculateConfidence(validReadings, TemperatureUnits.F);
+    } else if (avgTemp >= 15 && avgTemp <= 45 && minTemp >= 5 && maxTemp <= 50) {
+      // Celsius detection (typical pool: 21-32°C, spa: 35-40°C)
+      detectedUnit = TemperatureUnits.C;
+      confidence = this.calculateConfidence(validReadings, TemperatureUnits.C);
+    } else {
+      // Ambiguous range - could be either unit
+      return {
+        isConsistent: true, // Can't determine, assume it's correct
+        detectedUnit: null,
+        configuredUnit,
+        analysisCount: validReadings.length,
+      };
+    }
+
+    const isConsistent = detectedUnit === configuredUnit;
+
+    // Only report inconsistency if we have high confidence
+    if (!isConsistent && confidence > 0.7) {
+      const expectedRange = configuredUnit === TemperatureUnits.F ? '70-104°F for pools/spas' : '21-40°C for pools/spas';
+      const actualRange = `${minTemp.toFixed(1)}-${maxTemp.toFixed(1)}°${detectedUnit}`;
+
+      return {
+        isConsistent: false,
+        detectedUnit,
+        configuredUnit,
+        analysisCount: validReadings.length,
+        warning:
+          `Temperature unit mismatch detected. Configured: ${configuredUnit}, ` +
+          `but readings appear to be in ${detectedUnit} (${actualRange}). ` +
+          `Expected range: ${expectedRange}. Please verify your temperatureUnits setting.`,
+      };
+    }
+
+    return {
+      isConsistent: true,
+      detectedUnit,
+      configuredUnit,
+      analysisCount: validReadings.length,
+    };
+  }
+
+  /**
+   * Calculate confidence level for temperature unit detection
+   */
+  private static calculateConfidence(readings: number[], unit: TemperatureUnits): number {
+    if (readings.length === 0) {
+      return 0;
+    }
+
+    const avgTemp = readings.reduce((sum, temp) => sum + temp, 0) / readings.length;
+
+    if (unit === TemperatureUnits.F) {
+      // High confidence for typical pool/spa Fahrenheit ranges
+      if (avgTemp >= 70 && avgTemp <= 104) {
+        return 0.9;
+      }
+      if (avgTemp >= 65 && avgTemp <= 110) {
+        return 0.8;
+      }
+      if (avgTemp >= 60 && avgTemp <= 115) {
+        return 0.6;
+      }
+      return 0.3;
+    } else {
+      // High confidence for typical pool/spa Celsius ranges
+      if (avgTemp >= 21 && avgTemp <= 40) {
+        return 0.9;
+      }
+      if (avgTemp >= 18 && avgTemp <= 43) {
+        return 0.8;
+      }
+      if (avgTemp >= 15 && avgTemp <= 45) {
+        return 0.6;
+      }
+      return 0.3;
+    }
   }
 }
