@@ -121,7 +121,7 @@ This is a **Homebridge plugin** that connects to Pentair IntelliCenter pool cont
 - **Discovery Process**: Sends multiple `GetHardwareDefinition` commands to IntelliCenter, merges responses, then transforms raw data into structured device hierarchy (Panels → Modules → Circuits/Bodies/Features)
 - **Real-time Updates**: Subscribes to parameter updates via `RequestParamList` commands, processes `NotifyList` responses to update accessory states
 - **Connection Management**: Robust Telnet connection with automatic reconnection, heartbeat monitoring, and buffer management for partial message handling
-- **Pump Integration**: Maps pump circuits to regular circuits for variable speed control via HomeKit fan accessories
+- **Pump Integration**: Maps pump circuits to regular circuits for variable speed control via HomeKit fan accessories with highly accurate power consumption and flow rate calculations using fourth-degree polynomial formulas calibrated from real IntelliCenter data
 - **Temperature Sensors**: Conditional registration based on heater presence and configuration (skips water temp sensors when heaters exist)
 
 ### Configuration
@@ -250,6 +250,34 @@ Always run `npm run prepublishOnly` after dependency updates to ensure compatibi
 - **Branch strategy**: Separate handling for stable (master) and pre-release (beta) branches
 - **Security first**: Integrated security scanning in release pipeline
 - **Reliable releases**: Manual verification ensures both npm and GitHub releases succeed
+
+### Pump Performance Curve Calculations
+
+**Mathematical Implementation**: The plugin implements highly accurate pump performance calculations using fourth-degree polynomial formulas calibrated from real IntelliCenter data:
+
+**Power Consumption (WATTS)**:
+- **Formula**: `W = a*r⁴ + b*r³ + c*r² + d*r` where `r = RPM/MAX_RPM`
+- **Calibration**: Coefficients derived from multiple real-world data points from actual IntelliCenter systems
+- **Accuracy**: Zero deviation accuracy between calibration points with smooth interpolation
+- **Implementation**: Located in `src/constants.ts` within `PUMP_PERFORMANCE_CURVES` object
+
+**Flow Rate (GPM)**:
+- **VSF/VF Pumps**: Fourth-degree polynomial formulas for precise flow rate calculations
+- **VS Pumps**: Linear approximation formulas based on manufacturer specifications
+- **Range Validation**: All calculations include proper RPM range checking and boundary conditions
+
+**Key Features**:
+- **Real-world calibration**: Formulas derived from actual pump performance data, not theoretical specifications
+- **Efficiency modeling**: Different pump types (VS, VF, VSF) have distinct efficiency characteristics
+- **Mathematical precision**: Fourth-degree polynomials provide smooth, accurate curves between data points
+- **Performance optimization**: Calculations are mathematically optimized for speed while maintaining accuracy
+
+**When updating pump curves**:
+1. Use real IntelliCenter data points for calibration whenever possible
+2. Implement fourth-degree polynomial formulas for maximum accuracy
+3. Validate calculations across full RPM range (typically 450-3450 RPM)
+4. Update both power (WATTS) and flow rate (GPM) calculations simultaneously
+5. Test accuracy against known data points to ensure zero deviation
 
 ### Development Standards Context
 

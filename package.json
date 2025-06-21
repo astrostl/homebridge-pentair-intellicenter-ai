@@ -33,10 +33,7 @@
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run format:check && npm run security-check && npm run outdated-check && npm run build && npm run test",
-    "test": "jest",
-    "release": "semantic-release",
-    "release:dry": "semantic-release --dry-run",
-    "prepare": "husky"
+    "test": "jest"
   },
   "keywords": [
     "homebridge-plugin",
@@ -57,12 +54,6 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/commit-analyzer": "^13.0.1",
-    "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^11.0.3",
-    "@semantic-release/npm": "^12.0.1",
-    "@semantic-release/release-notes-generator": "^14.0.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.3",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
@@ -71,12 +62,10 @@
     "eslint": "^9.29.0",
     "eslint-plugin-security": "^3.0.1",
     "homebridge": "^1.8.0",
-    "husky": "^9.1.7",
     "jest": "^30.0.0",
     "nodemon": "^3.1.10",
     "prettier": "^3.5.3",
     "rimraf": "^6.0.1",
-    "semantic-release": "^24.2.5",
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"

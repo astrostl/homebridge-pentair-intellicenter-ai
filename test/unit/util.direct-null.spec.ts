@@ -86,6 +86,10 @@ describe('Util Direct Null Input Tests', () => {
     ];
 
     const result = findBodyCircuit(body, circuits);
-    expect(result).toEqual({ id: 'circuit1' });
+    expect(result).toEqual({
+      id: 'circuit1',
+      name: 'Test Body',
+      objectType: ObjectType.Circuit,
+    });
   });
 });

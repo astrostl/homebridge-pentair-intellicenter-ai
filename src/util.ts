@@ -32,6 +32,45 @@ function isIntelliCenterObject(obj: unknown): obj is IntelliCenterObject {
   );
 }
 
+/**
+ * Safe property access helpers to prevent unsafe dynamic property access
+ */
+const safeGetStringProperty = (obj: Record<string, unknown>, key: string, defaultValue = ''): string => {
+  const value = obj[key];
+  return typeof value === 'string' ? value : defaultValue;
+};
+
+const safeGetStringPropertyOptional = (obj: Record<string, unknown>, key: string): string | undefined => {
+  const value = obj[key];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+};
+
+const safeGetNumberProperty = (obj: Record<string, unknown>, key: string, defaultValue = 0): number => {
+  const value = obj[key];
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+};
+
+const safeGetObjectProperty = (obj: Record<string, unknown>, key: string): Record<string, unknown> | null => {
+  const value = obj[key];
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+};
+
+const safeGetArrayProperty = (obj: Record<string, unknown>, key: string): unknown[] => {
+  const value = obj[key];
+  return Array.isArray(value) ? value : [];
+};
+
+const safeGetParams = (obj: IntelliCenterObject): Record<string, unknown> => {
+  return safeGetObjectProperty(obj, PARAMS_KEY) || {};
+};
+
 import {
   CIRCUIT_KEY,
   CIRCUITS_KEY,
@@ -63,17 +102,20 @@ const transformHeaters = (heaters: unknown[]): ReadonlyArray<Heater> => {
       if (!isIntelliCenterObject(obj)) {
         return false;
       }
-      return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Heater;
+      const params = safeGetParams(obj);
+      return safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Heater;
     })
     .map(heaterObj => {
       const obj = heaterObj as IntelliCenterObject;
-      const params = obj[PARAMS_KEY];
+      const params = safeGetParams(obj);
+      const bodyIdsString = safeGetStringProperty(params, ObjectType.Body);
+      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
       return {
-        id: obj[OBJ_ID_KEY],
-        name: params[OBJ_NAME_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
+        name: safeGetStringProperty(params, OBJ_NAME_KEY),
         objectType: ObjectType.Heater,
-        type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
-        bodyIds: (params[ObjectType.Body] as string)?.split(' ') || [],
+        type: subtype ? subtype.toUpperCase() : undefined,
+        bodyIds: bodyIdsString ? bodyIdsString.split(' ') : [],
       } as Heater;
     });
 };
@@ -130,16 +172,18 @@ const transformBodies = (circuits: unknown[]): ReadonlyArray<Body> => {
       if (!isIntelliCenterObject(obj)) {
         return false;
       }
-      return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Body;
+      const params = safeGetParams(obj);
+      return safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Body;
     })
     .map(bodyObj => {
       const obj = bodyObj as IntelliCenterObject;
-      const params = obj[PARAMS_KEY];
+      const params = safeGetParams(obj);
+      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
       const body = {
-        id: obj[OBJ_ID_KEY],
-        name: params[OBJ_NAME_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
+        name: safeGetStringProperty(params, OBJ_NAME_KEY),
         objectType: ObjectType.Body,
-        type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
+        type: subtype ? subtype.toUpperCase() : undefined,
       } as Body;
       updateBody(body, params as IntelliCenterParams);
       return {
@@ -154,11 +198,17 @@ export const findBodyCircuit = (body: Body, circuits: unknown[]): BaseCircuit | 
     if (!isIntelliCenterObject(circuit)) {
       continue;
     }
-    const params = circuit[PARAMS_KEY];
-    if (params[OBJ_TYPE_KEY] === ObjectType.Circuit && body.type === params[OBJ_SUBTYPE_KEY] && body.name === params[OBJ_NAME_KEY]) {
+    const params = safeGetParams(circuit);
+    const circuitType = safeGetStringProperty(params, OBJ_TYPE_KEY);
+    const circuitSubType = safeGetStringProperty(params, OBJ_SUBTYPE_KEY);
+    const circuitName = safeGetStringProperty(params, OBJ_NAME_KEY);
+
+    if (circuitType === ObjectType.Circuit && body.type === circuitSubType && body.name === circuitName) {
       return {
-        id: circuit[OBJ_ID_KEY],
-      };
+        id: safeGetStringProperty(circuit, OBJ_ID_KEY),
+        name: circuitName,
+        objectType: ObjectType.Circuit,
+      } as BaseCircuit;
     }
   }
   return undefined;
@@ -174,16 +224,17 @@ const transformFeatures = (circuits: unknown[], includeAllCircuits = false, logg
       if (!isIntelliCenterObject(featureObj)) {
         return false;
       }
-      const params = featureObj[PARAMS_KEY];
+      const params = safeGetParams(featureObj);
       if (!params) {
         return false;
       }
-      const subtype = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
-      const objId = featureObj[OBJ_ID_KEY];
-      const name = params[OBJ_NAME_KEY];
+      const subtype = safeGetStringProperty(params, OBJ_SUBTYPE_KEY).toUpperCase();
+      const objId = safeGetStringProperty(featureObj, OBJ_ID_KEY);
+      const name = safeGetStringProperty(params, OBJ_NAME_KEY);
 
-      const isCircuit = params[OBJ_TYPE_KEY] === ObjectType.Circuit;
-      const isFeature = params['FEATR'] === 'ON' || (includeAllCircuits && params['FEATR'] === 'FEATR');
+      const isCircuit = safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Circuit;
+      const featrValue = safeGetStringProperty(params, 'FEATR');
+      const isFeature = featrValue === 'ON' || (includeAllCircuits && featrValue === 'FEATR');
       // IntelliBrite is not required to be a feature.
       const isIntelliBrite = subtype === CircuitType.IntelliBrite;
       const isLegacy = subtype === 'LEGACY';
@@ -194,7 +245,7 @@ const transformFeatures = (circuits: unknown[], includeAllCircuits = false, logg
       if (isCircuit && !isLegacy && !shouldInclude && logger) {
         logger.debug(
           `Circuit filtered out - ID: ${objId}, Name: ${name}, ` +
-            `SubType: ${subtype}, Feature: ${params['FEATR']}, Will send updates but not be accessible in HomeKit`,
+            `SubType: ${subtype}, Feature: ${featrValue}, Will send updates but not be accessible in HomeKit`,
         );
       } else if (isCircuit && !isLegacy && includeAllCircuits && !isFeature && !isIntelliBrite && logger) {
         logger.info(`Non-feature circuit included due to includeAllCircuits - ID: ${objId}, Name: ${name}`);
@@ -204,12 +255,13 @@ const transformFeatures = (circuits: unknown[], includeAllCircuits = false, logg
     })
     .map(featureObj => {
       const obj = featureObj as IntelliCenterObject;
-      const params = obj[PARAMS_KEY];
+      const params = safeGetParams(obj);
+      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
       const circuit = {
-        id: obj[OBJ_ID_KEY],
-        name: params[OBJ_NAME_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
+        name: safeGetStringProperty(params, OBJ_NAME_KEY),
         objectType: ObjectType.Circuit,
-        type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
+        type: subtype ? subtype.toUpperCase() : undefined,
       } as Circuit;
       updateCircuit(circuit, params as IntelliCenterParams);
       return circuit;
@@ -225,23 +277,24 @@ const transformPumps = (pumps: unknown[], logger?: Logger): ReadonlyArray<Pump> 
       if (!isIntelliCenterObject(pumpObj)) {
         return false;
       }
-      const params = pumpObj[PARAMS_KEY];
+      const params = safeGetParams(pumpObj);
       if (!params) {
         return false;
       }
-      const objId = pumpObj[OBJ_ID_KEY];
-      const objType = params[OBJ_TYPE_KEY];
-      const subType = (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase();
+      const objId = safeGetStringProperty(pumpObj, OBJ_ID_KEY);
+      const objType = safeGetStringProperty(params, OBJ_TYPE_KEY);
+      const subType = safeGetStringProperty(params, OBJ_SUBTYPE_KEY).toUpperCase();
       const isPump = objType === ObjectType.Pump;
       const isVariableSpeed = VARIABLE_SPEED_PUMP_SUBTYPES.has(subType);
 
       // Debug pump discovery
       if (isPump && logger) {
+        const pumpName = safeGetStringProperty(params, OBJ_NAME_KEY);
         if (isVariableSpeed) {
-          logger.debug(`Variable speed pump discovered - ID: ${objId}, SubType: ${subType}, Name: ${params[OBJ_NAME_KEY]}`);
+          logger.debug(`Variable speed pump discovered - ID: ${objId}, SubType: ${subType}, Name: ${pumpName}`);
         } else {
           logger.debug(
-            `Pump filtered out - ID: ${objId}, SubType: ${subType}, Name: ${params[OBJ_NAME_KEY]} ` +
+            `Pump filtered out - ID: ${objId}, SubType: ${subType}, Name: ${pumpName} ` +
               `(not in VARIABLE_SPEED_PUMP_SUBTYPES: ${Array.from(VARIABLE_SPEED_PUMP_SUBTYPES).join(', ')})`,
           );
         }
@@ -251,18 +304,20 @@ const transformPumps = (pumps: unknown[], logger?: Logger): ReadonlyArray<Pump> 
     })
     .map(pumpObj => {
       const obj = pumpObj as IntelliCenterObject;
-      const params = obj[PARAMS_KEY];
+      const params = safeGetParams(obj);
+      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
       const pump = {
-        id: obj[OBJ_ID_KEY],
-        name: params[OBJ_NAME_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
+        name: safeGetStringProperty(params, OBJ_NAME_KEY),
         objectType: ObjectType.Pump,
-        type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
-        minRpm: +((params[OBJ_MIN_KEY] as string) || '0'),
-        maxRpm: +((params[OBJ_MAX_KEY] as string) || '0'),
-        minFlow: +((params[OBJ_MIN_FLOW_KEY] as string) || '0'),
-        maxFlow: +((params[OBJ_MAX_FLOW_KEY] as string) || '0'),
+        type: subtype ? subtype.toUpperCase() : undefined,
+        minRpm: safeGetNumberProperty(params, OBJ_MIN_KEY),
+        maxRpm: safeGetNumberProperty(params, OBJ_MAX_KEY),
+        minFlow: safeGetNumberProperty(params, OBJ_MIN_FLOW_KEY),
+        maxFlow: safeGetNumberProperty(params, OBJ_MAX_FLOW_KEY),
       } as Pump;
-      const circuits = Array.isArray(params[OBJ_LIST_KEY]) ? transformPumpCircuits(pump, params[OBJ_LIST_KEY] as unknown[]) : [];
+      const objList = safeGetArrayProperty(params, OBJ_LIST_KEY);
+      const circuits = objList.length > 0 ? transformPumpCircuits(pump, objList) : [];
 
       return {
         ...pump,
@@ -280,23 +335,24 @@ const transformTempSensors = (sensors: unknown[]): ReadonlyArray<Sensor> => {
       if (!isIntelliCenterObject(sensorObj)) {
         return false;
       }
-      const params = sensorObj[PARAMS_KEY];
+      const params = safeGetParams(sensorObj);
       return (
         params &&
-        params[OBJ_TYPE_KEY] === ObjectType.Sensor &&
-        Object.values(TemperatureSensorType).includes(params[OBJ_SUBTYPE_KEY] as TemperatureSensorType)
+        safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Sensor &&
+        Object.values(TemperatureSensorType).includes(safeGetStringProperty(params, OBJ_SUBTYPE_KEY) as TemperatureSensorType)
       );
     })
     .map(sensorObj => {
       const obj = sensorObj as IntelliCenterObject;
-      const params = obj[PARAMS_KEY];
-      const probeValue = +((params['PROBE'] as string) || '0');
+      const params = safeGetParams(obj);
+      const probeValue = safeGetNumberProperty(params, 'PROBE');
+      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
       return {
-        id: obj[OBJ_ID_KEY],
-        name: params[OBJ_NAME_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
+        name: safeGetStringProperty(params, OBJ_NAME_KEY),
         objectType: ObjectType.Sensor,
-        type: (params[OBJ_SUBTYPE_KEY] as string).toUpperCase(),
-        probe: isNaN(probeValue) ? 0 : probeValue,
+        type: subtype ? subtype.toUpperCase() : undefined,
+        probe: probeValue,
       } as Sensor;
     });
 };
@@ -306,12 +362,14 @@ const transformPumpCircuits = (pump: Pump, pumpObjList: unknown[]): ReadonlyArra
     return [];
   }
   return pumpObjList.filter(isIntelliCenterObject).map(pumpObj => {
+    const params = safeGetParams(pumpObj);
+    const speedType = safeGetStringPropertyOptional(params, SELECT_KEY);
     return {
-      id: pumpObj[OBJ_ID_KEY],
+      id: safeGetStringProperty(pumpObj, OBJ_ID_KEY),
       pump: pump,
-      circuitId: pumpObj[PARAMS_KEY][CIRCUIT_KEY] as string,
-      speed: +((pumpObj[PARAMS_KEY][SPEED_KEY] as string) || '0'),
-      speedType: (pumpObj[PARAMS_KEY][SELECT_KEY] as string)?.toUpperCase(),
+      circuitId: safeGetStringProperty(params, CIRCUIT_KEY),
+      speed: safeGetNumberProperty(params, SPEED_KEY),
+      speedType: speedType ? speedType.toUpperCase() : undefined,
     } as PumpCircuit;
   });
 };
@@ -325,18 +383,20 @@ const transformModules = (modules: unknown[], includeAllCircuits = false, logger
       if (!isIntelliCenterObject(obj)) {
         return false;
       }
-      return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Module;
+      const params = safeGetParams(obj);
+      return safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Module;
     })
     .map(moduleObj => {
       const obj = moduleObj as IntelliCenterObject;
-      const params = obj[PARAMS_KEY];
-      const circuits = Array.isArray(params[CIRCUITS_KEY]) ? (params[CIRCUITS_KEY] as unknown[]) : [];
+      const params = safeGetParams(obj);
+      const circuits = safeGetArrayProperty(params, CIRCUITS_KEY);
+      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
       return {
-        id: obj[OBJ_ID_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
         features: transformFeatures(circuits, includeAllCircuits, logger),
         bodies: transformBodies(circuits),
         heaters: transformHeaters(circuits),
-        type: (params[OBJ_SUBTYPE_KEY] as string)?.toUpperCase(),
+        type: subtype ? subtype.toUpperCase() : undefined,
       } as Module;
     });
 };
@@ -351,7 +411,7 @@ export const transformPanels = (
   }
 
   // Handle response format - could be array or object with array property
-  const responseArray = Array.isArray(response) ? response : (response.panels as unknown[] | undefined);
+  const responseArray = Array.isArray(response) ? response : safeGetArrayProperty(response, 'panels');
   if (!responseArray || !Array.isArray(responseArray)) {
     return [];
   }
@@ -360,13 +420,15 @@ export const transformPanels = (
       if (!isIntelliCenterObject(obj)) {
         return false;
       }
-      return obj[PARAMS_KEY][OBJ_TYPE_KEY] === ObjectType.Panel;
+      const params = safeGetParams(obj);
+      return safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Panel;
     })
     .map(panelObj => {
       const obj = panelObj as IntelliCenterObject;
-      const objList = Array.isArray(obj[PARAMS_KEY][OBJ_LIST_KEY]) ? (obj[PARAMS_KEY][OBJ_LIST_KEY] as unknown[]) : [];
+      const params = safeGetParams(obj);
+      const objList = safeGetArrayProperty(params, OBJ_LIST_KEY);
       return {
-        id: obj[OBJ_ID_KEY],
+        id: safeGetStringProperty(obj, OBJ_ID_KEY),
         modules: transformModules(objList, includeAllCircuits, logger),
         features: transformFeatures(objList, includeAllCircuits, logger), // Some features are directly on panel.
         pumps: transformPumps(objList, logger),
