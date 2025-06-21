@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2025-06-21
+
+### Fixed
+- **Reduced verbose logging**: Moved detailed pump and circuit update logs from `info` to `debug` level
+  - **Pump circuit updates**: All `[PUMP CIRCUIT UPDATE]`, `[PUMP UPDATE]`, and `[PUMP UPDATE COMPLETE]` logs are now debug-only
+  - **Standalone pump updates**: All `[STANDALONE PUMP UPDATE]` and `[STANDALONE PUMP SENSOR UPDATE]` logs are now debug-only
+  - **Circuit updates**: All `[CIRCUIT UPDATE]` logs with detailed parameters are now debug-only
+  - **Sensor updates**: All `[PUMP SENSOR UPDATE]` logs including individual sensor update confirmations are now debug-only
+  - **Pump-circuit associations**: All association mapping logs are now debug-only
+  - **Sensor restoration**: Cache restoration logs are now debug-only
+  - **Result**: Much cleaner info-level logs while preserving full diagnostic capability at debug level
+
+### Technical
+- **Homebridge logs**: Info level now shows only essential operational messages (connections, errors, warnings)
+- **Debug level**: Full diagnostic logging available when `"debug": true` is enabled in Homebridge config
+- **No functional changes**: All pump sensor functionality remains identical, only logging verbosity reduced
+
 ## [2.8.0] - 2025-06-21
 
 ### Added
