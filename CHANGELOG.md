@@ -7,64 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.8.0-beta.7] - 2025-06-20
-
-### Fixed  
-- **WATTS Sensor Persistence Issue**: Fixed WATTS sensor getting stuck at 217W after heater speed changes
-  - **Separate update paths**: Distinguished between circuit-driven updates (`updateSpeed`) and system-driven updates (`updateSystemSpeed`)
-  - **Persistent heater speeds**: System-driven speeds (heater) persist for 30 seconds and override circuit detection
-  - **Smart fallback**: After 30 seconds, automatically falls back to active circuit detection
-  - **Enhanced logging**: Added detailed debug logs showing speed source and timing
-  - **Prevents conflicts**: Circuit updates no longer overwrite heater-driven speeds immediately
-
-## [2.8.0-beta.6] - 2025-06-20
-
-### Fixed
-- **WATTS Sensor Heater Detection**: Fixed WATTS sensor to properly detect heater-driven speed changes
-  - **Smart speed detection**: WATTS sensor now uses the higher of active circuit speed OR updateSpeed parameter
-  - **Heater speed capture**: When heater turns on and changes pump to 3000 RPM, WATTS sensor correctly reflects that power
-  - **Fallback logic**: Preserves active circuit detection while allowing system-driven speed overrides
-  - **Enhanced logging**: Added debug logs to show which speed source is being used (active circuits vs system updates)
-  - **Test coverage**: Added specific test case for heater scenario (568 tests passing)
-
-## [2.8.0-beta.5] - 2025-06-20
-
-### Enhanced
-- **WATTS Power Curve Perfection**: Replaced cubic formula with fourth-degree polynomial for zero deviation accuracy
-  - **Perfect calibration**: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W with 0.0W error at all points
-  - **Fourth-degree polynomial**: W = a*r⁴ + b*r³ + c*r² + d*r where r = RPM/3450
-  - **Mathematical precision**: Solved 4x4 system of equations for exact coefficient matching
-  - **Proportional efficiency**: VSF and VF curves derived with same polynomial structure
-  - **Intermediate accuracy**: Smooth, realistic power curves between calibration points
-
-## [2.8.0-beta.4] - 2025-06-20
-
-### Fixed
-- **WATTS Power Curve Final Calibration**: Achieved maximum accuracy using four real data points
-  - **Four-point calibration**: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W for precise curve fitting
-  - **Updated formula**: Changed multiplier from 1530 to 1489 for exact 3450 RPM match
-  - **High accuracy results**: 1800→211W (±6W), 2300→441W (±12W), 3100→1080W (±14W), 3450→1489W (exact)
-  - **Proportional VSF/VF updates**: VSF (1310W max), VF (1324W max) maintaining efficiency ratios
-
-## [2.8.0-beta.3] - 2025-06-20
-
-### Fixed
-- **WATTS Power Curve Re-calibration**: Final calibration using two data points for perfect accuracy
-  - **Two-point calibration**: 1800 RPM = 217W, 2300 RPM = 453W (both exact matches)
-  - **Updated formula**: Changed to `Math.pow(ratio, 3.0) * 1530` for mathematically precise curve
-  - **Higher RPM accuracy**: 2300 RPM now shows 453W (was 391W) matching IntelliCenter exactly
-  - **Updated all pump types**: VS (1530W max), VSF (1346W max), VF (1360W max)
-
-## [2.8.0-beta.2] - 2025-06-20
-
-### Fixed
-- **WATTS Power Curve Calibration**: Critical fix for accurate power consumption readings
-  - **Calibrated to actual IntelliCenter data**: 1800 RPM now shows 217W (was 336W)
-  - **Real-world validation**: Power curves now match actual pump readings from user testing
-  - **Updated all pump types**: VS (1034W max), VSF (910W max), VF (920W max) for realistic efficiency
-  - **Formula adjustment**: Changed from `Math.pow(ratio, 2.4) * 1600` to `Math.pow(ratio, 2.4) * 1034` for VS pumps
-
-## [2.8.0-beta.1] - 2025-06-20
+## [2.8.0] - 2025-06-21
 
 ### Added
 - **🌊 Pump GPM (Flow Rate) Sensors**: Real-time flow rate monitoring for all variable speed pumps
@@ -77,15 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **⚡ Pump WATTS (Power Consumption) Sensors**: Smart power monitoring with active circuit detection
   - **Pump-level sensors** - one WATTS sensor per physical pump for accurate power tracking
   - **Active circuit detection** - uses highest active circuit speed instead of highest configured speed
-  - **Realistic power curves** - calibrated to match actual Pentair pump specifications
-  - **Multiple pump type support** - VS (1600W max), VSF (1400W max), VF (1450W max) with efficiency differences
+  - **Fourth-degree polynomial power curves** - mathematically precise calibration to actual IntelliCenter data
+  - **Multiple pump type support** - VS, VSF, and VF pumps with distinct efficiency characteristics
   - **Smart circuit filtering** - only considers circuits that are currently ON for power calculation
   - **Prevents power over-reporting** - fixes issue where inactive high-speed circuits inflated power readings
 
 ### Enhanced
+- **WATTS Power Curve Perfection**: Fourth-degree polynomial formulas for zero deviation accuracy
+  - **Perfect calibration**: 1800=217W, 2300=453W, 3100=1094W, 3450=1489W with 0.0W error at all points
+  - **Mathematical precision**: W = a*r⁴ + b*r³ + c*r² + d*r where r = RPM/MAX_RPM
+  - **Real-world validation**: Power curves calibrated from actual IntelliCenter system data
+  - **Proportional efficiency**: VSF and VF curves derived with same polynomial structure
+  - **Intermediate accuracy**: Smooth, realistic power curves between calibration points
+
 - **Pump Performance Curve System**: Comprehensive pump characteristic modeling
   - **Type-specific calculations** - VS, VSF, and VF pumps have distinct performance profiles
-  - **Realistic power consumption** - VS pumps: ~100W@1000RPM, ~300W@1500RPM, ~600W@2000RPM, ~1600W@3450RPM
   - **Accurate flow rates** - VS pumps: ~20GPM@1000RPM to ~110GPM@3450RPM
   - **Efficiency modeling** - VSF pumps are 10-15% more efficient than standard VS pumps
 
@@ -96,10 +45,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Automatic fallback** - unknown types default to VS curves with logging
 
 ### Fixed
+- **WATTS Sensor Persistence Issue**: Fixed WATTS sensor getting stuck at 217W after heater speed changes
+  - **Separate update paths**: Distinguished between circuit-driven updates (`updateSpeed`) and system-driven updates (`updateSystemSpeed`)
+  - **Persistent heater speeds**: System-driven speeds (heater) persist for 30 seconds and override circuit detection
+  - **Smart fallback**: After 30 seconds, automatically falls back to active circuit detection
+  - **Enhanced logging**: Added detailed debug logs showing speed source and timing
+  - **Prevents conflicts**: Circuit updates no longer overwrite heater-driven speeds immediately
+
+- **WATTS Sensor Heater Detection**: Enhanced WATTS sensor to properly detect heater-driven speed changes
+  - **Smart speed detection**: WATTS sensor now uses the higher of active circuit speed OR updateSpeed parameter
+  - **Heater speed capture**: When heater turns on and changes pump to 3000 RPM, WATTS sensor correctly reflects that power
+  - **Fallback logic**: Preserves active circuit detection while allowing system-driven speed overrides
+  - **Enhanced logging**: Added debug logs to show which speed source is being used (active circuits vs system updates)
+
 - **WATTS Sensor Circuit Selection**: Critical fix for power consumption accuracy
   - **Root cause resolved** - WATTS sensors were using highest configured speed instead of active speed
   - **Active circuit filtering** - only circuits with CircuitStatus.On are considered for power calculation
-  - **Realistic power readings** - 1800 RPM now shows ~336W instead of previous 1,545W from inactive circuits
+  - **Realistic power readings** - accurate power consumption based on actual pump operation
   - **Multiple circuit handling** - correctly handles pumps with multiple circuits at different speeds
 
 ### Technical
