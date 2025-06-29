@@ -118,63 +118,69 @@ export class PumpGpmAccessory {
   /**
    * Check if a pump circuit is currently active by looking for corresponding feature/circuit status
    */
-  private isPumpCircuitActive(circuitId: string): boolean {
-    // Search through all discovered accessories to find the one with this circuit ID
+  private checkStandardCircuitActive(circuitId: string): boolean | null {
     for (const [, accessory] of this.platform.accessoryMap) {
       if (accessory.context.circuit && accessory.context.circuit.id === circuitId) {
         const isOn = accessory.context.circuit.status === CircuitStatus.On;
         this.platform.log.debug(`Found circuit ${circuitId}: status = ${accessory.context.circuit.status}, active = ${isOn}`);
         return isOn;
       }
-      // Also check feature contexts
       if (accessory.context.feature && accessory.context.feature.id === circuitId) {
         const isOn = accessory.context.feature.status === CircuitStatus.On;
         this.platform.log.debug(`Found feature ${circuitId}: status = ${accessory.context.feature.status}, active = ${isOn}`);
         return isOn;
       }
-      // Also check body contexts (for Pool, Spa, etc.)
       if (accessory.context.body && accessory.context.body.circuit?.id === circuitId) {
         const isOn = accessory.context.body.status === CircuitStatus.On;
         this.platform.log.debug(`Found body circuit ${circuitId}: status = ${accessory.context.body.status}, active = ${isOn}`);
         return isOn;
       }
     }
+    return null; // Not found
+  }
 
-    // Check if this is an internal heater circuit (like X0051) that should be active when heaters are running
-    if (circuitId.startsWith('X')) {
-      this.platform.log.debug(`Circuit ${circuitId} appears to be internal heater circuit, checking heater status...`);
+  private checkHeaterCircuitActive(circuitId: string): boolean {
+    this.platform.log.debug(`Circuit ${circuitId} appears to be internal heater circuit, checking heater status...`);
 
-      // Check if any body has a heater that is actively calling for heat
-      for (const [, accessory] of this.platform.accessoryMap) {
-        if (accessory.context.body && accessory.context.body.status === CircuitStatus.On) {
-          const body = accessory.context.body;
+    for (const [, accessory] of this.platform.accessoryMap) {
+      if (accessory.context.body && accessory.context.body.status === CircuitStatus.On) {
+        const body = accessory.context.body;
 
-          // Check if this body has a heater assigned and is actively heating
-          if (body.heaterId && body.heaterId !== '00000') {
-            // Debug: log all body fields to see what's available
-            this.platform.log.debug(`[homebridge-pentair-intellicenter-ai] Body ${body.name} ALL FIELDS: ${JSON.stringify(body)}`);
+        if (body.heaterId && body.heaterId !== '00000') {
+          this.platform.log.debug(`[homebridge-pentair-intellicenter-ai] Body ${body.name} ALL FIELDS: ${JSON.stringify(body)}`);
 
-            // Check if heater is actively calling for heat by comparing current temp to set point
-            const currentTemp = Number(body.temperature) || 0;
-            const setPoint = Number(body.lowTemperature) || 0;
-            const isActivelyHeating = currentTemp < setPoint;
+          const currentTemp = Number(body.temperature) || 0;
+          const setPoint = Number(body.lowTemperature) || 0;
+          const isActivelyHeating = currentTemp < setPoint;
 
-            this.platform.log.debug(
-              `[homebridge-pentair-intellicenter-ai] Body ${body.name}: heater ${body.heaterId}, ` +
-                `temp ${currentTemp}°F, setpoint ${setPoint}°F, actively heating: ${isActivelyHeating} ` +
-                `[${currentTemp} < ${setPoint} = ${currentTemp < setPoint}]`,
-            );
+          this.platform.log.debug(
+            `[homebridge-pentair-intellicenter-ai] Body ${body.name}: heater ${body.heaterId}, ` +
+              `temp ${currentTemp}°F, setpoint ${setPoint}°F, actively heating: ${isActivelyHeating} ` +
+              `[${currentTemp} < ${setPoint} = ${currentTemp < setPoint}]`,
+          );
 
-            if (isActivelyHeating) {
-              this.platform.log.debug(`Found actively heating heater for body ${body.name}, circuit ${circuitId} is active`);
-              return true;
-            }
+          if (isActivelyHeating) {
+            this.platform.log.debug(`Found actively heating heater for body ${body.name}, circuit ${circuitId} is active`);
+            return true;
           }
         }
       }
+    }
 
-      this.platform.log.debug(`No actively heating heaters found, circuit ${circuitId} is inactive`);
-      return false;
+    this.platform.log.debug(`No actively heating heaters found, circuit ${circuitId} is inactive`);
+    return false;
+  }
+
+  private isPumpCircuitActive(circuitId: string): boolean {
+    // Check standard circuits first
+    const standardResult = this.checkStandardCircuitActive(circuitId);
+    if (standardResult !== null) {
+      return standardResult;
+    }
+
+    // Check if this is an internal heater circuit
+    if (circuitId.startsWith('X')) {
+      return this.checkHeaterCircuitActive(circuitId);
     }
 
     // If we can't find the circuit, assume it's inactive

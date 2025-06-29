@@ -102,6 +102,14 @@ describe('PentairPlatform', () => {
   let mockAPI: jest.Mocked<API>;
   let mockTelnetInstance: jest.Mocked<Telnet>;
   let mockConfig: PlatformConfig;
+  const platformInstances: PentairPlatform[] = [];
+
+  // Helper function to create and track platform instances
+  const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
+    const platform = new PentairPlatform(logger, config, api);
+    platformInstances.push(platform);
+    return platform;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -197,13 +205,17 @@ describe('PentairPlatform', () => {
     };
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Clean up all platform instances to prevent timer leaks
+    await Promise.all(platformInstances.map(p => p.cleanup()));
+    platformInstances.length = 0;
+
     jest.useRealTimers();
   });
 
   describe('Constructor', () => {
     it('should initialize platform with valid config', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       expect(platform).toBeDefined();
       expect(MockedTelnet).toHaveBeenCalledTimes(1);
@@ -224,14 +236,14 @@ describe('PentairPlatform', () => {
         sanitizedConfig: configWithoutIP,
       });
 
-      platform = new PentairPlatform(mockLogger, configWithoutIP, mockAPI);
+      platform = createTrackedPlatform(mockLogger, configWithoutIP, mockAPI);
 
       expect(mockLogger.error).toHaveBeenCalledWith('Configuration validation failed:');
       expect(mockLogger.error).toHaveBeenCalledWith('  - ipAddress is required and must be a string');
     });
 
     it('should set up telnet event handlers', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const eventHandlers = ['data', 'connect', 'ready', 'failedlogin', 'close', 'error', 'end', 'responseready'];
       eventHandlers.forEach(event => {
@@ -241,7 +253,7 @@ describe('PentairPlatform', () => {
 
     it('should set up heartbeat monitoring', () => {
       const setIntervalSpy = jest.spyOn(global, 'setInterval');
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Should have set up the interval
       expect(setIntervalSpy).toHaveBeenCalled();
@@ -252,7 +264,7 @@ describe('PentairPlatform', () => {
 
   describe('connectToIntellicenter', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should connect with correct telnet parameters', async () => {
@@ -283,7 +295,7 @@ describe('PentairPlatform', () => {
 
   describe('Event Handlers', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     describe('data handler', () => {
@@ -346,7 +358,7 @@ describe('PentairPlatform', () => {
           sanitizedConfig: { ...smallBufferConfig },
         });
 
-        platform = new PentairPlatform(mockLogger, smallBufferConfig, mockAPI);
+        platform = createTrackedPlatform(mockLogger, smallBufferConfig, mockAPI);
 
         // Get the new data handler from the new platform instance
         const newOnCalls = mockTelnetInstance.on.mock.calls.filter(call => call[0] === 'data');
@@ -429,7 +441,7 @@ describe('PentairPlatform', () => {
 
   describe('handleUpdate', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle unsuccessful responses', async () => {
@@ -549,7 +561,7 @@ describe('PentairPlatform', () => {
 
   describe('configureAccessory', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should add accessory to map', () => {
@@ -581,7 +593,7 @@ describe('PentairPlatform', () => {
 
   describe('Configuration Management', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should return sanitized config', () => {
@@ -607,7 +619,7 @@ describe('PentairPlatform', () => {
 
   describe('Connection Health Monitoring', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should detect connection timeout and attempt reconnection', () => {
@@ -615,7 +627,7 @@ describe('PentairPlatform', () => {
       jest.setSystemTime(mockTime);
 
       // Create platform with timer
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Set socket as alive and last message received 5 hours ago
       (platform as any).isSocketAlive = true;
@@ -633,7 +645,7 @@ describe('PentairPlatform', () => {
 
   describe('Device Discovery', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should start device discovery', () => {
@@ -746,7 +758,7 @@ describe('PentairPlatform', () => {
 
   describe('Command Processing', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should sanitize commands before sending', () => {
@@ -859,7 +871,7 @@ describe('PentairPlatform', () => {
 
   describe('Update Handling', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should update circuit accessories', () => {
@@ -909,7 +921,7 @@ describe('PentairPlatform', () => {
       expect(mockAPI.updatePlatformAccessories).toHaveBeenCalledWith([mockAccessory]);
 
       // Verify the pump circuit was updated directly
-      expect(mockAccessory.context.pumpCircuit.speed).toBe('75');
+      expect(mockAccessory.context.pumpCircuit.speed).toBe(75);
     });
 
     it('should update heater RPM sensors when pump circuit speeds change', () => {
@@ -960,7 +972,7 @@ describe('PentairPlatform', () => {
       expect(updatePumpSpy).not.toHaveBeenCalled();
 
       // Verify the pump circuit was updated directly
-      expect(mockPumpAccessory.context.pumpCircuit.speed).toBe('2800');
+      expect(mockPumpAccessory.context.pumpCircuit.speed).toBe(2800);
 
       // Should still call pump sensor updates
       expect(updatePumpSensorsSpy).toHaveBeenCalledWith(mockPumpAccessory.context.pumpCircuit);
@@ -1094,7 +1106,7 @@ describe('PentairPlatform', () => {
 
   describe('Error Recovery', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle maybeReconnect with proper throttling', async () => {
@@ -1144,7 +1156,7 @@ describe('PentairPlatform', () => {
 
   describe('System Health and Configuration', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should return system health information', () => {
@@ -1197,7 +1209,7 @@ describe('PentairPlatform', () => {
 
   describe('Command Processing and Sanitization', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
       (platform as any).isSocketAlive = true;
       jest.spyOn((platform as any).rateLimiter, 'recordRequest').mockReturnValue(true);
     });
@@ -1309,7 +1321,7 @@ describe('PentairPlatform', () => {
 
   describe('Discovery and Accessory Management', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should subscribe for updates on discovered devices', () => {
@@ -1362,7 +1374,7 @@ describe('PentairPlatform', () => {
       });
 
       // Create platform with invalid config to prevent validation
-      const invalidPlatform = new PentairPlatform(mockLogger, { ...mockConfig, ipAddress: undefined }, mockAPI);
+      const invalidPlatform = createTrackedPlatform(mockLogger, { ...mockConfig, ipAddress: undefined }, mockAPI);
 
       await invalidPlatform.connectToIntellicenter();
 
@@ -1383,7 +1395,7 @@ describe('PentairPlatform', () => {
 
   describe('Update Processing Edge Cases', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle updates for unregistered devices with pump characteristics', () => {
@@ -1532,7 +1544,7 @@ describe('PentairPlatform', () => {
 
   describe('Utility and Helper Methods', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle delay method', async () => {
@@ -1598,7 +1610,7 @@ describe('PentairPlatform', () => {
 
   describe('Additional Edge Cases and Coverage', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle pump circuit mapping', () => {
@@ -2014,7 +2026,7 @@ describe('PentairPlatform', () => {
 
   describe('Connection Lifecycle Events', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle didFinishLaunching event', async () => {
@@ -2069,7 +2081,7 @@ describe('PentairPlatform', () => {
 
   describe('Device Discovery Edge Cases', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle discoverHeater with missing body', () => {
@@ -2183,7 +2195,7 @@ describe('PentairPlatform', () => {
 
   describe('Error Handling and Edge Cases', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle sendCommandNoWait when rate limited', () => {
@@ -2277,7 +2289,7 @@ describe('PentairPlatform', () => {
 
   describe('JSON Handling Edge Cases', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle circular references in json method', () => {
@@ -2292,7 +2304,7 @@ describe('PentairPlatform', () => {
 
   describe('Full Coverage Tests for Platform', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should cover responseready event', () => {
@@ -2471,7 +2483,7 @@ describe('PentairPlatform', () => {
 
   describe('Complete Coverage Tests', () => {
     it('should cover remaining platform edge cases', () => {
-      const testPlatform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const testPlatform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Test the delay method directly
       const delayPromise = testPlatform['delay'](100);
@@ -2484,7 +2496,7 @@ describe('PentairPlatform', () => {
     });
 
     it('should cover heater discovery with existing accessory in cache (lines 630-634)', () => {
-      const testPlatform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const testPlatform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const mockHeater = {
         id: 'H1',
@@ -2527,7 +2539,7 @@ describe('PentairPlatform', () => {
     });
 
     it('should cover heater discovery with new accessory registration (lines 636-642)', () => {
-      const testPlatform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const testPlatform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const mockHeater = {
         id: 'H2',
@@ -2565,7 +2577,7 @@ describe('PentairPlatform', () => {
     });
 
     it('should cover remaining uncovered platform lines', () => {
-      const testPlatform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const testPlatform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Test various edge cases to hit remaining uncovered lines
 
@@ -2588,7 +2600,7 @@ describe('PentairPlatform', () => {
     let testPlatform: PentairPlatform;
 
     beforeEach(() => {
-      testPlatform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      testPlatform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should trigger maybeReconnect on timeout covering line 153', async () => {
@@ -2683,7 +2695,7 @@ describe('PentairPlatform', () => {
         },
       });
 
-      const testPlatformAirTempDisabled = new PentairPlatform(mockLogger, configWithAirTempDisabled, mockAPI);
+      const testPlatformAirTempDisabled = createTrackedPlatform(mockLogger, configWithAirTempDisabled, mockAPI);
 
       const mockPanel = { id: 'P1', modules: [] };
       const mockModule = { id: 'M1', name: 'Module 1' };
@@ -2736,7 +2748,7 @@ describe('PentairPlatform', () => {
         },
       });
 
-      const testPlatformForRemoval = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const testPlatformForRemoval = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
       testPlatformForRemoval.accessoryMap.set('mock-uuid-S1', mockExistingTempAccessory);
 
       // Call discoverTemperatureSensor - should remove the existing accessory

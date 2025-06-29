@@ -471,4 +471,188 @@ describe('PumpRpmAccessory', () => {
       expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Speed: 2100'));
     });
   });
+
+  describe('Heater Circuit Active Checking', () => {
+    beforeEach(() => {
+      // Reset to default setup for this describe block
+      jest.clearAllMocks();
+    });
+
+    it('should detect active heater when temperature is below setpoint', async () => {
+      // Set up pump with heater circuit
+      mockAccessory.context.pump.circuits = [{ id: 'X0051', speed: 2200, circuitId: 'X0051' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Clear accessoryMap to ensure circuit is not found in standard check
+      mockPlatform.accessoryMap.clear();
+
+      // Set up body with heater that's actively heating
+      (mockPlatform.accessoryMap as Map<string, any>).set('body-uuid', {
+        context: {
+          body: {
+            id: 'B1101',
+            name: 'Pool',
+            status: CircuitStatus.On,
+            heaterId: 'H0001',
+            temperature: 75, // Current temp
+            lowTemperature: 85, // Target temp - higher than current
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      // Should find active heater circuit
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Looking for circuit X0051 in accessories'));
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Circuit X0051 appears to be internal heater circuit'));
+      expect(rpm).toBe(2200); // Should return the circuit speed
+    });
+
+    it('should detect inactive heater when no actively heating bodies', async () => {
+      // Set up pump with heater circuit
+      mockAccessory.context.pump.circuits = [{ id: 'X0051', speed: 2200, circuitId: 'X0051' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Clear accessoryMap to ensure circuit is not found in standard check
+      mockPlatform.accessoryMap.clear();
+
+      // Set up body with heater that's not actively heating
+      (mockPlatform.accessoryMap as Map<string, any>).set('body-uuid', {
+        context: {
+          body: {
+            id: 'B1101',
+            name: 'Pool',
+            status: CircuitStatus.On,
+            heaterId: 'H0001',
+            temperature: 85, // Current temp
+            lowTemperature: 80, // Target temp - lower than current
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Looking for circuit X0051 in accessories'));
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Circuit X0051 appears to be internal heater circuit'));
+      expect(rpm).toBe(0.0001); // Should return minimum when not actively heating
+    });
+
+    it('should handle circuit not found and return minimum', async () => {
+      // Set up pump with non-X circuit to test not-found path
+      mockAccessory.context.pump.circuits = [{ id: 'C9999', speed: 2200, circuitId: 'C9999' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Clear accessoryMap to ensure circuit is not found
+      mockPlatform.accessoryMap.clear();
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Looking for circuit C9999 in accessories'));
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(
+        expect.stringContaining('Circuit C9999 not found in accessories, assuming inactive'),
+      );
+      expect(rpm).toBe(0.0001);
+    });
+
+    it('should handle body that is turned off', async () => {
+      // Set up pump with heater circuit
+      mockAccessory.context.pump.circuits = [{ id: 'X0051', speed: 2200, circuitId: 'X0051' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Clear accessoryMap to ensure circuit is not found in standard check
+      mockPlatform.accessoryMap.clear();
+
+      // Set up body that's turned off - this should not trigger heater logic
+      (mockPlatform.accessoryMap as Map<string, any>).set('body-uuid', {
+        context: {
+          body: {
+            id: 'B1101',
+            name: 'Pool',
+            status: CircuitStatus.Off, // Body is off
+            heaterId: 'H0001',
+            temperature: 75,
+            lowTemperature: 85,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      // When body is off, the heater check should not find any active heating
+      expect(rpm).toBe(0.0001);
+    });
+
+    it('should handle no body accessories at all', async () => {
+      // Set up pump with heater circuit
+      mockAccessory.context.pump.circuits = [{ id: 'X0051', speed: 2200, circuitId: 'X0051' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Clear accessoryMap completely
+      mockPlatform.accessoryMap.clear();
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Looking for circuit X0051 in accessories'));
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Circuit X0051 appears to be internal heater circuit'));
+      expect(rpm).toBe(0.0001);
+    });
+
+    it('should handle multiple circuits and log "not highest" case', async () => {
+      // Set up pump with multiple circuits to test "not highest" logging
+      mockAccessory.context.pump.circuits = [
+        { id: 'C0001', speed: 3000, circuitId: 'C0001' },
+        { id: 'C0002', speed: 2000, circuitId: 'C0002' }, // Lower speed - should trigger "not highest" log
+      ];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up both circuits as active
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit1-uuid', {
+        context: {
+          circuit: {
+            id: 'C0001',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit2-uuid', {
+        context: {
+          circuit: {
+            id: 'C0002',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      // Should log "not highest" for the lower speed circuit
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Not highest: 2000 <= 3000'));
+      expect(rpm).toBe(3000); // Should return the highest speed
+    });
+
+    it('should handle feature context circuit checking', async () => {
+      // Clear existing setup and create new one for this test
+      mockPlatform.accessoryMap.clear();
+
+      // Set up pump with regular circuit (not X-prefixed)
+      mockAccessory.context.pump.circuits = [{ id: 'F0001', speed: 2500, circuitId: 'F0001' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up accessory with feature context (not circuit context)
+      (mockPlatform.accessoryMap as Map<string, any>).set('feature-uuid', {
+        context: {
+          feature: {
+            id: 'F0001',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+
+      // Should find the active circuit and return the speed
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Looking for circuit F0001 in accessories'));
+      expect(rpm).toBe(2500); // Should return the circuit speed since it's active
+    });
+  });
 });

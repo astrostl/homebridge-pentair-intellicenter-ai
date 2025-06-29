@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.2] - 2025-06-29
+
+### Enhanced
+- **Dependency Management**: Updated development dependencies for improved security and compatibility
+  - **jest**: Updated to v30.0.3 for enhanced testing performance
+  - **@types/node**: Updated to v24.0.4 for latest Node.js type definitions
+  - **@typescript-eslint/eslint-plugin**: Updated to v8.35.0 for improved TypeScript linting
+  - **prettier**: Updated to v3.6.2 for enhanced code formatting capabilities
+
+### Added
+- **Security Enhancements**: Added CodeQL security analysis workflow
+  - **Automated security scanning**: CodeQL analyzes JavaScript/TypeScript code for security vulnerabilities
+  - **Continuous monitoring**: Runs on push, pull requests, and weekly schedule
+  - **Proper language configuration**: Focused on JavaScript/TypeScript to prevent scanning errors
+
+### Fixed
+- **Documentation Updates**: Corrected formatting issues and updated references
+  - **Fixed missing parenthesis** in README.md Apple Home link
+  - **Updated firmware testing reference** to clarify current testing timeframe
+  - **Removed stale test metrics** from changelog to prevent maintenance overhead
+
+### Technical
+- **Automated dependency updates**: Leveraged Dependabot for secure, automated dependency management
+- **Comprehensive quality pipeline**: All quality gates pass with excellent test coverage
+- **Security compliance**: Zero vulnerabilities detected in dependency audit
+
 ## [2.8.1] - 2025-06-21
 
 ### Fixed
@@ -82,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Multiple circuit handling** - correctly handles pumps with multiple circuits at different speeds
 
 ### Technical
-- **Comprehensive test coverage** - 94% coverage for new pump sensor accessories
+- **Comprehensive test coverage** - excellent coverage for new pump sensor accessories
 - **Type-safe implementations** - full TypeScript support for all pump sensor types
 - **Memory efficient** - pump-level sensors reduce accessory count vs feature-level approach
 - **Platform integration** - seamless discovery and update integration with existing architecture
@@ -117,15 +143,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Enhanced search logic** - finds RPM sensors even with pump circuit ID mismatches
   - **Fallback mechanisms** - multiple strategies to locate and update correct sensors
 
-- **📊 Comprehensive Testing**: Added 22 new tests for RPM sensor functionality
+- **📊 Comprehensive Testing**: Added extensive new tests for RPM sensor functionality
   - **PumpRpmAccessory tests** - complete coverage of RPM sensor behavior
   - **Heater RPM logic tests** - pump circuit selection priorities and mapping
   - **Integration tests** - real-world RPM update scenarios
   - **Edge case coverage** - error handling, missing circuits, invalid speeds
 
 - **🏗️ Code Quality**: Maintained world-class standards throughout development
-  - **94.21% test coverage** with 550 comprehensive tests
-  - **100% function coverage** - every method tested
+  - **Excellent test coverage** with comprehensive tests
+  - **Complete function coverage** - every method tested
   - **Production-ready error handling** - graceful degradation for all edge cases
   - **TypeScript safety** - strict type checking for all new functionality
 
@@ -277,8 +303,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Version 2.5.1 was the baseline for this major development infrastructure overhaul. The changes above represent a comprehensive modernization of the development workflow, code quality standards, and documentation accuracy while maintaining the core plugin functionality and excellent test coverage that made this plugin reliable.
 
 ### Key Metrics (v2.6.0)
-- **Test Coverage**: 100% statement coverage, 97%+ branch coverage
-- **Test Suite**: 525 comprehensive tests across 23 test suites
+- **Test Coverage**: Excellent statement and branch coverage
+- **Test Suite**: Comprehensive tests across multiple test suites
 - **Code Quality**: Zero ESLint warnings, Prettier formatted, security scanned
 - **Build Process**: Complete quality gates with lint, format, security, dependency checking, build, and test validation
 - **Node.js Support**: Node 18+, 20+, 22+, 24+ LTS versions

@@ -214,116 +214,189 @@ export const findBodyCircuit = (body: Body, circuits: unknown[]): BaseCircuit | 
   return undefined;
 };
 
+const isValidFeatureObject = (featureObj: unknown): boolean => {
+  if (!isIntelliCenterObject(featureObj)) {
+    return false;
+  }
+  const params = safeGetParams(featureObj);
+  return !!params;
+};
+
+const getFeatureProperties = (featureObj: IntelliCenterObject) => {
+  const params = safeGetParams(featureObj)!;
+  return {
+    subtype: safeGetStringProperty(params, OBJ_SUBTYPE_KEY).toUpperCase(),
+    objId: safeGetStringProperty(featureObj, OBJ_ID_KEY),
+    name: safeGetStringProperty(params, OBJ_NAME_KEY),
+    isCircuit: safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Circuit,
+    featrValue: safeGetStringProperty(params, 'FEATR'),
+  };
+};
+
+const shouldIncludeFeature = (props: ReturnType<typeof getFeatureProperties>, includeAllCircuits: boolean): boolean => {
+  const { subtype, isCircuit, featrValue } = props;
+
+  if (!isCircuit || subtype === 'LEGACY') {
+    return false;
+  }
+
+  return includeAllCircuits || isFeatureEnabled(featrValue, includeAllCircuits) || isIntelliBriteCircuit(subtype);
+};
+
+const isFeatureEnabled = (featrValue: string, includeAllCircuits: boolean): boolean => {
+  return featrValue === 'ON' || (includeAllCircuits && featrValue === 'FEATR');
+};
+
+const isIntelliBriteCircuit = (subtype: string): boolean => {
+  return subtype === CircuitType.IntelliBrite;
+};
+
+const logFilteredFeature = (
+  props: ReturnType<typeof getFeatureProperties>,
+  includeAllCircuits: boolean,
+  shouldInclude: boolean,
+  logger?: Logger,
+) => {
+  if (!logger || !props.isCircuit || props.subtype === 'LEGACY') {
+    return;
+  }
+
+  const { subtype, objId, name, featrValue } = props;
+
+  if (!shouldInclude) {
+    logFilteredOutCircuit(objId, name, subtype, featrValue, logger);
+  } else if (shouldLogIncludedCircuit(includeAllCircuits, featrValue, subtype)) {
+    logIncludedNonFeatureCircuit(objId, name, logger);
+  }
+};
+
+const logFilteredOutCircuit = (objId: string, name: string, subtype: string, featrValue: string, logger: Logger) => {
+  logger.debug(
+    `Circuit filtered out - ID: ${objId}, Name: ${name}, ` +
+      `SubType: ${subtype}, Feature: ${featrValue}, Will send updates but not be accessible in HomeKit`,
+  );
+};
+
+const logIncludedNonFeatureCircuit = (objId: string, name: string, logger: Logger) => {
+  logger.info(`Non-feature circuit included due to includeAllCircuits - ID: ${objId}, Name: ${name}`);
+};
+
+const shouldLogIncludedCircuit = (includeAllCircuits: boolean, featrValue: string, subtype: string): boolean => {
+  const isFeature = featrValue === 'ON' || featrValue === 'FEATR';
+  const isIntelliBrite = subtype === CircuitType.IntelliBrite;
+  return includeAllCircuits && !isFeature && !isIntelliBrite;
+};
+
 const transformFeatures = (circuits: unknown[], includeAllCircuits = false, logger?: Logger): ReadonlyArray<Circuit> => {
   if (!circuits) {
     return [];
   }
 
   return circuits
-    .filter(featureObj => {
-      if (!isIntelliCenterObject(featureObj)) {
-        return false;
-      }
-      const params = safeGetParams(featureObj);
-      if (!params) {
-        return false;
-      }
-      const subtype = safeGetStringProperty(params, OBJ_SUBTYPE_KEY).toUpperCase();
-      const objId = safeGetStringProperty(featureObj, OBJ_ID_KEY);
-      const name = safeGetStringProperty(params, OBJ_NAME_KEY);
+    .filter(featureObj => processFeatureFilter(featureObj, includeAllCircuits, logger))
+    .map(featureObj => transformFeatureToCircuit(featureObj as IntelliCenterObject));
+};
 
-      const isCircuit = safeGetStringProperty(params, OBJ_TYPE_KEY) === ObjectType.Circuit;
-      const featrValue = safeGetStringProperty(params, 'FEATR');
-      const isFeature = featrValue === 'ON' || (includeAllCircuits && featrValue === 'FEATR');
-      // IntelliBrite is not required to be a feature.
-      const isIntelliBrite = subtype === CircuitType.IntelliBrite;
-      const isLegacy = subtype === 'LEGACY';
+const processFeatureFilter = (featureObj: unknown, includeAllCircuits: boolean, logger?: Logger): boolean => {
+  if (!isValidFeatureObject(featureObj)) {
+    return false;
+  }
 
-      const shouldInclude = isCircuit && !isLegacy && (includeAllCircuits || isFeature || isIntelliBrite);
+  const props = getFeatureProperties(featureObj as IntelliCenterObject);
+  const shouldInclude = shouldIncludeFeature(props, includeAllCircuits);
 
-      // Log circuits that are filtered out for debugging
-      if (isCircuit && !isLegacy && !shouldInclude && logger) {
-        logger.debug(
-          `Circuit filtered out - ID: ${objId}, Name: ${name}, ` +
-            `SubType: ${subtype}, Feature: ${featrValue}, Will send updates but not be accessible in HomeKit`,
-        );
-      } else if (isCircuit && !isLegacy && includeAllCircuits && !isFeature && !isIntelliBrite && logger) {
-        logger.info(`Non-feature circuit included due to includeAllCircuits - ID: ${objId}, Name: ${name}`);
-      }
+  logFilteredFeature(props, includeAllCircuits, shouldInclude, logger);
 
-      return shouldInclude;
-    })
-    .map(featureObj => {
-      const obj = featureObj as IntelliCenterObject;
-      const params = safeGetParams(obj);
-      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
-      const circuit = {
-        id: safeGetStringProperty(obj, OBJ_ID_KEY),
-        name: safeGetStringProperty(params, OBJ_NAME_KEY),
-        objectType: ObjectType.Circuit,
-        type: subtype ? subtype.toUpperCase() : undefined,
-      } as Circuit;
-      updateCircuit(circuit, params as IntelliCenterParams);
-      return circuit;
-    });
+  return shouldInclude;
+};
+
+const transformFeatureToCircuit = (obj: IntelliCenterObject): Circuit => {
+  const params = safeGetParams(obj);
+  const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
+  const circuit = {
+    id: safeGetStringProperty(obj, OBJ_ID_KEY),
+    name: safeGetStringProperty(params, OBJ_NAME_KEY),
+    objectType: ObjectType.Circuit,
+    type: subtype ? subtype.toUpperCase() : undefined,
+  } as Circuit;
+  updateCircuit(circuit, params as IntelliCenterParams);
+  return circuit;
 };
 
 const transformPumps = (pumps: unknown[], logger?: Logger): ReadonlyArray<Pump> => {
   if (!pumps) {
     return [];
   }
-  return pumps
-    .filter(pumpObj => {
-      if (!isIntelliCenterObject(pumpObj)) {
-        return false;
-      }
-      const params = safeGetParams(pumpObj);
-      if (!params) {
-        return false;
-      }
-      const objId = safeGetStringProperty(pumpObj, OBJ_ID_KEY);
-      const objType = safeGetStringProperty(params, OBJ_TYPE_KEY);
-      const subType = safeGetStringProperty(params, OBJ_SUBTYPE_KEY).toUpperCase();
-      const isPump = objType === ObjectType.Pump;
-      const isVariableSpeed = VARIABLE_SPEED_PUMP_SUBTYPES.has(subType);
+  return pumps.filter(pumpObj => isValidPumpObject(pumpObj, logger)).map(pumpObj => transformPumpObject(pumpObj as IntelliCenterObject));
+};
 
-      // Debug pump discovery
-      if (isPump && logger) {
-        const pumpName = safeGetStringProperty(params, OBJ_NAME_KEY);
-        if (isVariableSpeed) {
-          logger.debug(`Variable speed pump discovered - ID: ${objId}, SubType: ${subType}, Name: ${pumpName}`);
-        } else {
-          logger.debug(
-            `Pump filtered out - ID: ${objId}, SubType: ${subType}, Name: ${pumpName} ` +
-              `(not in VARIABLE_SPEED_PUMP_SUBTYPES: ${Array.from(VARIABLE_SPEED_PUMP_SUBTYPES).join(', ')})`,
-          );
-        }
-      }
+const isValidPumpObject = (pumpObj: unknown, logger?: Logger): boolean => {
+  if (!isIntelliCenterObject(pumpObj)) {
+    return false;
+  }
 
-      return isPump && isVariableSpeed;
-    })
-    .map(pumpObj => {
-      const obj = pumpObj as IntelliCenterObject;
-      const params = safeGetParams(obj);
-      const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
-      const pump = {
-        id: safeGetStringProperty(obj, OBJ_ID_KEY),
-        name: safeGetStringProperty(params, OBJ_NAME_KEY),
-        objectType: ObjectType.Pump,
-        type: subtype ? subtype.toUpperCase() : undefined,
-        minRpm: safeGetNumberProperty(params, OBJ_MIN_KEY),
-        maxRpm: safeGetNumberProperty(params, OBJ_MAX_KEY),
-        minFlow: safeGetNumberProperty(params, OBJ_MIN_FLOW_KEY),
-        maxFlow: safeGetNumberProperty(params, OBJ_MAX_FLOW_KEY),
-      } as Pump;
-      const objList = safeGetArrayProperty(params, OBJ_LIST_KEY);
-      const circuits = objList.length > 0 ? transformPumpCircuits(pump, objList) : [];
+  const params = safeGetParams(pumpObj);
+  if (!params) {
+    return false;
+  }
 
-      return {
-        ...pump,
-        circuits: circuits,
-      };
-    });
+  const pumpValidation = validatePumpObjectType(pumpObj, params as IntelliCenterParams);
+
+  if (pumpValidation.isPump && logger) {
+    logPumpDiscovery(pumpObj, pumpValidation, logger);
+  }
+
+  return pumpValidation.isPump && pumpValidation.isVariableSpeed;
+};
+
+const validatePumpObjectType = (pumpObj: IntelliCenterObject, params: IntelliCenterParams) => {
+  const objType = safeGetStringProperty(params, OBJ_TYPE_KEY);
+  const subType = safeGetStringProperty(params, OBJ_SUBTYPE_KEY).toUpperCase();
+  const isPump = objType === ObjectType.Pump;
+  const isVariableSpeed = VARIABLE_SPEED_PUMP_SUBTYPES.has(subType);
+
+  return { isPump, isVariableSpeed, objType, subType };
+};
+
+const logPumpDiscovery = (pumpObj: IntelliCenterObject, validation: any, logger: Logger): void => {
+  const objId = safeGetStringProperty(pumpObj, OBJ_ID_KEY);
+  const params = safeGetParams(pumpObj);
+  const pumpName = safeGetStringProperty(params, OBJ_NAME_KEY);
+
+  if (validation.isVariableSpeed) {
+    logger.debug(`Variable speed pump discovered - ID: ${objId}, SubType: ${validation.subType}, Name: ${pumpName}`);
+  } else {
+    logger.debug(
+      `Pump filtered out - ID: ${objId}, SubType: ${validation.subType}, Name: ${pumpName} ` +
+        `(not in VARIABLE_SPEED_PUMP_SUBTYPES: ${Array.from(VARIABLE_SPEED_PUMP_SUBTYPES).join(', ')})`,
+    );
+  }
+};
+
+const transformPumpObject = (obj: IntelliCenterObject): Pump => {
+  const params = safeGetParams(obj);
+  const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
+  const pump = createPumpFromParams(obj, params, subtype);
+  const objList = safeGetArrayProperty(params, OBJ_LIST_KEY);
+  const circuits = objList.length > 0 ? transformPumpCircuits(pump, objList) : [];
+
+  return {
+    ...pump,
+    circuits: circuits,
+  };
+};
+
+const createPumpFromParams = (obj: IntelliCenterObject, params: Record<string, unknown>, subtype?: string): Pump => {
+  return {
+    id: safeGetStringProperty(obj, OBJ_ID_KEY),
+    name: safeGetStringProperty(params, OBJ_NAME_KEY),
+    objectType: ObjectType.Pump,
+    type: subtype ? subtype.toUpperCase() : undefined,
+    minRpm: safeGetNumberProperty(params, OBJ_MIN_KEY),
+    maxRpm: safeGetNumberProperty(params, OBJ_MAX_KEY),
+    minFlow: safeGetNumberProperty(params, OBJ_MIN_FLOW_KEY),
+    maxFlow: safeGetNumberProperty(params, OBJ_MAX_FLOW_KEY),
+  } as Pump;
 };
 
 const transformTempSensors = (sensors: unknown[]): ReadonlyArray<Sensor> => {
@@ -495,17 +568,36 @@ export const mergeResponseArray = (target: MergeableArray, responseToAdd: Mergea
 
 export const mergeResponse = (target: MergeableObject, responseToAdd: MergeableObject): void => {
   for (const key in responseToAdd) {
-    if (Object.prototype.hasOwnProperty.call(responseToAdd, key) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
-      if (target[key] && isObject(target[key] as Record<string, unknown>) && isObject(responseToAdd[key] as Record<string, unknown>)) {
-        if (Array.isArray(target[key]) && Array.isArray(responseToAdd[key])) {
-          mergeResponseArray(target[key] as MergeableArray, responseToAdd[key] as MergeableArray);
-        } else {
-          mergeResponse(target[key] as MergeableObject, responseToAdd[key] as MergeableObject);
-        }
-      } else {
-        target[key] = responseToAdd[key];
-      }
+    if (isSafePropertyKey(responseToAdd, key)) {
+      mergePropertyValue(target, responseToAdd, key);
     }
+  }
+};
+
+const isSafePropertyKey = (obj: MergeableObject, key: string): boolean => {
+  return Object.prototype.hasOwnProperty.call(obj, key) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
+};
+
+const mergePropertyValue = (target: MergeableObject, source: MergeableObject, key: string): void => {
+  const targetValue = target[key];
+  const sourceValue = source[key];
+
+  if (shouldMergeNestedObject(targetValue, sourceValue)) {
+    mergeNestedValue(targetValue, sourceValue);
+  } else {
+    target[key] = sourceValue;
+  }
+};
+
+const shouldMergeNestedObject = (targetValue: unknown, sourceValue: unknown): boolean => {
+  return !!targetValue && isObject(targetValue as Record<string, unknown>) && isObject(sourceValue as Record<string, unknown>);
+};
+
+const mergeNestedValue = (targetValue: unknown, sourceValue: unknown): void => {
+  if (Array.isArray(targetValue) && Array.isArray(sourceValue)) {
+    mergeResponseArray(targetValue as MergeableArray, sourceValue as MergeableArray);
+  } else {
+    mergeResponse(targetValue as MergeableObject, sourceValue as MergeableObject);
   }
 };
 
