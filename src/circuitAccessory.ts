@@ -27,61 +27,75 @@ const MODEL = 'Circuit';
  * Each accessory may expose multiple services of different service types.
  */
 export class CircuitAccessory {
-  private service: Service;
-  private circuit: Circuit;
-  private panel: Panel;
-  private module: Module | null;
+  private service!: Service;
+  private circuit!: Circuit;
+  private panel!: Panel;
+  private module!: Module | null;
   private pumpCircuit: PumpCircuit | undefined;
 
   constructor(
     private readonly platform: PentairPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-    this.module = accessory.context.module as Module;
-    this.panel = accessory.context.panel as Panel;
-    this.circuit = accessory.context.circuit as Circuit;
-    this.pumpCircuit = accessory.context.pumpCircuit as PumpCircuit;
+    this.initializeContext();
+    this.setupAccessoryInformation();
+    this.setupService();
+    this.configureServiceCharacteristics();
+    this.configureFanService();
+  }
 
+  private initializeContext(): void {
+    this.module = this.accessory.context.module as Module;
+    this.panel = this.accessory.context.panel as Panel;
+    this.circuit = this.accessory.context.circuit as Circuit;
+    this.pumpCircuit = this.accessory.context.pumpCircuit as PumpCircuit;
+  }
+
+  private setupAccessoryInformation(): void {
     const serial = this.module ? `${this.panel.id}.${this.module.id}.${this.circuit.id}` : `${this.panel.id}.${this.circuit.id}`;
     this.accessory
       .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, MANUFACTURER)
       .setCharacteristic(this.platform.Characteristic.Model, MODEL)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, serial);
+  }
 
+  private setupService(): void {
     if (CircuitType.IntelliBrite === this.circuit.type) {
       this.service =
         this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
-
-      this.service
-        .getCharacteristic(this.platform.Characteristic.Hue)
-        .onSet(this.setColorHue.bind(this))
-        .onGet(this.getColorHue.bind(this));
-
-      this.service
-        .getCharacteristic(this.platform.Characteristic.Saturation)
-        .onSet(this.setColorSaturation.bind(this))
-        .onGet(this.getColorSaturation.bind(this));
-
-      this.service
-        .getCharacteristic(this.platform.Characteristic.ColorTemperature)
-        .onSet(this.setColorTemperature.bind(this))
-        .onGet(this.getColorTemperature.bind(this));
-
-      this.service
-        .getCharacteristic(this.platform.Characteristic.Brightness)
-        .onSet(this.setBrightness.bind(this))
-        .onGet(this.getBrightness.bind(this));
+      this.setupLightbulbCharacteristics();
     } else {
       this.service = this.accessory.getService(this.platform.Service.Switch) || this.accessory.addService(this.platform.Service.Switch);
     }
+  }
 
+  private setupLightbulbCharacteristics(): void {
+    this.service.getCharacteristic(this.platform.Characteristic.Hue).onSet(this.setColorHue.bind(this)).onGet(this.getColorHue.bind(this));
+
+    this.service
+      .getCharacteristic(this.platform.Characteristic.Saturation)
+      .onSet(this.setColorSaturation.bind(this))
+      .onGet(this.getColorSaturation.bind(this));
+
+    this.service
+      .getCharacteristic(this.platform.Characteristic.ColorTemperature)
+      .onSet(this.setColorTemperature.bind(this))
+      .onGet(this.getColorTemperature.bind(this));
+
+    this.service
+      .getCharacteristic(this.platform.Characteristic.Brightness)
+      .onSet(this.setBrightness.bind(this))
+      .onGet(this.getBrightness.bind(this));
+  }
+
+  private configureServiceCharacteristics(): void {
     this.service.setCharacteristic(this.platform.Characteristic.Name, this.circuit.name);
-
     this.service.updateCharacteristic(this.platform.Characteristic.On, this.getCircuitStatus());
-
     this.service.getCharacteristic(this.platform.Characteristic.On).onSet(this.setOn.bind(this)).onGet(this.getOn.bind(this));
+  }
 
+  private configureFanService(): void {
     const fanService = this.accessory.getService(this.platform.Service.Fan);
 
     if (this.pumpCircuit && this.platform.getConfig().supportVSP) {

@@ -44,6 +44,7 @@ module.exports = [
       'no-multi-spaces': ['warn', { 'ignoreEOLComments': true }],
       'no-trailing-spaces': ['warn'],
       'lines-between-class-members': ['warn', 'always', {'exceptAfterSingleLine': true}],
+      'complexity': ['error', { 'max': 15 }],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',

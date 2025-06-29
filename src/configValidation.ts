@@ -20,6 +20,17 @@ export interface TemperatureUnitValidationResult {
   warning?: string;
 }
 
+interface TemperatureStats {
+  avgTemp: number;
+  minTemp: number;
+  maxTemp: number;
+}
+
+interface TemperatureDetectionResult {
+  unit: TemperatureUnits;
+  confidence: number;
+}
+
 export type PentairConfig = {
   ipAddress: string;
   username: string;
@@ -34,6 +45,120 @@ export type PentairConfig = {
 } & PlatformConfig;
 
 export class ConfigValidator {
+  private static validateRequiredFields(config: PlatformConfig, errors: string[], warnings: string[], sanitizedConfig: PentairConfig) {
+    this.validateRequiredIpAddress(config, errors, sanitizedConfig);
+    this.validateRequiredUsername(config, errors, sanitizedConfig);
+    this.validateRequiredPassword(config, errors, warnings, sanitizedConfig);
+  }
+
+  private static validateRequiredIpAddress(config: PlatformConfig, errors: string[], sanitizedConfig: PentairConfig) {
+    if (!config.ipAddress || typeof config.ipAddress !== 'string') {
+      errors.push('ipAddress is required and must be a string');
+    } else {
+      const ipValidation = this.validateIpAddress(config.ipAddress);
+      if (!ipValidation.isValid) {
+        errors.push(`ipAddress is invalid: ${ipValidation.error}`);
+      } else {
+        sanitizedConfig.ipAddress = config.ipAddress;
+      }
+    }
+  }
+
+  private static validateRequiredUsername(config: PlatformConfig, errors: string[], sanitizedConfig: PentairConfig) {
+    if (!config.username || typeof config.username !== 'string') {
+      errors.push('username is required and must be a string');
+    } else {
+      const usernameValidation = this.validateUsername(config.username);
+      if (!usernameValidation.isValid) {
+        errors.push(`username is invalid: ${usernameValidation.error}`);
+      } else {
+        sanitizedConfig.username = usernameValidation.sanitized || config.username;
+      }
+    }
+  }
+
+  private static validateRequiredPassword(config: PlatformConfig, errors: string[], warnings: string[], sanitizedConfig: PentairConfig) {
+    if (!config.password || typeof config.password !== 'string') {
+      errors.push('password is required and must be a string');
+    } else {
+      const passwordValidation = this.validatePassword(config.password);
+      if (!passwordValidation.isValid) {
+        errors.push(`password is invalid: ${passwordValidation.error}`);
+      } else {
+        sanitizedConfig.password = passwordValidation.sanitized || config.password;
+        if (passwordValidation.warning) {
+          warnings.push(passwordValidation.warning);
+        }
+      }
+    }
+  }
+
+  private static validateTemperatureUnits(config: PlatformConfig, errors: string[], warnings: string[], sanitizedConfig: PentairConfig) {
+    if (!config.temperatureUnits) {
+      warnings.push('temperatureUnits not specified, defaulting to Fahrenheit');
+      sanitizedConfig.temperatureUnits = TemperatureUnits.F;
+    } else if (!Object.values(TemperatureUnits).includes(config.temperatureUnits as TemperatureUnits)) {
+      errors.push(`temperatureUnits must be '${TemperatureUnits.F}' or '${TemperatureUnits.C}'`);
+    } else {
+      sanitizedConfig.temperatureUnits = config.temperatureUnits as TemperatureUnits;
+    }
+  }
+
+  private static validateTemperatureRangeConfig(config: PlatformConfig, errors: string[], sanitizedConfig: PentairConfig) {
+    const tempValidation = this.validateTemperatureRange(
+      config.minimumTemperature,
+      config.maximumTemperature,
+      (config.temperatureUnits as TemperatureUnits) || TemperatureUnits.F,
+    );
+    if (!tempValidation.isValid) {
+      errors.push(tempValidation.error!);
+    }
+    if (tempValidation.sanitizedMin !== undefined) {
+      sanitizedConfig.minimumTemperature = tempValidation.sanitizedMin;
+    }
+    if (tempValidation.sanitizedMax !== undefined) {
+      sanitizedConfig.maximumTemperature = tempValidation.sanitizedMax;
+    }
+  }
+
+  private static validateOptionalFields(config: PlatformConfig, warnings: string[], sanitizedConfig: PentairConfig) {
+    // Boolean fields with defaults
+    sanitizedConfig.supportVSP = this.validateBoolean(config.supportVSP, false);
+    sanitizedConfig.airTemp = this.validateBoolean(config.airTemp, true);
+    sanitizedConfig.includeAllCircuits = this.validateBoolean(config.includeAllCircuits, false);
+
+    // Buffer size validation
+    this.validateBufferSizeConfig(config, warnings, sanitizedConfig);
+  }
+
+  private static validateBufferSizeConfig(config: PlatformConfig, warnings: string[], sanitizedConfig: PentairConfig) {
+    if (config.maxBufferSize !== undefined) {
+      const bufferValidation = this.validateBufferSize(config.maxBufferSize);
+      if (!bufferValidation.isValid) {
+        warnings.push(`Invalid maxBufferSize: ${bufferValidation.error}. Using default.`);
+        sanitizedConfig.maxBufferSize = 1048576; // 1MB default
+      } else {
+        sanitizedConfig.maxBufferSize = bufferValidation.sanitizedValue!;
+      }
+    } else {
+      sanitizedConfig.maxBufferSize = 1048576; // 1MB default
+    }
+  }
+
+  private static performSecurityChecks(config: PlatformConfig, warnings: string[]) {
+    if (config.ipAddress && this.isPrivateNetwork(config.ipAddress)) {
+      // This is good - internal network
+    } else if (config.ipAddress) {
+      warnings.push('IP address appears to be on a public network. Ensure your IntelliCenter is properly secured.');
+    }
+  }
+
+  private static finalizeSanitizedConfig(sanitizedConfig: PentairConfig) {
+    if (sanitizedConfig.ipAddress) {
+      sanitizedConfig.ipAddress = sanitizedConfig.ipAddress.trim();
+    }
+  }
+
   static validate(config: PlatformConfig): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -50,98 +175,13 @@ export class ConfigValidator {
       name: config.name,
     } as PentairConfig;
 
-    // Required field validation
-    if (!config.ipAddress || typeof config.ipAddress !== 'string') {
-      errors.push('ipAddress is required and must be a string');
-    } else {
-      const ipValidation = this.validateIpAddress(config.ipAddress);
-      if (!ipValidation.isValid) {
-        errors.push(`ipAddress is invalid: ${ipValidation.error}`);
-      } else {
-        sanitizedConfig.ipAddress = config.ipAddress;
-      }
-    }
-
-    if (!config.username || typeof config.username !== 'string') {
-      errors.push('username is required and must be a string');
-    } else {
-      const usernameValidation = this.validateUsername(config.username);
-      if (!usernameValidation.isValid) {
-        errors.push(`username is invalid: ${usernameValidation.error}`);
-      } else {
-        sanitizedConfig.username = usernameValidation.sanitized || config.username;
-      }
-    }
-
-    if (!config.password || typeof config.password !== 'string') {
-      errors.push('password is required and must be a string');
-    } else {
-      const passwordValidation = this.validatePassword(config.password);
-      if (!passwordValidation.isValid) {
-        errors.push(`password is invalid: ${passwordValidation.error}`);
-      } else {
-        sanitizedConfig.password = passwordValidation.sanitized || config.password;
-        if (passwordValidation.warning) {
-          warnings.push(passwordValidation.warning);
-        }
-      }
-    }
-
-    // Temperature units validation
-    if (!config.temperatureUnits) {
-      warnings.push('temperatureUnits not specified, defaulting to Fahrenheit');
-      sanitizedConfig.temperatureUnits = TemperatureUnits.F;
-    } else if (!Object.values(TemperatureUnits).includes(config.temperatureUnits as TemperatureUnits)) {
-      errors.push(`temperatureUnits must be '${TemperatureUnits.F}' or '${TemperatureUnits.C}'`);
-    } else {
-      sanitizedConfig.temperatureUnits = config.temperatureUnits as TemperatureUnits;
-    }
-
-    // Temperature range validation
-    const tempValidation = this.validateTemperatureRange(
-      config.minimumTemperature,
-      config.maximumTemperature,
-      (config.temperatureUnits as TemperatureUnits) || TemperatureUnits.F,
-    );
-    if (!tempValidation.isValid) {
-      errors.push(tempValidation.error!);
-    }
-    if (tempValidation.sanitizedMin !== undefined) {
-      sanitizedConfig.minimumTemperature = tempValidation.sanitizedMin;
-    }
-    if (tempValidation.sanitizedMax !== undefined) {
-      sanitizedConfig.maximumTemperature = tempValidation.sanitizedMax;
-    }
-
-    // Boolean field validation with defaults
-    sanitizedConfig.supportVSP = this.validateBoolean(config.supportVSP, false);
-    sanitizedConfig.airTemp = this.validateBoolean(config.airTemp, true);
-    sanitizedConfig.includeAllCircuits = this.validateBoolean(config.includeAllCircuits, false);
-
-    // Buffer size validation
-    if (config.maxBufferSize !== undefined) {
-      const bufferValidation = this.validateBufferSize(config.maxBufferSize);
-      if (!bufferValidation.isValid) {
-        warnings.push(`Invalid maxBufferSize: ${bufferValidation.error}. Using default.`);
-        sanitizedConfig.maxBufferSize = 1048576; // 1MB default
-      } else {
-        sanitizedConfig.maxBufferSize = bufferValidation.sanitizedValue!;
-      }
-    } else {
-      sanitizedConfig.maxBufferSize = 1048576; // 1MB default
-    }
-
-    // Security warnings
-    if (config.ipAddress && this.isPrivateNetwork(config.ipAddress)) {
-      // This is good - internal network
-    } else if (config.ipAddress) {
-      warnings.push('IP address appears to be on a public network. Ensure your IntelliCenter is properly secured.');
-    }
-
-    // Final sanitization for IP address
-    if (sanitizedConfig.ipAddress) {
-      sanitizedConfig.ipAddress = sanitizedConfig.ipAddress.trim();
-    }
+    // Validate all sections
+    this.validateRequiredFields(config, errors, warnings, sanitizedConfig);
+    this.validateTemperatureUnits(config, errors, warnings, sanitizedConfig);
+    this.validateTemperatureRangeConfig(config, errors, sanitizedConfig);
+    this.validateOptionalFields(config, warnings, sanitizedConfig);
+    this.performSecurityChecks(config, warnings);
+    this.finalizeSanitizedConfig(sanitizedConfig);
 
     const isValid = errors.length === 0;
 
@@ -208,33 +248,42 @@ export class ConfigValidator {
     return { isValid: true, sanitized };
   }
 
+  private static parseTemperatureValue(value: unknown, units: TemperatureUnits, isMin: boolean): number {
+    if (typeof value === 'string') {
+      return parseFloat(value);
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    // Set defaults based on units
+    if (isMin) {
+      return units === TemperatureUnits.F ? 40 : 4;
+    }
+    return units === TemperatureUnits.F ? 104 : 40;
+  }
+
+  private static validateTemperatureBounds(temp: number, units: TemperatureUnits, isMin: boolean): { isValid: boolean; error?: string } {
+    if (units === TemperatureUnits.F) {
+      const bounds = isMin ? { min: 32, max: 120, label: 'Minimum' } : { min: 50, max: 120, label: 'Maximum' };
+      if (temp < bounds.min || temp > bounds.max) {
+        return { isValid: false, error: `${bounds.label} temperature must be between ${bounds.min}°F and ${bounds.max}°F` };
+      }
+    } else {
+      const bounds = isMin ? { min: 0, max: 50, label: 'Minimum' } : { min: 10, max: 50, label: 'Maximum' };
+      if (temp < bounds.min || temp > bounds.max) {
+        return { isValid: false, error: `${bounds.label} temperature must be between ${bounds.min}°C and ${bounds.max}°C` };
+      }
+    }
+    return { isValid: true };
+  }
+
   private static validateTemperatureRange(
     min: unknown,
     max: unknown,
     units: TemperatureUnits,
   ): { isValid: boolean; error?: string; sanitizedMin?: number; sanitizedMax?: number } {
-    let minTemp: number;
-    let maxTemp: number;
-
-    // Convert and validate minimum temperature
-    if (typeof min === 'string') {
-      minTemp = parseFloat(min);
-    } else if (typeof min === 'number') {
-      minTemp = min;
-    } else {
-      // Set defaults based on units
-      minTemp = units === TemperatureUnits.F ? 40 : 4;
-    }
-
-    // Convert and validate maximum temperature
-    if (typeof max === 'string') {
-      maxTemp = parseFloat(max);
-    } else if (typeof max === 'number') {
-      maxTemp = max;
-    } else {
-      // Set defaults based on units
-      maxTemp = units === TemperatureUnits.F ? 104 : 40;
-    }
+    const minTemp = this.parseTemperatureValue(min, units, true);
+    const maxTemp = this.parseTemperatureValue(max, units, false);
 
     if (isNaN(minTemp) || isNaN(maxTemp)) {
       return { isValid: false, error: 'Temperature values must be valid numbers' };
@@ -244,21 +293,14 @@ export class ConfigValidator {
       return { isValid: false, error: 'Minimum temperature must be less than maximum temperature' };
     }
 
-    // Validate reasonable ranges based on units
-    if (units === TemperatureUnits.F) {
-      if (minTemp < 32 || minTemp > 120) {
-        return { isValid: false, error: 'Minimum temperature must be between 32°F and 120°F' };
-      }
-      if (maxTemp < 50 || maxTemp > 120) {
-        return { isValid: false, error: 'Maximum temperature must be between 50°F and 120°F' };
-      }
-    } else {
-      if (minTemp < 0 || minTemp > 50) {
-        return { isValid: false, error: 'Minimum temperature must be between 0°C and 50°C' };
-      }
-      if (maxTemp < 10 || maxTemp > 50) {
-        return { isValid: false, error: 'Maximum temperature must be between 10°C and 50°C' };
-      }
+    const minValidation = this.validateTemperatureBounds(minTemp, units, true);
+    if (!minValidation.isValid) {
+      return minValidation;
+    }
+
+    const maxValidation = this.validateTemperatureBounds(maxTemp, units, false);
+    if (!maxValidation.isValid) {
+      return maxValidation;
     }
 
     return {
@@ -353,78 +395,149 @@ export class ConfigValidator {
     configuredUnit: TemperatureUnits,
   ): TemperatureUnitValidationResult {
     if (temperatureReadings.length === 0) {
-      return {
-        isConsistent: true, // No data to analyze yet
-        detectedUnit: null,
-        configuredUnit,
-        analysisCount: 0,
-      };
+      return this.createValidationResult(true, null, configuredUnit, 0);
     }
 
-    // Filter out invalid readings
-    const validReadings = temperatureReadings.filter(
-      temp => !isNaN(temp) && temp !== null && temp !== undefined && temp > -50 && temp < 200,
-    );
+    const validReadings = this.filterValidTemperatureReadings(temperatureReadings);
 
     if (validReadings.length < 3) {
+      return this.createValidationResult(true, null, configuredUnit, validReadings.length);
+    }
+
+    const processedReadings = this.processValidTemperatureReadings(validReadings);
+
+    if (!processedReadings) {
+      return this.createValidationResult(true, null, configuredUnit, validReadings.length);
+    }
+
+    return this.validateDetectedTemperatureUnit(processedReadings, configuredUnit, validReadings.length);
+  }
+
+  private static processValidTemperatureReadings(validReadings: number[]) {
+    const tempStats = this.calculateTemperatureStats(validReadings);
+    const detectionResult = this.detectTemperatureUnit(tempStats);
+
+    return detectionResult ? { validReadings, tempStats, detectionResult } : null;
+  }
+
+  private static validateDetectedTemperatureUnit(
+    processed: { validReadings: number[]; tempStats: TemperatureStats; detectionResult: TemperatureDetectionResult },
+    configuredUnit: TemperatureUnits,
+    validReadingsCount: number,
+  ): TemperatureUnitValidationResult {
+    const { tempStats, detectionResult } = processed;
+    const isConsistent = detectionResult.unit === configuredUnit;
+    const isHighConfidence = detectionResult.confidence > 0.7;
+
+    if (!isConsistent && isHighConfidence) {
+      return this.createInconsistentResult(detectionResult.unit, configuredUnit, validReadingsCount, tempStats);
+    }
+
+    return this.createValidationResult(true, detectionResult.unit, configuredUnit, validReadingsCount);
+  }
+
+  private static filterValidTemperatureReadings(readings: number[]): number[] {
+    return readings.filter(temp => !isNaN(temp) && temp !== null && temp !== undefined && temp > -50 && temp < 200);
+  }
+
+  private static calculateTemperatureStats(readings: number[]): TemperatureStats {
+    const avgTemp = readings.reduce((sum, temp) => sum + temp, 0) / readings.length;
+    const minTemp = Math.min(...readings);
+    const maxTemp = Math.max(...readings);
+    return { avgTemp, minTemp, maxTemp };
+  }
+
+  private static detectTemperatureUnit(stats: TemperatureStats): TemperatureDetectionResult | null {
+    const fahrenheitResult = this.tryDetectFahrenheit(stats);
+    if (fahrenheitResult) {
+      return fahrenheitResult;
+    }
+
+    const celsiusResult = this.tryDetectCelsius(stats);
+    if (celsiusResult) {
+      return celsiusResult;
+    }
+
+    return null;
+  }
+
+  private static tryDetectFahrenheit(stats: TemperatureStats): TemperatureDetectionResult | null {
+    const { avgTemp, minTemp, maxTemp } = stats;
+    const fahrenheitRanges = { avg: [65, 110] as [number, number], min: [50, 120] as [number, number], max: [50, 120] as [number, number] };
+
+    if (this.isWithinTemperatureRanges(avgTemp, minTemp, maxTemp, fahrenheitRanges)) {
       return {
-        isConsistent: true, // Insufficient data for reliable analysis
-        detectedUnit: null,
-        configuredUnit,
-        analysisCount: validReadings.length,
+        unit: TemperatureUnits.F,
+        confidence: this.calculateConfidence([avgTemp, minTemp, maxTemp], TemperatureUnits.F),
       };
     }
 
-    const avgTemp = validReadings.reduce((sum, temp) => sum + temp, 0) / validReadings.length;
-    const minTemp = Math.min(...validReadings);
-    const maxTemp = Math.max(...validReadings);
+    return null;
+  }
 
-    // Determine likely temperature unit based on typical pool/spa temperature ranges
-    let detectedUnit: TemperatureUnits;
-    let confidence = 0;
+  private static tryDetectCelsius(stats: TemperatureStats): TemperatureDetectionResult | null {
+    const { avgTemp, minTemp, maxTemp } = stats;
+    const celsiusRanges = { avg: [15, 45] as [number, number], min: [5, 50] as [number, number], max: [5, 50] as [number, number] };
 
-    // Fahrenheit detection (typical pool: 70-90°F, spa: 95-104°F)
-    if (avgTemp >= 65 && avgTemp <= 110 && minTemp >= 50 && maxTemp <= 120) {
-      detectedUnit = TemperatureUnits.F;
-      confidence = this.calculateConfidence(validReadings, TemperatureUnits.F);
-    } else if (avgTemp >= 15 && avgTemp <= 45 && minTemp >= 5 && maxTemp <= 50) {
-      // Celsius detection (typical pool: 21-32°C, spa: 35-40°C)
-      detectedUnit = TemperatureUnits.C;
-      confidence = this.calculateConfidence(validReadings, TemperatureUnits.C);
-    } else {
-      // Ambiguous range - could be either unit
+    if (this.isWithinTemperatureRanges(avgTemp, minTemp, maxTemp, celsiusRanges)) {
       return {
-        isConsistent: true, // Can't determine, assume it's correct
-        detectedUnit: null,
-        configuredUnit,
-        analysisCount: validReadings.length,
+        unit: TemperatureUnits.C,
+        confidence: this.calculateConfidence([avgTemp, minTemp, maxTemp], TemperatureUnits.C),
       };
     }
 
-    const isConsistent = detectedUnit === configuredUnit;
+    return null;
+  }
 
-    // Only report inconsistency if we have high confidence
-    if (!isConsistent && confidence > 0.7) {
-      const expectedRange = configuredUnit === TemperatureUnits.F ? '70-104°F for pools/spas' : '21-40°C for pools/spas';
-      const actualRange = `${minTemp.toFixed(1)}-${maxTemp.toFixed(1)}°${detectedUnit}`;
+  private static isWithinTemperatureRanges(
+    avgTemp: number,
+    minTemp: number,
+    maxTemp: number,
+    ranges: { avg: [number, number]; min: [number, number]; max: [number, number] },
+  ): boolean {
+    return (
+      avgTemp >= ranges.avg[0] &&
+      avgTemp <= ranges.avg[1] &&
+      minTemp >= ranges.min[0] &&
+      minTemp <= ranges.min[1] &&
+      maxTemp >= ranges.max[0] &&
+      maxTemp <= ranges.max[1]
+    );
+  }
 
-      return {
-        isConsistent: false,
-        detectedUnit,
-        configuredUnit,
-        analysisCount: validReadings.length,
-        warning:
-          `Temperature unit mismatch detected. Configured: ${configuredUnit}, ` +
-          `but readings appear to be in ${detectedUnit} (${actualRange}). ` +
-          `Expected range: ${expectedRange}. Please verify your temperatureUnits setting.`,
-      };
-    }
-
+  private static createValidationResult(
+    isConsistent: boolean,
+    detectedUnit: TemperatureUnits | null,
+    configuredUnit: TemperatureUnits,
+    analysisCount: number,
+  ): TemperatureUnitValidationResult {
     return {
-      isConsistent: true,
+      isConsistent,
       detectedUnit,
       configuredUnit,
-      analysisCount: validReadings.length,
+      analysisCount,
+    };
+  }
+
+  private static createInconsistentResult(
+    detectedUnit: TemperatureUnits,
+    configuredUnit: TemperatureUnits,
+    analysisCount: number,
+    stats: TemperatureStats,
+  ): TemperatureUnitValidationResult {
+    const expectedRange = configuredUnit === TemperatureUnits.F ? '70-104°F for pools/spas' : '21-40°C for pools/spas';
+    const actualRange = `${stats.minTemp.toFixed(1)}-${stats.maxTemp.toFixed(1)}°${detectedUnit}`;
+    const warning =
+      `Temperature unit mismatch detected. Configured: ${configuredUnit}, ` +
+      `but readings appear to be in ${detectedUnit} (${actualRange}). ` +
+      `Expected range: ${expectedRange}. Please verify your temperatureUnits setting.`;
+
+    return {
+      isConsistent: false,
+      detectedUnit,
+      configuredUnit,
+      analysisCount,
+      warning,
     };
   }
 
@@ -437,31 +550,33 @@ export class ConfigValidator {
     }
 
     const avgTemp = readings.reduce((sum, temp) => sum + temp, 0) / readings.length;
+    const confidenceRanges = this.getConfidenceRanges(unit);
 
+    return this.determineConfidenceLevel(avgTemp, confidenceRanges);
+  }
+
+  private static getConfidenceRanges(unit: TemperatureUnits) {
     if (unit === TemperatureUnits.F) {
-      // High confidence for typical pool/spa Fahrenheit ranges
-      if (avgTemp >= 70 && avgTemp <= 104) {
-        return 0.9;
-      }
-      if (avgTemp >= 65 && avgTemp <= 110) {
-        return 0.8;
-      }
-      if (avgTemp >= 60 && avgTemp <= 115) {
-        return 0.6;
-      }
-      return 0.3;
+      return [
+        { range: [70, 104] as [number, number], confidence: 0.9 },
+        { range: [65, 110] as [number, number], confidence: 0.8 },
+        { range: [60, 115] as [number, number], confidence: 0.6 },
+      ];
     } else {
-      // High confidence for typical pool/spa Celsius ranges
-      if (avgTemp >= 21 && avgTemp <= 40) {
-        return 0.9;
-      }
-      if (avgTemp >= 18 && avgTemp <= 43) {
-        return 0.8;
-      }
-      if (avgTemp >= 15 && avgTemp <= 45) {
-        return 0.6;
-      }
-      return 0.3;
+      return [
+        { range: [21, 40] as [number, number], confidence: 0.9 },
+        { range: [18, 43] as [number, number], confidence: 0.8 },
+        { range: [15, 45] as [number, number], confidence: 0.6 },
+      ];
     }
+  }
+
+  private static determineConfidenceLevel(avgTemp: number, ranges: Array<{ range: [number, number]; confidence: number }>): number {
+    for (const { range, confidence } of ranges) {
+      if (avgTemp >= range[0] && avgTemp <= range[1]) {
+        return confidence;
+      }
+    }
+    return 0.3;
   }
 }

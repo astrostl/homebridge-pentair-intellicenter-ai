@@ -99,6 +99,14 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
   let mockAPI: jest.Mocked<API>;
   let mockTelnetInstance: jest.Mocked<Telnet>;
   let mockConfig: PlatformConfig;
+  const platformInstances: PentairPlatform[] = [];
+
+  // Helper function to create and track platform instances
+  const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
+    const platform = new PentairPlatform(logger, config, api);
+    platformInstances.push(platform);
+    return platform;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -225,7 +233,11 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
     };
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Clean up all platform instances to prevent timer leaks
+    await Promise.all(platformInstances.map(p => p.cleanup()));
+    platformInstances.length = 0;
+
     jest.useRealTimers();
   });
 
@@ -234,7 +246,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
       const connectionError = new Error('ECONNREFUSED');
       mockTelnetInstance.connect.mockRejectedValue(connectionError);
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Test that the platform handles connection errors through the circuit breaker
       const health = platform.getSystemHealth();
@@ -246,7 +258,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
     it('should handle circuit breaker OPEN state', () => {
       // Setup the platform
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       // Test circuit breaker state directly
       const circuitBreaker = (platform as any).circuitBreaker;
@@ -261,7 +273,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Health Monitoring', () => {
     it('should provide system health status', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const health = platform.getSystemHealth();
 
@@ -274,7 +286,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
     });
 
     it('should reset error handling components', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       platform.resetErrorHandling();
 
@@ -284,7 +296,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Command Queue and Rate Limiting', () => {
     it('should handle rate limiting', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const command: IntelliCenterRequest = {
         command: IntelliCenterRequestCommand.GetQuery,
@@ -302,7 +314,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
     });
 
     it('should sanitize commands before sending', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const maliciousCommand: IntelliCenterRequest = {
         command: IntelliCenterRequestCommand.GetQuery,
@@ -326,7 +338,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
     });
 
     it('should handle connection not alive', () => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const command: IntelliCenterRequest = {
         command: IntelliCenterRequestCommand.GetQuery,
@@ -346,7 +358,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Socket Event Handlers', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle connect event', () => {
@@ -430,7 +442,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Data Event Handler', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle incomplete data chunks', () => {
@@ -484,7 +496,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Device Discovery and Updates', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle discovery response and register accessories', async () => {
@@ -570,7 +582,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Error Response Handling', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle ParseError responses', async () => {
@@ -634,7 +646,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('JSON Serialization', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle circular references in JSON serialization', () => {
@@ -658,7 +670,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Heartbeat and Reconnection', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should trigger reconnection after long silence', () => {
@@ -696,7 +708,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Orphaned Accessory Cleanup', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should clean up orphaned circuit accessories', () => {
@@ -773,7 +785,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Discovery Device Type Sequencing', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should handle discovery response sequencing', async () => {
@@ -821,7 +833,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
 
   describe('Temperature Sensor Discovery Logic', () => {
     beforeEach(() => {
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
     });
 
     it('should skip air temperature sensor when disabled in config', () => {
@@ -837,7 +849,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         sanitizedConfig: configWithoutAirTemp,
       });
 
-      const newPlatform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const newPlatform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const panel = {
         id: 'PNL01',
@@ -899,7 +911,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         sanitizedConfig: null,
       });
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       expect(mockLogger.error).toHaveBeenCalledWith('Configuration validation failed:');
       expect(mockLogger.error).toHaveBeenCalledWith('  - ipAddress is required');
@@ -913,7 +925,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         sanitizedConfig: mockConfigValidator.validate().sanitizedConfig,
       });
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       expect(mockLogger.warn).toHaveBeenCalledWith('Config Warning: Temperature units defaulted to Fahrenheit');
     });
@@ -926,7 +938,7 @@ describe('PentairPlatform - Comprehensive Coverage Tests', () => {
         sanitizedConfig: null,
       });
 
-      platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       expect(() => platform.getConfig()).toThrow('Configuration has not been validated. Cannot return config.');
     });

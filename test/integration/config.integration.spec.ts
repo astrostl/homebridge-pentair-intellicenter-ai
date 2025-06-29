@@ -40,19 +40,26 @@ describe('Configuration Integration Tests', () => {
     jest.clearAllMocks();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Clean up all platform instances to prevent timer leaks
-    platformInstances.forEach(platform => {
+    for (const platform of platformInstances) {
       if (platform && typeof platform.cleanup === 'function') {
-        platform.cleanup();
+        await platform.cleanup();
       }
-    });
+    }
     platformInstances.length = 0;
   });
 
   // Helper function to create and track platform instances
   const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
     const platform = new PentairPlatform(logger, config, api);
+
+    // Immediately clear the timer created in constructor to prevent leaks in tests
+    if ((platform as any).heartbeatInterval) {
+      clearInterval((platform as any).heartbeatInterval);
+      (platform as any).heartbeatInterval = null;
+    }
+
     platformInstances.push(platform);
     return platform;
   };

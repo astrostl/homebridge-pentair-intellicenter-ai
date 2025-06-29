@@ -24,9 +24,10 @@ This file provides comprehensive guidance for Claude Code (claude.ai/code) and h
 - **Security audit**: `npm run security-audit` - Runs npm audit for moderate+ vulnerabilities
 - **Security CI**: `npm run audit-ci` - Enforces security audit with detailed reporting
 - **Security check**: `npm run security-check` - Runs both security audit and audit-ci
+- **Outdated check**: `npm run outdated-check` - Checks for outdated dependencies
 - **Test**: `npm run test` - Runs Jest test suite with coverage reporting
 - **Development**: `npm run watch` - Builds, links, and watches for changes with nodemon
-- **Prepare for publish**: `npm run prepublishOnly` - Runs lint, format check, security check, build, and test in sequence
+- **Prepare for publish**: `npm run prepublishOnly` - Runs lint, format check, security check, outdated check, build, and test in sequence
 
 ## Release Process
 
@@ -237,6 +238,8 @@ Always run `npm run prepublishOnly` after dependency updates to ensure compatibi
 - **Jest cleanup**: Eliminated all timer leaks and open handles in test suite
 - **Coverage excellence**: Maintains ~99%+ line coverage with meaningful tests
 - **Zero warnings**: ESLint configuration enforces zero-warning policy
+- **Cyclomatic complexity**: ESLint enforces maximum complexity of 15 per function
+- **ESLint configuration**: Modern flat config format in `eslint.config.js` with TypeScript support
 - **Security scanning**: Integrated audit-ci and eslint-plugin-security for vulnerability detection
 - **Protocol-specific security**: Balanced security rules that account for legitimate dynamic property access
 - **Manual release process**: Reliable manual workflow with comprehensive quality gates

@@ -1,6 +1,6 @@
 import { PentairPlatform } from '../../src/platform';
 import { HeaterAccessory } from '../../src/heaterAccessory';
-import { API, PlatformAccessory, Service, Logger } from 'homebridge';
+import { API, PlatformAccessory, Service, Logger, PlatformConfig } from 'homebridge';
 import { TemperatureUnits } from '../../src/types';
 
 // Mock Homebridge API and platform
@@ -45,6 +45,14 @@ const mockLogger = {
 describe('HeaterAccessory Comprehensive Coverage Tests', () => {
   let platform: PentairPlatform;
   let mockConfig: any;
+  const platformInstances: PentairPlatform[] = [];
+
+  // Helper function to create and track platform instances
+  const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
+    const platform = new PentairPlatform(logger, config, api);
+    platformInstances.push(platform);
+    return platform;
+  };
 
   beforeEach(() => {
     mockConfig = {
@@ -59,7 +67,13 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
       supportVSP: true,
     };
 
-    platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+    platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
+  });
+
+  afterEach(async () => {
+    // Clean up all platform instances to prevent timer leaks
+    await Promise.all(platformInstances.map(p => p.cleanup()));
+    platformInstances.length = 0;
   });
 
   describe('Missing HeaterAccessory branches', () => {
@@ -136,7 +150,7 @@ describe('HeaterAccessory Comprehensive Coverage Tests', () => {
         supportVSP: true,
       };
 
-      const platform = new PentairPlatform(mockLogger, mockConfig, mockAPI);
+      const platform = createTrackedPlatform(mockLogger, mockConfig, mockAPI);
 
       const mockAccessory = {
         context: {

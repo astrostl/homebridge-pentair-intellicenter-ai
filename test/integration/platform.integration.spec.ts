@@ -169,13 +169,13 @@ describe('Platform Integration Tests', () => {
     };
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Clean up all platform instances to prevent timer leaks
-    platformInstances.forEach(platform => {
+    for (const platform of platformInstances) {
       if (platform && typeof platform.cleanup === 'function') {
-        platform.cleanup();
+        await platform.cleanup();
       }
-    });
+    }
     platformInstances.length = 0;
 
     jest.useRealTimers();
@@ -184,6 +184,13 @@ describe('Platform Integration Tests', () => {
   // Helper function to create and track platform instances
   const createTrackedPlatform = (logger: Logger, config: PlatformConfig, api: API): PentairPlatform => {
     const platform = new PentairPlatform(logger, config, api);
+
+    // Immediately clear the timer created in constructor to prevent leaks in tests
+    if ((platform as any).heartbeatInterval) {
+      clearInterval((platform as any).heartbeatInterval);
+      (platform as any).heartbeatInterval = null;
+    }
+
     platformInstances.push(platform);
     return platform;
   };
@@ -645,6 +652,18 @@ describe('Platform Integration Tests', () => {
       // Set connection as old
       (platform as any).isSocketAlive = true;
       (platform as any).lastMessageReceived = Date.now() - 5 * 60 * 60 * 1000;
+
+      // Recreate heartbeat interval for this specific test (since we clear it in createTrackedPlatform)
+      (platform as any).heartbeatInterval = setInterval(() => {
+        const now = Date.now();
+        const silence = now - (platform as any).lastMessageReceived;
+
+        if ((platform as any).isSocketAlive && silence > 4 * 60 * 60 * 1000 /* 4 hours */) {
+          mockLogger.warn('No data from IntelliCenter in over 4 hours. Closing and restarting connection.');
+          mockTelnetInstance.destroy();
+          (platform as any).isSocketAlive = false;
+        }
+      }, 60000);
 
       // Trigger heartbeat check
       jest.advanceTimersByTime(61000);
