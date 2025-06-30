@@ -20,3 +20,8 @@ Exposes all bodies, all features, and any circuits *marked as features in Intell
 ## Configuration Options
 
 Yes, you need your local IP and your IntelliCenter login. If you enable the option to show VSPs they will expose as a fan that you can use to adjust between your system-configured min/max. It might also blow away your system-configured RPM settings. I consider this feature especially risky and personally disable it. Outside air temp is hopefully straightforward. There is also an option to expose all circuits — while tempting, doing this results in dozens of things getting exposed in Apple Home for me and I only use it for debugging.
+
+## Roadmap
+
+- **Pressure-testing auth necessity**: Investigate whether authentication is truly required for all operations or if some functionality can work without credentials
+- **Cooling support**: Add support for heat pumps in cooling mode and chiller systems for comprehensive temperature control
