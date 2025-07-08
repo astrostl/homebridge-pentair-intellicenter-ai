@@ -60,6 +60,7 @@
               "B1101",
               "B1202"
             ],
+            "coolingEnabled": false,
             "id": "H0001",
             "name": "Gas Heater",
             "objectType": "HEATER",

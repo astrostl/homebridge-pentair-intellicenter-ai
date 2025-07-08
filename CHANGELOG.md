@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.3] - 2025-07-08
+
+### Added
+- **🌡️ Heat Pump Cooling Support**: Complete cooling functionality for heat pump equipped pools
+  - **Dual setpoint thermostats** - separate heating and cooling threshold controls in HomeKit
+  - **Intelligent mode detection** - devices with cooling show OFF/AUTO modes, heating-only shows OFF/HEAT
+  - **Smart current state** - accurately reports HEATING, COOLING, or OFF based on temperature vs setpoints
+  - **Automatic cooling threshold** - HIGH_TEMP parameter support for cooling setpoint management
+  - **Comprehensive cooling logic** - proper deadband handling between heating and cooling setpoints
+
+### Enhanced
+- **🔧 Heater Accessory Architecture**: Sophisticated thermostat control for modern pool equipment
+  - **Cooling capability detection** - automatically detects COOL parameter from IntelliCenter
+  - **Dynamic mode configuration** - valid HomeKit modes adapt based on cooling capability
+  - **Enhanced current state logic** - proper heating/cooling state detection for heat pumps
+  - **Threshold temperature management** - separate heating and cooling setpoint controls
+  - **Protocol integration** - seamless HIGH_TEMP and COOL parameter handling
+
+### Fixed
+- **🎯 Thermostat Mode Accuracy**: Corrected mode reporting for different heater types
+  - **Heat pump detection** - proper AUTO mode for dual-capability devices
+  - **Heating-only compatibility** - maintains existing HEAT mode behavior for standard heaters
+  - **State synchronization** - current heating/cooling state matches actual equipment operation
+  - **Temperature deadband** - prevents oscillation between heating and cooling states
+
+### Technical
+- **Comprehensive test coverage** - extensive cooling functionality test suite
+- **Type safety** - proper TypeScript support for cooling-enabled heaters
+- **Backward compatibility** - existing heating-only configurations unchanged
+- **Protocol compliance** - full IntelliCenter COOL and HIGH_TEMP parameter support
+
 ## [2.8.2] - 2025-06-29
 
 ### Enhanced

@@ -17,6 +17,7 @@ import {
   HEATER_KEY,
   NO_HEATER_ID,
   LOW_TEMP_KEY,
+  HIGH_TEMP_KEY,
   STATUS_KEY,
   THERMOSTAT_STEP_VALUE,
   CURRENT_TEMP_MIN_C,
@@ -105,6 +106,31 @@ export class HeaterAccessory {
         .updateValue(this.lowTemperature || 0);
     }
 
+    // Add cooling setpoint support for heat pumps
+    if (this.heater.coolingEnabled && this.highTemperature) {
+      this.service
+        .getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
+        .onSet(this.setCoolingThresholdTemperature.bind(this))
+        .onGet(this.getCoolingThresholdTemperature.bind(this))
+        .setProps({
+          minValue: this.minValue,
+          maxValue: this.maxValue,
+          minStep: THERMOSTAT_STEP_VALUE,
+        })
+        .updateValue(this.highTemperature || 0);
+
+      this.service
+        .getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+        .onSet(this.setHeatingThresholdTemperature.bind(this))
+        .onGet(this.getHeatingThresholdTemperature.bind(this))
+        .setProps({
+          minValue: this.minValue,
+          maxValue: this.maxValue,
+          minStep: THERMOSTAT_STEP_VALUE,
+        })
+        .updateValue(this.lowTemperature || 0);
+    }
+
     if (this.temperature) {
       this.service
         .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
@@ -117,6 +143,19 @@ export class HeaterAccessory {
         });
     }
 
+    // Determine valid values based on cooling capability
+    const validValues = [this.platform.Characteristic.TargetHeatingCoolingState.OFF];
+    let maxValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+
+    if (this.heater.coolingEnabled) {
+      // For devices with both heating and cooling, only show OFF and AUTO
+      validValues.push(this.platform.Characteristic.TargetHeatingCoolingState.AUTO);
+      maxValue = this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
+    } else {
+      // For heating-only devices, show OFF and HEAT
+      validValues.push(this.platform.Characteristic.TargetHeatingCoolingState.HEAT);
+    }
+
     this.service
       .getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .onGet(this.getMode.bind(this))
@@ -124,28 +163,44 @@ export class HeaterAccessory {
       .updateValue(this.getMode())
       .setProps({
         minValue: this.platform.Characteristic.TargetHeatingCoolingState.OFF,
-        maxValue: this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
-        validValues: [
-          this.platform.Characteristic.TargetHeatingCoolingState.OFF,
-          this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
-        ],
+        maxValue: maxValue,
+        validValues: validValues,
       });
   }
 
   getMode(): CharacteristicValue {
-    return this.body.heaterId === this.heater.id
-      ? this.platform.Characteristic.TargetHeatingCoolingState.HEAT
-      : this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    // If heater is not selected for this body, it's OFF
+    if (this.body.heaterId !== this.heater.id) {
+      return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    }
+
+    // If heater is selected but no cooling capability, it's HEAT
+    if (!this.heater.coolingEnabled) {
+      return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+    }
+
+    // For cooling-enabled heaters, if heater is selected it's AUTO
+    return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
   }
 
   async setMode(value: CharacteristicValue) {
     this.platform.log.info(`Set heat power to ${value} for heater ${this.heater.name}`);
     let heater = this.heater.id;
     let mode = HeatMode.On;
+
     if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
       heater = NO_HEATER_ID;
       mode = HeatMode.Off;
+    } else if (
+      value === this.platform.Characteristic.TargetHeatingCoolingState.AUTO ||
+      value === this.platform.Characteristic.TargetHeatingCoolingState.HEAT ||
+      value === this.platform.Characteristic.TargetHeatingCoolingState.COOL
+    ) {
+      // For AUTO, HEAT, or COOL modes, select this heater
+      heater = this.heater.id;
+      mode = HeatMode.On;
     }
+
     if (mode === HeatMode.On) {
       // Turn on the pump.
       const command = {
@@ -190,8 +245,27 @@ export class HeaterAccessory {
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
-    // If temperature hasn't reached target, it's heating
-    if (this.temperature && this.lowTemperature && this.temperature < this.lowTemperature) {
+    // If no temperature data, return OFF
+    if (!this.temperature) {
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+
+    // For cooling-enabled heaters, check both heating and cooling conditions
+    if (this.heater.coolingEnabled) {
+      // Check if actively cooling (temp above high setpoint)
+      if (this.highTemperature && this.temperature > this.highTemperature) {
+        return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
+      }
+      // Check if actively heating (temp below low setpoint)
+      if (this.lowTemperature && this.temperature < this.lowTemperature) {
+        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      }
+      // If within deadband, system is idle
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+
+    // For heating-only systems, check if actively heating
+    if (this.lowTemperature && this.temperature < this.lowTemperature) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
     }
 
@@ -223,6 +297,52 @@ export class HeaterAccessory {
   }
 
   async getTargetTemperature(): Promise<Nullable<CharacteristicValue>> {
+    return this.lowTemperature || this.minValue;
+  }
+
+  async setCoolingThresholdTemperature(value: CharacteristicValue) {
+    const convertedValue: number = this.isFahrenheit ? Math.round(celsiusToFahrenheit(value as number)) : (value as number);
+
+    this.platform.log.info(
+      `Setting cooling threshold temperature ${value} converted/rounded to: ${convertedValue} for heater ${this.heater.name}`,
+    );
+    const command = {
+      command: IntelliCenterRequestCommand.SetParamList,
+      messageID: uuidv4(),
+      objectList: [
+        {
+          objnam: this.body.id,
+          params: { [HIGH_TEMP_KEY]: `${convertedValue}` } as never,
+        } as CircuitStatusMessage,
+      ],
+    } as IntelliCenterRequest;
+    this.platform.sendCommandNoWait(command);
+  }
+
+  async getCoolingThresholdTemperature(): Promise<Nullable<CharacteristicValue>> {
+    return this.highTemperature || this.maxValue;
+  }
+
+  async setHeatingThresholdTemperature(value: CharacteristicValue) {
+    const convertedValue: number = this.isFahrenheit ? Math.round(celsiusToFahrenheit(value as number)) : (value as number);
+
+    this.platform.log.info(
+      `Setting heating threshold temperature ${value} converted/rounded to: ${convertedValue} for heater ${this.heater.name}`,
+    );
+    const command = {
+      command: IntelliCenterRequestCommand.SetParamList,
+      messageID: uuidv4(),
+      objectList: [
+        {
+          objnam: this.body.id,
+          params: { [LOW_TEMP_KEY]: `${convertedValue}` } as never,
+        } as CircuitStatusMessage,
+      ],
+    } as IntelliCenterRequest;
+    this.platform.sendCommandNoWait(command);
+  }
+
+  async getHeatingThresholdTemperature(): Promise<Nullable<CharacteristicValue>> {
     return this.lowTemperature || this.minValue;
   }
 }
