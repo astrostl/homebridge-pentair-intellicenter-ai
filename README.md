@@ -24,4 +24,3 @@ Yes, you need your local IP and your IntelliCenter login. If you enable the opti
 ## Roadmap
 
 - **Pressure-testing auth necessity**: Investigate whether authentication is truly required for all operations or if some functionality can work without credentials
-- **Cooling support**: Add support for heat pumps in cooling mode and chiller systems for comprehensive temperature control
