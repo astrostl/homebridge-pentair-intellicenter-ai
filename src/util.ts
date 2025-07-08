@@ -74,6 +74,7 @@ const safeGetParams = (obj: IntelliCenterObject): Record<string, unknown> => {
 import {
   CIRCUIT_KEY,
   CIRCUITS_KEY,
+  COOL_KEY,
   GPM_KEY,
   LAST_TEMP_KEY,
   OBJ_ID_KEY,
@@ -110,12 +111,15 @@ const transformHeaters = (heaters: unknown[]): ReadonlyArray<Heater> => {
       const params = safeGetParams(obj);
       const bodyIdsString = safeGetStringProperty(params, ObjectType.Body);
       const subtype = safeGetStringPropertyOptional(params, OBJ_SUBTYPE_KEY);
+      const coolValue = safeGetStringPropertyOptional(params, COOL_KEY);
+
       return {
         id: safeGetStringProperty(obj, OBJ_ID_KEY),
         name: safeGetStringProperty(params, OBJ_NAME_KEY),
         objectType: ObjectType.Heater,
         type: subtype ? subtype.toUpperCase() : undefined,
         bodyIds: bodyIdsString ? bodyIdsString.split(' ') : [],
+        coolingEnabled: coolValue !== undefined && coolValue !== 'OFF',
       } as Heater;
     });
 };
