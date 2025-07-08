@@ -189,6 +189,7 @@ export type Body = {
 
 export type Heater = {
   bodyIds: ReadonlyArray<string>;
+  coolingEnabled?: boolean;
 } & Circuit;
 
 export type Module = {
