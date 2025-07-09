@@ -24,3 +24,5 @@ Yes, you need your local IP and your IntelliCenter login. If you enable the opti
 ## Roadmap
 
 - **Pressure-testing auth necessity**: Investigate whether authentication is truly required for all operations or if some functionality can work without credentials
+- **Info logging cleanup**: Review and reduce excessive .info() logging statements throughout the codebase to improve log clarity and reduce noise
+- **More robust thermal state detection**: Enhance heater state detection to better handle edge cases and provide more accurate heating/cooling status reporting
