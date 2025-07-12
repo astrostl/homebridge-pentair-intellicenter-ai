@@ -67,6 +67,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   // this is used to track restored cached accessories
   public readonly accessoryMap: Map<string, PlatformAccessory> = new Map();
   public readonly heaters: Map<string, PlatformAccessory> = new Map();
+  public readonly heaterInstances: Map<string, HeaterAccessory> = new Map();
 
   private connection!: Telnet;
   private maxBufferSize!: number;
@@ -998,7 +999,15 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         this.log.debug(`Updating heater ${heaterAccessory.displayName}`);
         heaterAccessory.context.body = body;
         this.api.updatePlatformAccessories([heaterAccessory]);
-        new HeaterAccessory(this, heaterAccessory);
+
+        // Get or create HeaterAccessory instance and update temperature ranges
+        let heaterInstance = this.heaterInstances.get(heaterAccessory.UUID);
+        if (!heaterInstance) {
+          heaterInstance = new HeaterAccessory(this, heaterAccessory);
+          this.heaterInstances.set(heaterAccessory.UUID, heaterInstance);
+        } else {
+          heaterInstance.updateTemperatureRanges(body);
+        }
 
         // Update the corresponding heater RPM sensor
         this.updateHeaterRpmSensor(heaterAccessory.context.heater, body);
@@ -1590,6 +1599,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     accessoriesToRemove.push(accessory);
     this.accessoryMap.delete(accessoryUuid);
     this.heaters.delete(accessoryUuid);
+    this.heaterInstances.delete(accessoryUuid);
   }
 
   cleanupOrphanedAccessories(discoveredAccessoryIds: Set<string>) {
@@ -1622,13 +1632,15 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           accessory.context.body = body;
           accessory.context.heater = heater;
           this.api.updatePlatformAccessories([accessory]);
-          new HeaterAccessory(this, accessory);
+          const heaterInstance = new HeaterAccessory(this, accessory);
+          this.heaterInstances.set(accessory.UUID, heaterInstance);
         } else {
           this.log.debug(`Adding new heater: ${heater.name}`);
           accessory = new this.api.platformAccessory(name, uuid);
           accessory.context.body = body;
           accessory.context.heater = heater;
-          new HeaterAccessory(this, accessory);
+          const heaterInstance = new HeaterAccessory(this, accessory);
+          this.heaterInstances.set(accessory.UUID, heaterInstance);
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
           this.accessoryMap.set(accessory.UUID, accessory);
         }
@@ -2844,6 +2856,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
     this.accessoryMap?.clear();
     this.heaters?.clear();
+    this.heaterInstances?.clear();
     this.pumpIdToCircuitMap?.clear();
     this.pumpToCircuitsMap?.clear();
     this.circuitToPumpMap?.clear();

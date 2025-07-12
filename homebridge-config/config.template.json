@@ -1,0 +1,19 @@
+{
+  "bridge": {
+    "name": "Homebridge Test",
+    "username": "CC:22:3D:E3:CE:30",
+    "port": 51826,
+    "pin": "031-45-154"
+  },
+  "accessories": [],
+  "platforms": [
+    {
+      "platform": "PentairIntelliCenter",
+      "name": "Pentair IntelliCenter",
+      "host": "YOUR_INTELLICENTER_IP",
+      "username": "YOUR_USERNAME", 
+      "password": "YOUR_PASSWORD",
+      "temperatureUnits": "F"
+    }
+  ]
+}

@@ -345,4 +345,60 @@ export class HeaterAccessory {
   async getHeatingThresholdTemperature(): Promise<Nullable<CharacteristicValue>> {
     return this.lowTemperature || this.minValue;
   }
+
+  updateTemperatureRanges(body: Body): void {
+    const oldLowTemp = this.lowTemperature;
+    const oldHighTemp = this.highTemperature;
+
+    this.lowTemperature = body.lowTemperature;
+    this.highTemperature = body.highTemperature;
+
+    if (this.isFahrenheit) {
+      if (this.lowTemperature) {
+        this.lowTemperature = fahrenheitToCelsius(this.lowTemperature);
+      }
+      if (this.highTemperature) {
+        this.highTemperature = fahrenheitToCelsius(this.highTemperature);
+      }
+    }
+
+    // Update HomeKit characteristic props if ranges changed
+    const rangeChanged = oldLowTemp !== this.lowTemperature || oldHighTemp !== this.highTemperature;
+    if (rangeChanged) {
+      this.updateCharacteristicProps();
+    }
+  }
+
+  private updateCharacteristicProps(): void {
+    // Use actual body temperature limits if available, otherwise use platform limits
+    const actualMinValue = this.lowTemperature ? this.lowTemperature - 5 : this.minValue;
+    const actualMaxValue = this.highTemperature ? this.highTemperature + 5 : this.maxValue;
+
+    this.platform.log.info(
+      `Updating heater ${this.heater.name} temperature range: ${actualMinValue}°-${actualMaxValue}° ` +
+        `(low: ${this.lowTemperature}, high: ${this.highTemperature}) ${this.isFahrenheit ? 'F' : 'C'}`,
+    );
+
+    if (this.lowTemperature) {
+      this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps({
+        minValue: actualMinValue,
+        maxValue: actualMaxValue,
+        minStep: THERMOSTAT_STEP_VALUE,
+      });
+    }
+
+    if (this.heater.coolingEnabled && this.highTemperature) {
+      this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps({
+        minValue: actualMinValue,
+        maxValue: actualMaxValue,
+        minStep: THERMOSTAT_STEP_VALUE,
+      });
+
+      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps({
+        minValue: actualMinValue,
+        maxValue: actualMaxValue,
+        minStep: THERMOSTAT_STEP_VALUE,
+      });
+    }
+  }
 }

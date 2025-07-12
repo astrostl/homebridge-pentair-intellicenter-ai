@@ -26,3 +26,42 @@ Yes, you need your local IP and your IntelliCenter login. If you enable the opti
 - **Pressure-testing auth necessity**: Investigate whether authentication is truly required for all operations or if some functionality can work without credentials
 - **Info logging cleanup**: Review and reduce excessive .info() logging statements throughout the codebase to improve log clarity and reduce noise
 - **More robust thermal state detection**: Enhance heater state detection to better handle edge cases and provide more accurate heating/cooling status reporting
+
+## Local Development
+
+For developers who want to test changes locally using Docker:
+
+### Quick Setup
+
+1. **Copy the template config:**
+   ```bash
+   cp homebridge-config/config.template.json homebridge-config/config.json
+   ```
+
+2. **Edit `homebridge-config/config.json`** and replace:
+   - `YOUR_INTELLICENTER_IP` with your IntelliCenter's IP address
+   - `YOUR_USERNAME` with your IntelliCenter username
+   - `YOUR_PASSWORD` with your IntelliCenter password
+
+3. **Build and start:**
+   ```bash
+   npm run build
+   docker-compose up -d
+   ```
+
+4. **Access Homebridge UI:** http://localhost:8581 (default login: `admin`/`admin`)
+
+### Development Workflow
+
+After making code changes:
+```bash
+npm run build
+docker-compose restart homebridge
+```
+
+View logs:
+```bash
+docker-compose logs -f homebridge
+```
+
+**Note:** Your `config.json` with real credentials is gitignored and won't be committed.
