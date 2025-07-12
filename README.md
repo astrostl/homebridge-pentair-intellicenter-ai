@@ -52,24 +52,36 @@ For developers who want to test changes locally using Docker:
 
 ### Development Workflow
 
-After making code changes:
+**Initial Setup:**
+1. Install the plugin via Homebridge UI first (from npm registry)
+2. Configure it with your IntelliCenter details
+
+**Testing Local Changes:**
 ```bash
-npm run build
-./stop-dev.sh && ./start-dev.sh
+# Test your local code changes without publishing
+./test-local.sh
 ```
 
-View logs:
+This script:
+- Builds your local plugin (`npm run build`)
+- Copies the `dist/` files directly into the running container's plugin directory
+- Restarts Homebridge to load your changes
+- Shows you how to watch for your specific logs
+
+**Other useful commands:**
 ```bash
+# View logs:
 # For Docker:
 docker compose logs -f homebridge
 
 # For nerdctl (Rancher Desktop):
 nerdctl compose logs -f homebridge
-```
 
-Stop the environment:
-```bash
+# Stop the environment:
 ./stop-dev.sh
+
+# Watch for specific plugin logs:
+nerdctl compose logs -f homebridge | grep "temperature range"
 ```
 
 **Note:** Your `config.json` with real credentials is gitignored and won't be committed.

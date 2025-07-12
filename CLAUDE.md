@@ -328,16 +328,29 @@ cp homebridge-config/config.template.json homebridge-config/config.json
 
 **Development Workflow:**
 ```bash
-# After making code changes
-npm run build
-./stop-dev.sh && ./start-dev.sh
+# Initial setup: Install plugin via Homebridge UI first
+# Then test local changes without publishing:
+./test-local.sh
 
 # View logs (Docker)
 docker compose logs -f homebridge
 
 # View logs (nerdctl/Rancher Desktop)
 nerdctl compose logs -f homebridge
+
+# Watch for specific logs (e.g., testing heat pump range fix)
+nerdctl compose logs -f homebridge | grep "temperature range"
 ```
+
+**Local Testing Process:**
+The `test-local.sh` script provides instant testing of code changes:
+1. **Builds** your local plugin (`npm run build`)
+2. **Finds** the installed plugin in `/var/lib/homebridge/node_modules/`
+3. **Copies** your `dist/` files directly into the container
+4. **Restarts** Homebridge to load changes
+5. **No publishing required** - test immediately
+
+This mimics the SFTP approach of copying built files directly to the plugin directory.
 
 **Key Benefits:**
 - **Realistic testing environment**: Full Homebridge with UI at http://localhost:8581
