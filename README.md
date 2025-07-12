@@ -45,8 +45,7 @@ For developers who want to test changes locally using Docker:
 
 3. **Build and start:**
    ```bash
-   npm run build
-   docker-compose up -d
+   ./start-dev.sh
    ```
 
 4. **Access Homebridge UI:** http://localhost:8581 (default login: `admin`/`admin`)
@@ -56,12 +55,21 @@ For developers who want to test changes locally using Docker:
 After making code changes:
 ```bash
 npm run build
-docker-compose restart homebridge
+./stop-dev.sh && ./start-dev.sh
 ```
 
 View logs:
 ```bash
-docker-compose logs -f homebridge
+# For Docker:
+docker compose logs -f homebridge
+
+# For nerdctl (Rancher Desktop):
+nerdctl compose logs -f homebridge
+```
+
+Stop the environment:
+```bash
+./stop-dev.sh
 ```
 
 **Note:** Your `config.json` with real credentials is gitignored and won't be committed.

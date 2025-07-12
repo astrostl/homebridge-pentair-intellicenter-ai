@@ -322,19 +322,21 @@ For testing changes in a realistic Homebridge environment, this repository inclu
 cp homebridge-config/config.template.json homebridge-config/config.json
 # Edit config.json with your IntelliCenter IP, username, password
 
-# Build and start Homebridge in Docker
-npm run build
-docker-compose up -d
+# Build and start Homebridge (works with Docker or nerdctl)
+./start-dev.sh
 ```
 
 **Development Workflow:**
 ```bash
 # After making code changes
 npm run build
-docker-compose restart homebridge
+./stop-dev.sh && ./start-dev.sh
 
-# View logs
-docker-compose logs -f homebridge
+# View logs (Docker)
+docker compose logs -f homebridge
+
+# View logs (nerdctl/Rancher Desktop)
+nerdctl compose logs -f homebridge
 ```
 
 **Key Benefits:**
