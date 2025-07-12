@@ -36,7 +36,9 @@ import {
   DISCOVER_COMMANDS,
   HEAT_SOURCE_KEY,
   HEATER_KEY,
+  HIGH_TEMP_KEY,
   LAST_TEMP_KEY,
+  LOW_TEMP_KEY,
   MODE_KEY,
   PROBE_KEY,
   PUMP_TYPE_MAPPING,
@@ -1448,7 +1450,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         const pumpCircuit = circuitIdPumpMap.get(body.circuit?.id as string);
         this.discoverCircuit(panel, module, body, pumpCircuit);
         this.associateBodyWithPump(body, pumpCircuit);
-        this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, MODE_KEY]);
+        this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, MODE_KEY, HIGH_TEMP_KEY, LOW_TEMP_KEY]);
         bodyIdMap.set(body.id, body);
       }
     }

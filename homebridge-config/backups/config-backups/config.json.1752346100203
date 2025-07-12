@@ -1,0 +1,29 @@
+{
+    "bridge": {
+        "name": "Homebridge Test",
+        "username": "CC:22:3D:E3:CE:30",
+        "port": 51826,
+        "pin": "031-45-154"
+    },
+    "accessories": [],
+    "platforms": [
+        {
+            "name": "Pentair IntelliCenter",
+            "ipAddress": "192.168.5.118",
+            "username": "myusername",
+            "password": "mypassword",
+            "temperatureUnits": "F",
+            "minimumTemperature": 50,
+            "maximumTemperature": 104,
+            "supportVSP": false,
+            "airTemp": true,
+            "includeAllCircuits": false,
+            "platform": "PentairIntelliCenter"
+        },
+        {
+            "name": "Config",
+            "port": 8581,
+            "platform": "config"
+        }
+    ]
+}
