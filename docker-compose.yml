@@ -2,7 +2,9 @@ services:
   homebridge:
     image: homebridge/homebridge:latest
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "8581:8581"
+      - "51826:51826"
     volumes:
       # Mount your local plugin development directory
       - .:/homebridge/node_modules/homebridge-pentair-intellicenter-ai
