@@ -312,6 +312,46 @@ Always run `npm run prepublishOnly` after dependency updates to ensure compatibi
 - Security (credential protection, dependency scanning)
 - Maintainability (comprehensive testing, structured release processes)
 
+### Local Development with Docker
+
+For testing changes in a realistic Homebridge environment, this repository includes Docker Compose configuration for local development:
+
+**Setup:**
+```bash
+# Copy template config and add your credentials
+cp homebridge-config/config.template.json homebridge-config/config.json
+# Edit config.json with your IntelliCenter IP, username, password
+
+# Build and start Homebridge in Docker
+npm run build
+docker-compose up -d
+```
+
+**Development Workflow:**
+```bash
+# After making code changes
+npm run build
+docker-compose restart homebridge
+
+# View logs
+docker-compose logs -f homebridge
+```
+
+**Key Benefits:**
+- **Realistic testing environment**: Full Homebridge with UI at http://localhost:8581
+- **Credential security**: Your `config.json` is gitignored, only template is committed
+- **Fast iteration**: Direct file mounting means changes are immediate after rebuild
+- **Integration testing**: Test real IntelliCenter connections and HomeKit behavior
+
+**When to use Docker testing:**
+- Testing new features with actual IntelliCenter hardware
+- Debugging connection or authentication issues
+- Validating HomeKit accessory behavior
+- Testing configuration changes
+- Reproducing user-reported issues
+
+**Important**: Docker testing complements but doesn't replace the comprehensive Jest test suite. Use both for complete validation.
+
 ## Maintaining This Document
 
 This CLAUDE.md file is a living document that must be kept up-to-date as the project evolves. **Always update this document when making changes to:**

@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  homebridge:
+    image: homebridge/homebridge:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      # Mount your local plugin development directory
+      - .:/homebridge/node_modules/homebridge-pentair-intellicenter-ai
+      # Mount Homebridge config directory
+      - ./homebridge-config:/homebridge
+    environment:
+      - PGID=1000
+      - PUID=1000
+      - HOMEBRIDGE_CONFIG_UI=1
+      - HOMEBRIDGE_CONFIG_UI_PORT=8581
+      # Enable debug logging to see your temperature range updates
+      - HOMEBRIDGE_DEBUG=1
