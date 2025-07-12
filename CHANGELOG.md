@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2025-07-12
+
+### Added
+- **🔄 Real-time Temperature Range Updates**: Heat pump temperature range changes now update immediately in HomeKit
+  - **Idle state detection** - temperature range changes are detected even when heater is not active
+  - **HITMP/LOTMP subscription** - proper parameter subscription for high/low temperature limits
+  - **Dynamic range updates** - HomeKit characteristics update automatically when ranges change in Pentair app
+  - **Instance tracking** - HeaterAccessory instances are tracked for dynamic updates
+  - **Immediate feedback** - no restart required when temperature ranges are modified
+
+- **🏠 Local Development Environment**: Complete Docker-based development workflow
+  - **Cross-platform support** - works with both Docker Desktop and nerdctl (Rancher Desktop)
+  - **Local testing without publishing** - test plugin changes directly in container environment
+  - **Automated deployment scripts** - `./test-local.sh` for rapid development iteration
+  - **Configuration template system** - secure credential handling with gitignored real configs
+  - **Homebridge UI Fahrenheit display** - automatic Fahrenheit temperature units in web interface
+
+### Enhanced
+- **🛠️ Development Infrastructure**: Comprehensive local testing and deployment
+  - **Platform detection** - automatic Docker vs nerdctl runtime detection
+  - **File-based deployment** - direct dist/ file copying for immediate testing
+  - **Container networking** - proper port mapping for internet access and external connectivity
+  - **Secure credential management** - template-based configuration with real credentials gitignored
+  - **Documentation updates** - CLAUDE.md and README updated with development workflows
+
+### Fixed
+- **🌡️ Temperature Range Synchronization**: Critical fix for heat pump range detection
+  - **Missing parameter subscriptions** - added HIGH_TEMP_KEY and LOW_TEMP_KEY to subscription list
+  - **Idle state bug** - temperature range changes now detected regardless of heater activity state
+  - **Real-time updates** - eliminated need for heater restart when temperature ranges change
+  - **HomeKit characteristic updates** - proper min/max value updates when ranges change dynamically
+
+### Technical Improvements
+- **📊 Instance Management**: HeaterAccessory tracking for dynamic updates
+- **🔧 Parameter Monitoring**: Enhanced IntelliCenter parameter subscription coverage
+- **🐳 Docker Configuration**: Optimized development container setup with proper networking
+- **📝 Documentation**: Updated behavioral guidelines and development practices in CLAUDE.md
+
 ## [2.8.3] - 2025-07-08
 
 ### Added

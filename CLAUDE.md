@@ -312,6 +312,15 @@ Always run `npm run prepublishOnly` after dependency updates to ensure compatibi
 - Security (credential protection, dependency scanning)
 - Maintainability (comprehensive testing, structured release processes)
 
+### Claude Code Behavioral Guidelines
+
+**Log Monitoring Practices:**
+
+- **NEVER stream logs indefinitely** - Always use bounded log commands with `--tail` or similar limits
+- **Use targeted searches** - When looking for specific events, use `grep` or similar filtering to avoid overwhelming output
+- **Check logs once, then wait** - After checking logs, wait for user feedback rather than continuously monitoring
+- **Respect user interruption** - If user interrupts log monitoring, immediately stop and acknowledge the interruption
+
 ### Local Development with Docker
 
 For testing changes in a realistic Homebridge environment, this repository includes Docker Compose configuration for local development:
