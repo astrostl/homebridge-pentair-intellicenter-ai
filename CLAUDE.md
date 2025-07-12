@@ -94,6 +94,21 @@ Before any release, ensure all quality checks pass:
 
 This is a **Homebridge plugin** that connects to Pentair IntelliCenter pool control systems via Telnet (port 6681). The plugin exposes pool circuits, heaters, pumps, and temperature sensors as HomeKit accessories.
 
+### IntelliCenter API Reference
+
+For detailed information about the IntelliCenter API protocol, commands, and data structures, refer to the comprehensive API documentation:
+
+**📖 [IntelliCenter API Documentation](https://github.com/astrostl/pentameter/blob/master/API.md)**
+
+This documentation provides:
+- Complete command reference and syntax
+- Data structure definitions and object types
+- Parameter keys and value formats
+- Protocol examples and response formats
+- Hardware discovery and real-time update patterns
+
+When working with IntelliCenter protocol changes, new command implementations, or debugging communication issues, always reference this API documentation for accurate protocol details.
+
 ### Design Philosophy
 
 **IMPORTANT**: This project should be held to **Homebridge plugin standards**, not enterprise software standards. Key principles:
@@ -316,14 +331,23 @@ Always run `npm run prepublishOnly` after dependency updates to ensure compatibi
 
 **Log Monitoring Practices:**
 
+- **NEVER use `-f` or `--follow` flags** - Streaming logs will always timeout and fail
 - **NEVER stream logs indefinitely** - Always use bounded log commands with `--tail` or similar limits
 - **Use targeted searches** - When looking for specific events, use `grep` or similar filtering to avoid overwhelming output
 - **Check logs once, then wait** - After checking logs, wait for user feedback rather than continuously monitoring
 - **Respect user interruption** - If user interrupts log monitoring, immediately stop and acknowledge the interruption
+- **Use static log commands only** - Examples: `--tail 50`, `--since 1m`, but never `-f`, `--follow`, or similar streaming flags
 
 ### Local Development with Docker
 
 For testing changes in a realistic Homebridge environment, this repository includes Docker Compose configuration for local development:
+
+**CRITICAL**: When doing local Docker development, ALWAYS add timestamped debug statements to confirm code deployment:
+```typescript
+// BUILD TIMESTAMP: YYYY-MM-DD-HH:MM:SS - Description of change
+this.platform.log.debug(`[${this.heater.name}] BUILD: YYYY-MM-DD-HH:MM:SS - function called`);
+```
+Then search logs for your timestamp to confirm the right code is running: `docker compose logs homebridge | grep "BUILD: YYYY-MM-DD-HH:MM:SS"`
 
 **Setup:**
 ```bash

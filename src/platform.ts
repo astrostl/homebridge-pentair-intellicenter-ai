@@ -39,7 +39,7 @@ import {
   HIGH_TEMP_KEY,
   LAST_TEMP_KEY,
   LOW_TEMP_KEY,
-  MODE_KEY,
+  HTMODE_KEY,
   PROBE_KEY,
   PUMP_TYPE_MAPPING,
   SELECT_KEY,
@@ -822,6 +822,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       this.collectTemperatureReading(body.temperature);
     }
 
+    // Always update heater accessories when body data changes
     this.updateHeaterStatuses(body);
   }
 
@@ -998,7 +999,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   updateHeaterStatuses(body: Body) {
     this.heaters.forEach(heaterAccessory => {
       if (heaterAccessory.context?.body?.id === body.id) {
-        this.log.debug(`Updating heater ${heaterAccessory.displayName}`);
+        this.log.debug(
+          `Updating heater ${heaterAccessory.displayName} with live body data ` + `(temp: ${body.temperature}, heatMode: ${body.heatMode})`,
+        );
+
+        // Update the accessory context with latest body data
         heaterAccessory.context.body = body;
         this.api.updatePlatformAccessories([heaterAccessory]);
 
@@ -1008,6 +1013,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           heaterInstance = new HeaterAccessory(this, heaterAccessory);
           this.heaterInstances.set(heaterAccessory.UUID, heaterInstance);
         } else {
+          // Critical: Update the heater accessory with live body data
           heaterInstance.updateTemperatureRanges(body);
         }
 
@@ -1450,7 +1456,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         const pumpCircuit = circuitIdPumpMap.get(body.circuit?.id as string);
         this.discoverCircuit(panel, module, body, pumpCircuit);
         this.associateBodyWithPump(body, pumpCircuit);
-        this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, MODE_KEY, HIGH_TEMP_KEY, LOW_TEMP_KEY]);
+        this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, HTMODE_KEY, HIGH_TEMP_KEY, LOW_TEMP_KEY]);
         bodyIdMap.set(body.id, body);
       }
     }

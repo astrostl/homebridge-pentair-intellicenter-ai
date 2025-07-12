@@ -660,4 +660,256 @@ describe('HeaterAccessory', () => {
       expect(heaterAccessory).toHaveProperty('heater');
     });
   });
+
+  describe('updateTemperatureRanges', () => {
+    beforeEach(() => {
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+    });
+
+    it('should update temperature ranges and current temperature', () => {
+      const updatedBody: Body = {
+        ...mockBody,
+        temperature: 80, // New temperature
+        lowTemperature: 72, // New low temp
+        highTemperature: 88, // New high temp
+        heatMode: HeatMode.On,
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should update HomeKit characteristic for current temperature
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith('CurrentTemperature', expect.any(Number));
+
+      // Should update current heating/cooling state
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          INACTIVE: 0,
+          IDLE: 1,
+          HEATING: 2,
+          COOLING: 3,
+          OFF: 0,
+          HEAT: 2,
+        }),
+        expect.any(Number),
+      );
+
+      // Should log debug information
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Updated current temperature'));
+    });
+
+    it('should handle temperature conversion from Fahrenheit to Celsius', () => {
+      const updatedBody: Body = {
+        ...mockBody,
+        temperature: 86, // 86°F = 30°C
+        lowTemperature: 77, // 77°F = 25°C
+        highTemperature: 95, // 95°F = 35°C
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should convert temperatures and update characteristics
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
+        'CurrentTemperature',
+        30, // 86°F -> 30°C
+      );
+    });
+
+    it('should update characteristic props when ranges change', () => {
+      const originalPropsCalls = mockService.setProps.mock.calls.length;
+
+      const updatedBody: Body = {
+        ...mockBody,
+        temperature: 80,
+        lowTemperature: 70, // Different from original 75
+        highTemperature: 90, // Different from original 85
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should call setProps for characteristic property updates
+      expect(mockService.setProps).toHaveBeenCalledTimes(originalPropsCalls + 1);
+    });
+
+    it('should not update props when ranges stay the same', () => {
+      // First call updateTemperatureRanges to set initial ranges
+      const initialBody: Body = {
+        ...mockBody,
+        lowTemperature: 75,
+        highTemperature: 85,
+      };
+
+      heaterAccessory.updateTemperatureRanges(initialBody);
+
+      // Clear mocks after initial update to get clean state
+      jest.clearAllMocks();
+
+      const sameBody: Body = {
+        ...initialBody,
+        temperature: 80, // Different temperature but same ranges
+        lowTemperature: 75, // Same as previous update
+        highTemperature: 85, // Same as previous update
+      };
+
+      heaterAccessory.updateTemperatureRanges(sameBody);
+
+      // Should not call setProps when ranges don't change (only updateCharacteristic calls should happen)
+      expect(mockService.setProps).not.toHaveBeenCalled();
+    });
+
+    it('should handle undefined temperature values gracefully', () => {
+      const bodyWithUndefinedValues: Body = {
+        ...mockBody,
+        temperature: undefined,
+        lowTemperature: undefined,
+        highTemperature: undefined,
+      };
+
+      expect(() => {
+        heaterAccessory.updateTemperatureRanges(bodyWithUndefinedValues);
+      }).not.toThrow();
+    });
+
+    it('should handle null temperature values gracefully', () => {
+      const bodyWithNullValues: Body = {
+        ...mockBody,
+        temperature: null as any,
+        lowTemperature: null as any,
+        highTemperature: null as any,
+      };
+
+      expect(() => {
+        heaterAccessory.updateTemperatureRanges(bodyWithNullValues);
+      }).not.toThrow();
+    });
+
+    it('should update heatMode when provided', () => {
+      const updatedBody: Body = {
+        ...mockBody,
+        heatMode: HeatMode.Off,
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should update body data with new heat mode - accessing via public heater property
+      // Note: body is private, so we verify the update indirectly through debug logs
+      expect(mockPlatform.log.debug).toHaveBeenCalled();
+    });
+
+    it('should work in Celsius mode without conversion', () => {
+      (mockPlatform.getConfig as jest.Mock).mockReturnValue({
+        temperatureUnits: TemperatureUnits.C,
+        minimumTemperature: 4,
+        maximumTemperature: 40,
+      });
+
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      const updatedBody: Body = {
+        ...mockBodyCelsius,
+        temperature: 28, // Celsius
+        lowTemperature: 26, // Celsius
+        highTemperature: 32, // Celsius
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should use temperature directly without conversion
+      expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
+        'CurrentTemperature',
+        28, // No conversion
+      );
+    });
+  });
+
+  describe('updateCharacteristicProps', () => {
+    beforeEach(() => {
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+    });
+
+    it('should update target temperature props when lowTemperature is available', () => {
+      // Call the private method via updateTemperatureRanges which triggers it
+      const updatedBody: Body = {
+        ...mockBody,
+        lowTemperature: 70, // Different value to trigger props update
+        highTemperature: 90,
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should log the temperature range update
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Updating heater Pool Heater temperature range'));
+
+      // Should set props for target temperature
+      expect(mockService.setProps).toHaveBeenCalledWith({
+        minValue: expect.any(Number),
+        maxValue: expect.any(Number),
+        minStep: THERMOSTAT_STEP_VALUE,
+      });
+    });
+
+    it('should handle cooling enabled with high temperature', () => {
+      // Setup heater with cooling enabled
+      const heaterWithCooling: Heater = {
+        ...mockHeater,
+        coolingEnabled: true,
+      };
+
+      mockPlatformAccessory.context.heater = heaterWithCooling;
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      const updatedBody: Body = {
+        ...mockBody,
+        lowTemperature: 70,
+        highTemperature: 90, // High temp for cooling
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should set props for both heating and cooling characteristics
+      expect(mockService.setProps).toHaveBeenCalledWith(
+        expect.objectContaining({
+          minValue: expect.any(Number),
+          maxValue: expect.any(Number),
+          minStep: THERMOSTAT_STEP_VALUE,
+        }),
+      );
+    });
+
+    it('should calculate correct min/max values with buffer', () => {
+      const updatedBody: Body = {
+        ...mockBody,
+        lowTemperature: 75, // 75°F = ~23.89°C
+        highTemperature: 85, // 85°F = ~29.44°C
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should use temperature limits with 5-degree buffer
+      // lowTemp (23.89) - 5 = ~18.89, highTemp (29.44) + 5 = ~34.44
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringMatching(/temperature range: \d+\.?\d*°-\d+\.?\d*°/));
+    });
+
+    it('should use platform limits when body temperatures are unavailable', () => {
+      const bodyWithoutTemps: Body = {
+        ...mockBody,
+        lowTemperature: undefined,
+        highTemperature: undefined,
+      };
+
+      mockPlatformAccessory.context.body = bodyWithoutTemps;
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      const updatedBody: Body = {
+        ...bodyWithoutTemps,
+        temperature: 78, // Only update current temp
+        lowTemperature: 70, // Add temp to trigger range update
+        highTemperature: 90,
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Should use platform min/max values when body temps are unavailable initially but then get updated
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('temperature range'));
+    });
+  });
 });

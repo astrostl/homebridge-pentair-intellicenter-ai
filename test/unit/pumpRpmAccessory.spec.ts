@@ -655,4 +655,167 @@ describe('PumpRpmAccessory', () => {
       expect(rpm).toBe(2500); // Should return the circuit speed since it's active
     });
   });
+
+  describe('getHighestActivePumpSpeed additional coverage', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockPlatform.accessoryMap.clear();
+    });
+
+    it('should handle empty circuits array', async () => {
+      // Set up pump with empty circuits array
+      mockAccessory.context.pump.circuits = [];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(0.0001); // Should return minimum when no circuits
+    });
+
+    it('should handle null/undefined circuits', async () => {
+      // Set up pump with null circuits
+      mockAccessory.context.pump.circuits = null as any;
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(0.0001); // Should return minimum when circuits is null
+    });
+
+    it('should handle circuits with invalid speed values', async () => {
+      // Set up pump with circuits having invalid speeds
+      mockAccessory.context.pump.circuits = [
+        { id: 'C0001', speed: 'invalid' as any },
+        { id: 'C0002', speed: NaN },
+        { id: 'C0003', speed: undefined },
+        { id: 'C0004', speed: null as any },
+      ];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(0.0001); // Should return minimum when all speeds are invalid
+    });
+
+    it('should handle mixed valid and invalid speeds', async () => {
+      // Set up pump with mix of valid and invalid speeds
+      mockAccessory.context.pump.circuits = [
+        { id: 'C0001', speed: 'invalid' as any, circuitId: 'C0001' },
+        { id: 'C0002', speed: 2800, circuitId: 'C0002' }, // Valid speed
+        { id: 'C0003', speed: NaN, circuitId: 'C0003' },
+      ];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up accessory map to find the valid circuit
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit-uuid', {
+        context: {
+          circuit: {
+            id: 'C0002',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(2800); // Should return the valid speed
+    });
+
+    it('should handle multiple active circuits and select highest speed', async () => {
+      // Set up pump with multiple circuits with different speeds
+      mockAccessory.context.pump.circuits = [
+        { id: 'C0001', speed: 1800, circuitId: 'C0001' },
+        { id: 'C0002', speed: 3200, circuitId: 'C0002' }, // Highest
+        { id: 'C0003', speed: 2400, circuitId: 'C0003' },
+      ];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up accessory map with all circuits active
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit1-uuid', {
+        context: {
+          circuit: {
+            id: 'C0001',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit2-uuid', {
+        context: {
+          circuit: {
+            id: 'C0002',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit3-uuid', {
+        context: {
+          circuit: {
+            id: 'C0003',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(3200); // Should return highest speed
+    });
+
+    it('should handle circuit with speed of 0', async () => {
+      // Set up pump with circuit that has speed 0
+      mockAccessory.context.pump.circuits = [
+        { id: 'C0001', speed: 0 },
+        { id: 'C0002', speed: 2500 },
+      ];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up accessory map with first circuit active (speed 0)
+      (mockPlatform.accessoryMap as Map<string, any>).set('circuit-uuid', {
+        context: {
+          circuit: {
+            id: 'C0001',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(0.0001); // Should return minimum when active circuit has speed 0
+    });
+
+    it('should handle body context with active status', async () => {
+      // Set up pump with body circuit
+      mockAccessory.context.pump.circuits = [{ id: 'B0001', speed: 2700 }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up accessory map with body context and active status
+      (mockPlatform.accessoryMap as Map<string, any>).set('body-uuid', {
+        context: {
+          body: {
+            id: 'B0001',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(2700); // Should return body circuit speed
+    });
+
+    it('should handle feature context with active status', async () => {
+      // Set up pump with feature circuit
+      mockAccessory.context.pump.circuits = [{ id: 'F0001', speed: 2900, circuitId: 'F0001' }];
+      pumpRpmAccessory = new PumpRpmAccessory(mockPlatform, mockAccessory);
+
+      // Set up accessory map with feature context and active status
+      (mockPlatform.accessoryMap as Map<string, any>).set('feature-uuid', {
+        context: {
+          feature: {
+            id: 'F0001',
+            status: CircuitStatus.On,
+          },
+        },
+      } as any);
+
+      const rpm = await pumpRpmAccessory.getRpm();
+      expect(rpm).toBe(2900); // Should return feature circuit speed
+    });
+  });
 });

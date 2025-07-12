@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.0] - 2025-07-12
+
+### Added
+- **🌡️ Enhanced Heater Control System**: Major improvements to heat pump heating/cooling state detection
+  - **HTMODE-based state detection** - uses proper IntelliCenter HTMODE values for accurate HEATING/COOLING/OFF state reporting
+  - **Real-time temperature synchronization** - temperature range changes in Pentair app update immediately in HomeKit
+  - **Enhanced parameter subscription** - added HTMODE_KEY to subscription list for better heater monitoring
+  - **Immediate HomeKit updates** - current temperature and heating/cooling state update automatically when body data changes
+  - **Type safety improvements** - added proper number conversion for HTMODE values to handle string/number inconsistencies
+
+- **🏗️ Cross-Platform Development Environment**: Complete Docker-based development workflow
+  - **Docker & nerdctl support** - development scripts work with both Docker Desktop and Rancher Desktop/nerdctl
+  - **Local testing workflow** - new `test-local.sh` script for rapid development iteration without npm publishing
+  - **Container optimization** - improved networking and volume mounting for reliable development environment
+  - **Configuration templates** - secure credential handling with gitignored real config files
+
+- **🧪 Enhanced Testing Infrastructure**: Expanded test coverage for edge cases and network scenarios
+  - **Network edge case testing** - new `platform-network-edge-cases.spec.ts` for comprehensive error handling
+  - **Enhanced heater testing** - improved test coverage for HTMODE-based state detection and cooling functionality
+  - **Better test isolation** - improved test cleanup and resource management
+
+### Enhanced
+- **🔧 Heater Accuracy Improvements**: More precise heating/cooling state detection for heat pump systems
+  - **Better current state logic** - more accurate reporting based on actual equipment operation
+  - **Debug logging enhancements** - added detailed logging for troubleshooting heater state detection
+  - **Improved temperature parameter mapping** - fixed TEMP vs LSTTMP parameter handling for accurate readings
+  - **Enhanced cooling support** - improved detection and control of heat pump cooling functionality
+
+- **📋 Development Infrastructure**: Streamlined development workflow and documentation
+  - **Comprehensive CLAUDE.md updates** - added behavioral guidelines, local development workflows, and security best practices
+  - **Development workflow documentation** - updated processes for Docker-based testing and contribution guidelines
+  - **Enhanced documentation** - improved development setup instructions and contribution processes
+
+### Fixed
+- **🛡️ Security Improvements**: Enhanced credential protection and secure development practices
+  - **Expanded .gitignore protection** - added exclusions for `homebridge-config/auth.json`, `homebridge-config/.uix-secrets`, `homebridge-config/persist/`, `homebridge-config/accessories/`, and `homebridge-config/backups/`
+  - **Removed sensitive files** - cleaned up accidentally tracked sensitive files from repository history
+  - **Better credential protection** - improved security for local development environments
+
+- **🌡️ Temperature Management Fixes**: Resolved real-time temperature synchronization issues
+  - **Parameter mapping corrections** - fixed temperature parameter handling for more accurate data processing
+  - **Real-time update reliability** - improved synchronization between IntelliCenter and HomeKit
+  - **HTMODE value handling** - proper conversion and validation of heater mode values
+
+### Technical Improvements
+- **Core system enhancements** - significant improvements to `src/heaterAccessory.ts`, `src/platform.ts`, `src/constants.ts`, `src/types.ts`, and `src/util.ts`
+- **Enhanced type definitions** - improved TypeScript support for heater mode values and temperature parameters
+- **Better error handling** - expanded error handling for network scenarios and edge cases
+- **Improved debugging** - enhanced logging throughout the system for better troubleshooting
+
 ## [2.9.0] - 2025-07-12
 
 ### Added

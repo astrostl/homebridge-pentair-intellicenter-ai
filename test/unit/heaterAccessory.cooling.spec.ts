@@ -109,7 +109,7 @@ const mockBody: Body = {
   lowTemperature: 75, // Heating setpoint
   highTemperature: 82, // Cooling setpoint
   heaterId: 'H01',
-  heatMode: HeatMode.On,
+  heatMode: undefined, // Will be set per test scenario
 };
 
 const mockConfig = {
@@ -222,6 +222,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
       // Temperature below heating setpoint (converted to Celsius: 70°F = 21.11°C)
       mockPlatformAccessory.context.body.temperature = 70; // Below 75°F
       mockPlatformAccessory.context.body.heaterId = mockHeatPump.id; // Ensure heater is selected
+      mockPlatformAccessory.context.body.heatMode = 1; // HTMODE >= 1: Actively calling for heat
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 
       const state = heaterAccessory.getCurrentHeatingCoolingState();
@@ -232,6 +233,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
       // Temperature above cooling setpoint (converted to Celsius: 85°F = 29.44°C)
       mockPlatformAccessory.context.body.temperature = 85; // Above 82°F
       mockPlatformAccessory.context.body.heaterId = mockHeatPump.id; // Ensure heater is selected
+      mockPlatformAccessory.context.body.heatMode = 9; // HTMODE = 9: Heat pump cooling mode
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 
       const state = heaterAccessory.getCurrentHeatingCoolingState();
@@ -242,6 +244,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
       // Temperature between setpoints (75-82°F) - reset to original value
       mockPlatformAccessory.context.body.temperature = 78; // Between 75°F and 82°F
       mockPlatformAccessory.context.body.heaterId = mockHeatPump.id; // Ensure heater is selected
+      mockPlatformAccessory.context.body.heatMode = 0; // HTMODE = 0: No heating demand
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 
       const state = heaterAccessory.getCurrentHeatingCoolingState();
@@ -250,6 +253,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
 
     it('should return OFF state when heater is not selected', () => {
       mockPlatformAccessory.context.body.heaterId = 'H02';
+      mockPlatformAccessory.context.body.heatMode = 0; // Set mode to OFF when heater not selected
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 
       const state = heaterAccessory.getCurrentHeatingCoolingState();
@@ -258,6 +262,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
 
     it('should return OFF state when no temperature data available', () => {
       mockPlatformAccessory.context.body.temperature = undefined;
+      mockPlatformAccessory.context.body.heatMode = 0; // HTMODE = 0: No heating demand
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 
       const state = heaterAccessory.getCurrentHeatingCoolingState();
@@ -353,6 +358,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
     it('should only return HEAT or OFF for current state in heating-only systems', () => {
       // Temperature below heating setpoint
       mockPlatformAccessory.context.body.temperature = 70;
+      mockPlatformAccessory.context.body.heatMode = 1; // HTMODE >= 1: Actively calling for heat
       // Re-create the heater accessory with updated temperature
       const heatingOnlyHeater: Heater = {
         ...mockHeatPump,
@@ -367,6 +373,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
 
       // Temperature at or above heating setpoint
       mockPlatformAccessory.context.body.temperature = 78;
+      mockPlatformAccessory.context.body.heatMode = 0; // HTMODE = 0: No heating demand
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 
       const state2 = heaterAccessory.getCurrentHeatingCoolingState();
@@ -407,6 +414,7 @@ describe('HeaterAccessory Cooling Functionality', () => {
       mockPlatformAccessory.context.body.temperature = 26; // 26°C
       mockPlatformAccessory.context.body.lowTemperature = 24; // 24°C
       mockPlatformAccessory.context.body.highTemperature = 28; // 28°C
+      mockPlatformAccessory.context.body.heatMode = 0; // Set neutral mode for testing
 
       heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
 

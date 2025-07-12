@@ -11,7 +11,7 @@ This is a fork of [Windscar/homebridge-pentair-intellicenter](https://github.com
 
 I have all of the security doodads GitHub offers (dependency updates, code scans, etc.) enabled. I've cleared all issues, and aim to keep them clear.
 
-I have a dual-body setup with a pool (IntelliFlo VSF pump, cleaner pump, heat pump, lights, and fountain feature) and spa (IntelliFlo VS pump, air blower, gas heater, lights). All testing is done on that using firmware 3.004+ (as of 2025).
+I have a dual-body setup with a pool (IntelliFlo VSF pump, cleaner pump, heat pump, lights, and fountain feature) and spa (IntelliFlo VS pump, air blower, gas heater, lights). All testing is done on that using firmware 3.004+ (actively maintained and tested).
 
 ## Features and Functionality
 

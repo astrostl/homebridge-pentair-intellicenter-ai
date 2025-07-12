@@ -240,12 +240,37 @@ export class HeaterAccessory {
   }
 
   getCurrentHeatingCoolingState(): CharacteristicValue {
+    // BUILD TIMESTAMP: 2025-07-12-22:20:00 - HTMODE=9 TYPE FIX
+    this.platform.log.debug(`[${this.heater.name}] BUILD: 2025-07-12-22:20:00 - getCurrentHeatingCoolingState called`);
+
     // If the heater is not selected for this body, it's OFF
     if (this.body.heaterId !== this.heater.id) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
-    // If no temperature data, return OFF
+    // Use HTMODE to determine actual heating status (per Pentameter API docs)
+    const heatMode = this.body.heatMode;
+    this.platform.log.debug(
+      `[${this.heater.name}] HTMODE value: ${heatMode} (type: ${typeof heatMode}), ` +
+        `temp: ${this.temperature}°C, low: ${this.lowTemperature}°C, high: ${this.highTemperature}°C`,
+    );
+    if (heatMode !== undefined && heatMode !== null) {
+      const heatModeNum = Number(heatMode);
+      if (heatModeNum === 9) {
+        // HTMODE = 9: Heat pump cooling mode
+        this.platform.log.debug(`[${this.heater.name}] HTMODE = 9, returning COOL state`);
+        return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
+      } else if (heatModeNum >= 1) {
+        // HTMODE >= 1: Actively calling for heat
+        this.platform.log.debug(`[${this.heater.name}] HTMODE = ${heatModeNum}, returning HEAT state`);
+        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      }
+      // HTMODE = 0: No heating demand (off or setpoint reached)
+      this.platform.log.debug(`[${this.heater.name}] HTMODE = 0, returning OFF state`);
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+
+    // Fallback to temperature comparison if HTMODE not available
     if (!this.temperature) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
@@ -349,9 +374,21 @@ export class HeaterAccessory {
   updateTemperatureRanges(body: Body): void {
     const oldLowTemp = this.lowTemperature;
     const oldHighTemp = this.highTemperature;
+    const oldTemperature = this.temperature;
 
     this.lowTemperature = body.lowTemperature;
     this.highTemperature = body.highTemperature;
+
+    // Update current body temperature and body data
+    if (body.temperature !== undefined && body.temperature !== null) {
+      this.temperature = this.isFahrenheit ? fahrenheitToCelsius(body.temperature) : body.temperature;
+      this.body.temperature = body.temperature;
+    }
+
+    // Update body heating mode for HTMODE-based status
+    if (body.heatMode !== undefined) {
+      this.body.heatMode = body.heatMode;
+    }
 
     if (this.isFahrenheit) {
       if (this.lowTemperature) {
@@ -361,6 +398,18 @@ export class HeaterAccessory {
         this.highTemperature = fahrenheitToCelsius(this.highTemperature);
       }
     }
+
+    // Update HomeKit characteristic if current temperature changed
+    if (this.temperature !== oldTemperature && this.temperature !== undefined) {
+      this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.temperature);
+      this.platform.log.debug(
+        `[${this.heater.name}] Updated current temperature: ` +
+          `${body.temperature}${this.isFahrenheit ? 'F' : 'C'} -> ${this.temperature}C`,
+      );
+    }
+
+    // Update heating/cooling status based on new body data (including HTMODE)
+    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, this.getCurrentHeatingCoolingState());
 
     // Update HomeKit characteristic props if ranges changed
     const rangeChanged = oldLowTemp !== this.lowTemperature || oldHighTemp !== this.highTemperature;

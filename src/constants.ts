@@ -16,6 +16,7 @@ export const LAST_TEMP_KEY = 'LSTTMP';
 export const HEAT_SOURCE_KEY = 'HTSRC';
 export const HEATER_KEY = 'HEATER';
 export const MODE_KEY = 'MODE';
+export const HTMODE_KEY = 'HTMODE';
 export const LOW_TEMP_KEY = 'LOTMP';
 export const HIGH_TEMP_KEY = 'HITMP';
 export const COOL_KEY = 'COOL';

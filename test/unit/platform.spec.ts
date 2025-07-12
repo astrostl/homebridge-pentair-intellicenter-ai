@@ -1690,7 +1690,7 @@ describe('PentairPlatform', () => {
 
       platform.updateHeaterStatuses(mockBody as any);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith('Updating heater Pool Heater');
+      expect(mockLogger.debug).toHaveBeenCalledWith('Updating heater Pool Heater with live body data (temp: 80, heatMode: undefined)');
       expect(mockHeaterAccessory.context.body).toBe(mockBody);
     });
 

@@ -182,7 +182,7 @@ export type Body = {
   highTemperature?: number;
   lowTemperature?: number;
   heaterId?: string;
-  heatMode?: HeatMode;
+  heatMode?: number; // HTMODE values: 0=off, 1=heating, 4=heat pump, 9=cooling
   circuit?: BaseCircuit;
   [key: string]: unknown;
 } & Circuit;

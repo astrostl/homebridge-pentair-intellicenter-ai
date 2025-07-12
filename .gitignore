@@ -123,4 +123,9 @@ dist
 
 # Local development Docker setup
 homebridge-config/config.json
+homebridge-config/auth.json
+homebridge-config/backups/
+homebridge-config/.uix-secrets
+homebridge-config/persist/
+homebridge-config/accessories/
 
