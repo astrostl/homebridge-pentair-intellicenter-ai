@@ -240,61 +240,87 @@ export class HeaterAccessory {
   }
 
   getCurrentHeatingCoolingState(): CharacteristicValue {
-    // BUILD TIMESTAMP: 2025-07-12-22:20:00 - HTMODE=9 TYPE FIX
-    this.platform.log.debug(`[${this.heater.name}] BUILD: 2025-07-12-22:20:00 - getCurrentHeatingCoolingState called`);
+    const heatSource = this.body.heatSource;
+    const heatMode = this.body.heatMode;
 
-    // If the heater is not selected for this body, it's OFF
+    this.platform.log.debug(
+      `[${this.heater.name}] HTSRC: ${heatSource}, HTMODE: ${heatMode}, ` +
+        `heater.id: ${this.heater.id}, temp: ${this.temperature}°C, low: ${this.lowTemperature}°C, high: ${this.highTemperature}°C`,
+    );
+
+    // Check HTSRC + HTMODE logic first if available
+    const htSrcState = this.checkHeatSourceState(heatSource, heatMode);
+    if (htSrcState !== null) {
+      return htSrcState;
+    }
+
+    // Fallback to temperature comparison logic
+    return this.checkTemperatureState();
+  }
+
+  private checkHeatSourceState(heatSource: string | undefined, heatMode: number | undefined): CharacteristicValue | null {
+    // If we have no heatSource data, skip this check and fall back to heaterId/temperature logic
+    if (!heatSource) {
+      return null;
+    }
+
+    // If HTSRC is 00000, heater is completely OFF
+    if (heatSource === '00000') {
+      this.platform.log.debug(`[${this.heater.name}] HTSRC = ${heatSource}, heater is OFF`);
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+
+    // If this heater is not the one assigned to the body, it's OFF
+    if (heatSource !== this.heater.id) {
+      this.platform.log.debug(`[${this.heater.name}] HTSRC = ${heatSource} != ${this.heater.id}, heater not selected`);
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+
+    // Non-00000 HTSRC + valid HTMODE determines heating status
+    if (heatMode !== undefined && heatMode !== null) {
+      return this.getStateFromHeatMode(heatSource, heatMode);
+    }
+
+    return null; // No valid HTMODE, fall back to temperature comparison
+  }
+
+  private getStateFromHeatMode(heatSource: string, heatMode: number): CharacteristicValue {
+    if (heatMode === 9) {
+      this.platform.log.debug(`[${this.heater.name}] HTSRC = ${heatSource}, HTMODE = 9, actively cooling`);
+      return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
+    } else if (heatMode >= 1) {
+      this.platform.log.debug(`[${this.heater.name}] HTSRC = ${heatSource}, HTMODE = ${heatMode}, actively heating`);
+      return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+    } else {
+      this.platform.log.debug(`[${this.heater.name}] HTSRC = ${heatSource}, HTMODE = 0, heater idle`);
+      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+  }
+
+  private checkTemperatureState(): CharacteristicValue {
+    // First check if this heater is even assigned to this body via heaterId
     if (this.body.heaterId !== this.heater.id) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
-    // Use HTMODE to determine actual heating status (per Pentameter API docs)
-    const heatMode = this.body.heatMode;
-    this.platform.log.debug(
-      `[${this.heater.name}] HTMODE value: ${heatMode} (type: ${typeof heatMode}), ` +
-        `temp: ${this.temperature}°C, low: ${this.lowTemperature}°C, high: ${this.highTemperature}°C`,
-    );
-    if (heatMode !== undefined && heatMode !== null) {
-      const heatModeNum = Number(heatMode);
-      if (heatModeNum === 9) {
-        // HTMODE = 9: Heat pump cooling mode
-        this.platform.log.debug(`[${this.heater.name}] HTMODE = 9, returning COOL state`);
-        return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
-      } else if (heatModeNum >= 1) {
-        // HTMODE >= 1: Actively calling for heat
-        this.platform.log.debug(`[${this.heater.name}] HTMODE = ${heatModeNum}, returning HEAT state`);
-        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
-      }
-      // HTMODE = 0: No heating demand (off or setpoint reached)
-      this.platform.log.debug(`[${this.heater.name}] HTMODE = 0, returning OFF state`);
-      return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-    }
-
-    // Fallback to temperature comparison if HTMODE not available
     if (!this.temperature) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
-    // For cooling-enabled heaters, check both heating and cooling conditions
     if (this.heater.coolingEnabled) {
-      // Check if actively cooling (temp above high setpoint)
       if (this.highTemperature && this.temperature > this.highTemperature) {
         return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
       }
-      // Check if actively heating (temp below low setpoint)
       if (this.lowTemperature && this.temperature < this.lowTemperature) {
         return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
       }
-      // If within deadband, system is idle
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
-    // For heating-only systems, check if actively heating
     if (this.lowTemperature && this.temperature < this.lowTemperature) {
       return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
     }
 
-    // Otherwise it's OFF (at temperature or idle)
     return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
   }
 

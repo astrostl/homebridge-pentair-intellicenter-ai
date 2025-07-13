@@ -260,6 +260,38 @@ Always run `npm run prepublishOnly` after dependency updates to ensure compatibi
 - **Manual release process**: Reliable manual workflow with comprehensive quality gates
 - **Supply chain security**: npm audit and dependency vulnerability scanning
 
+### TypeScript/JavaScript Type Safety
+
+**CRITICAL**: Always be vigilant about number vs string type conversions when working with IntelliCenter data, as this is a common source of bugs in this codebase.
+
+**Common Issues and Solutions**:
+
+- **Parameter Mapping**: IntelliCenter sends all values as strings (e.g., `"HTMODE": "0"`), but TypeScript may expect numbers
+- **Type Conversion**: Always use explicit conversion with `Number()` when needed: `const heatModeNum = Number(heatMode)`
+- **Constant Mapping**: Ensure parameter mapping uses correct constant keys (e.g., `HTMODE_KEY` not `'HTMODE'` directly)
+- **Validation**: Check for both `undefined` and `null` before type conversion: `if (heatMode !== undefined && heatMode !== null)`
+
+**Example Bug Pattern (Fixed in v2.10.0+)**:
+```typescript
+// WRONG - caused HTMODE mismatch
+['heatMode', 'HTMODE'], // direct string instead of constant
+
+// CORRECT - uses proper constant
+['heatMode', HTMODE_KEY], // resolves to actual parameter name
+```
+
+**When debugging data issues**:
+1. Check raw IntelliCenter data in logs (e.g., `"HTMODE": "0"`)
+2. Verify parameter mapping uses correct constants from `src/constants.ts`
+3. Confirm type conversion happens at the right point in data flow
+4. Test with both string and number representations of the same value
+5. Add debug logging to show both raw and processed values during development
+
+**Key Files for Type Safety**:
+- `src/util.ts` - Parameter mapping and data transformation
+- `src/constants.ts` - Parameter key definitions
+- `src/types.ts` - TypeScript type definitions
+
 ### Release System Evolution (v2.5.2+)
 
 - **Manual release workflow**: Structured manual process with quality gates

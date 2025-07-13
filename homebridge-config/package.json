@@ -1,6 +1,6 @@
 {
   "dependencies": {
     "homebridge": "1.10.0",
-    "homebridge-pentair-intellicenter-ai": "^2.9.0"
+    "homebridge-pentair-intellicenter-ai": "^2.10.0"
   }
 }

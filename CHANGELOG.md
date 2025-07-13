@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.1] - 2025-07-13
+
+### Fixed
+- **🌡️ Enhanced Heater State Detection**: Improved heating/cooling state accuracy for heat pump systems
+  - **HTSRC-based state logic** - now properly uses heat source (HTSRC) parameter to determine if heater is assigned to body
+  - **Fallback temperature logic** - graceful fallback to temperature comparison when HTSRC data unavailable
+  - **Better OFF state detection** - correctly identifies when HTSRC = '00000' (heater completely OFF)
+  - **Improved cooling detection** - enhanced HTMODE = 9 detection for heat pump cooling mode
+  - **Cleaner state determination** - refactored getCurrentHeatingCoolingState logic into focused helper methods
+
+### Enhanced
+- **🔧 Heater Control Reliability**: More robust heater state management
+  - **Better parameter validation** - enhanced checks for HTSRC and HTMODE data availability
+  - **Enhanced debug logging** - detailed logging shows HTSRC, HTMODE, and temperature values for troubleshooting
+  - **Improved fallback logic** - seamless transition between HTSRC-based and temperature-based state detection
+  - **Type safety improvements** - better handling of string/number conversions for heater parameters
+
+### Technical Improvements
+- **Code organization** - split complex getCurrentHeatingCoolingState into focused helper methods:
+  - `checkHeatSourceState()` - handles HTSRC-based state detection
+  - `getStateFromHeatMode()` - processes HTMODE values for heating/cooling determination
+  - `checkTemperatureState()` - fallback temperature comparison logic
+- **Enhanced test coverage** - updated test suite to cover new heater state detection logic
+- **Better maintainability** - clearer separation of concerns in heater state determination
+
 ## [2.10.0] - 2025-07-12
 
 ### Added

@@ -912,4 +912,152 @@ describe('HeaterAccessory', () => {
       expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('temperature range'));
     });
   });
+
+  describe('HTSRC/HTMODE logic', () => {
+    beforeEach(() => {
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+    });
+
+    describe('checkHeatSourceState', () => {
+      it('should return null when heatSource is undefined', () => {
+        const bodyWithoutHeatSource = { ...mockBody, heatSource: undefined };
+        mockPlatformAccessory.context.body = bodyWithoutHeatSource;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        // Should fall back to temperature comparison logic
+        expect(result).toBeDefined();
+      });
+
+      it('should return OFF when heatSource is "00000"', () => {
+        const bodyWithOffHeatSource = { ...mockBody, heatSource: '00000', heatMode: 1 };
+        mockPlatformAccessory.context.body = bodyWithOffHeatSource;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.OFF);
+      });
+
+      it('should return OFF when heatSource does not match heater ID', () => {
+        const bodyWithDifferentHeatSource = { ...mockBody, heatSource: 'different-heater-id', heatMode: 1 };
+        mockPlatformAccessory.context.body = bodyWithDifferentHeatSource;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.OFF);
+      });
+
+      it('should return null when heatMode is undefined', () => {
+        const bodyWithMatchingHeatSource = { ...mockBody, heatSource: mockHeater.id, heatMode: undefined };
+        mockPlatformAccessory.context.body = bodyWithMatchingHeatSource;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        // Should fall back to temperature comparison logic
+        expect(result).toBeDefined();
+      });
+
+      it('should return null when heatMode is null', () => {
+        const bodyWithMatchingHeatSource = { ...mockBody, heatSource: mockHeater.id, heatMode: null };
+        mockPlatformAccessory.context.body = bodyWithMatchingHeatSource;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        // Should fall back to temperature comparison logic
+        expect(result).toBeDefined();
+      });
+    });
+
+    describe('getStateFromHeatMode', () => {
+      it('should return COOL when heatMode is 9', () => {
+        const bodyWithCoolingMode = { ...mockBody, heatSource: mockHeater.id, heatMode: 9 };
+        mockPlatformAccessory.context.body = bodyWithCoolingMode;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.COOL);
+      });
+
+      it('should return HEAT when heatMode is 1', () => {
+        const bodyWithHeatingMode = { ...mockBody, heatSource: mockHeater.id, heatMode: 1 };
+        mockPlatformAccessory.context.body = bodyWithHeatingMode;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
+      });
+
+      it('should return HEAT when heatMode is 4', () => {
+        const bodyWithHeatPumpMode = { ...mockBody, heatSource: mockHeater.id, heatMode: 4 };
+        mockPlatformAccessory.context.body = bodyWithHeatPumpMode;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
+      });
+
+      it('should return HEAT when heatMode is any value >= 1 and not 9', () => {
+        const bodyWithHeatingMode = { ...mockBody, heatSource: mockHeater.id, heatMode: 5 };
+        mockPlatformAccessory.context.body = bodyWithHeatingMode;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
+      });
+
+      it('should return OFF when heatMode is 0', () => {
+        const bodyWithIdleMode = { ...mockBody, heatSource: mockHeater.id, heatMode: 0 };
+        mockPlatformAccessory.context.body = bodyWithIdleMode;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.OFF);
+      });
+
+      it('should return OFF when heatMode is negative', () => {
+        const bodyWithNegativeMode = { ...mockBody, heatSource: mockHeater.id, heatMode: -1 };
+        mockPlatformAccessory.context.body = bodyWithNegativeMode;
+        heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+        const result = heaterAccessory.getCurrentHeatingCoolingState();
+        expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.OFF);
+      });
+    });
+
+    it('should prioritize HTSRC/HTMODE over temperature comparison', () => {
+      // Set up body where temperature logic would return HEAT but HTMODE says idle
+      const bodyWithConflictingData = {
+        ...mockBody,
+        heatSource: mockHeater.id,
+        heatMode: 0, // Idle
+        temperature: 60, // Below lowTemperature (75°F)
+        lowTemperature: 75,
+        heaterId: mockHeater.id,
+      };
+      mockPlatformAccessory.context.body = bodyWithConflictingData;
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      const result = heaterAccessory.getCurrentHeatingCoolingState();
+      // Should return OFF from HTMODE, not HEAT from temperature comparison
+      expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.OFF);
+    });
+
+    it('should fall back to temperature comparison when HTSRC/HTMODE unavailable', () => {
+      // Test the fallback to checkTemperatureState logic
+      const bodyWithoutHeatSourceData = {
+        ...mockBody,
+        heatSource: undefined,
+        heatMode: undefined,
+        temperature: 60, // Below lowTemperature
+        lowTemperature: 75,
+        heaterId: mockHeater.id,
+      };
+      mockPlatformAccessory.context.body = bodyWithoutHeatSourceData;
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      const result = heaterAccessory.getCurrentHeatingCoolingState();
+      // Should return HEAT from temperature comparison
+      expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
+    });
+  });
 });

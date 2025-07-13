@@ -182,6 +182,7 @@ export type Body = {
   highTemperature?: number;
   lowTemperature?: number;
   heaterId?: string;
+  heatSource?: string; // HTSRC - raw heat source value (00000=off, non-00000=heater ID)
   heatMode?: number; // HTMODE values: 0=off, 1=heating, 4=heat pump, 9=cooling
   circuit?: BaseCircuit;
   [key: string]: unknown;
