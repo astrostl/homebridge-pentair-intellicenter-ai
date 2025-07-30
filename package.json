@@ -50,7 +50,7 @@
     "url": "https://github.com/astrostl"
   },
   "dependencies": {
-    "telnet-client": "^2.2.5",
+    "telnet-client": "^2.2.6",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
