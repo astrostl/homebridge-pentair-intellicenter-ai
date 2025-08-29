@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.2] - 2025-08-29
+
+### Fixed
+- **🔧 Critical Real-time Heater State Updates**: Fixed heater state synchronization when manually operated at device
+  - **HTMODE parameter mapping fix** - corrected bodyParams mapping from 'MODE' to 'HTMODE' in util.ts:135
+  - **Real-time update synchronization** - plugin now properly receives and processes HTMODE parameter changes via NotifyList responses
+  - **Manual device operation support** - when pool techs or users turn heater on/off at physical IntelliCenter device, HomeKit status updates immediately
+  - **Discovery consistency** - fix applies to both initial discovery and real-time updates for consistent behavior across all scenarios
+
+### Updated
+- **📦 Dependency Updates**: Multiple dependency updates for improved security and compatibility
+  - **Production dependencies**:
+    - `telnet-client`: 2.2.5 → 2.2.6
+  - **Development dependencies**:
+    - `jest`: 30.0.4 → 30.1.1 (testing framework)
+    - `@typescript-eslint/eslint-plugin`: multiple incremental updates (linting rules)
+    - `@typescript-eslint/parser`: 8.38.0 → 8.40.0 (TypeScript parser)
+    - `eslint`: 9.31.0 → 9.34.0 (code linting)
+    - `@types/node`: 24.0.13 → 24.3.0 (Node.js type definitions)
+    - `typescript`: 5.8.3 → 5.9.2 (TypeScript compiler)
+    - `ts-jest`: 29.4.0 → 29.4.1 (Jest TypeScript integration)
+    - `homebridge`: 1.10.0 → 1.11.0 (development/testing compatibility)
+
+### Technical Details
+- **Parameter mapping correction**: Changed `['heatMode', MODE_KEY]` to `['heatMode', HTMODE_KEY]` in bodyParams map
+- **Import optimization**: Removed unused MODE_KEY import and added HTMODE_KEY import in util.ts
+- **Test fixture updates**: Updated test data to use HTMODE parameter instead of MODE for consistency
+- **Root cause**: Plugin was subscribing to HTMODE updates but incorrectly mapping them via MODE parameter, causing missed real-time state changes
+
 ## [2.10.1] - 2025-07-13
 
 ### Fixed

@@ -76,8 +76,8 @@ import {
   CIRCUITS_KEY,
   COOL_KEY,
   GPM_KEY,
+  HTMODE_KEY,
   LAST_TEMP_KEY,
-  MODE_KEY,
   OBJ_ID_KEY,
   OBJ_LIST_KEY,
   OBJ_MAX_FLOW_KEY,
@@ -132,7 +132,7 @@ const bodyParams = new Map([
   ['highTemperature', 'HITMP'],
   ['lowTemperature', 'LOTMP'],
   ['heaterId', 'HTSRC'],
-  ['heatMode', MODE_KEY],
+  ['heatMode', HTMODE_KEY],
 ]) as ReadonlyMap<string, string>;
 
 const pumpParams = new Map([
