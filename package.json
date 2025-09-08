@@ -59,7 +59,7 @@
     "@typescript-eslint/eslint-plugin": "^8.41.0",
     "@typescript-eslint/parser": "^8.40.0",
     "audit-ci": "^7.1.0",
-    "eslint": "^9.34.0",
+    "eslint": "^9.35.0",
     "eslint-plugin-security": "^3.0.1",
     "homebridge": "^1.11.0",
     "jest": "^30.1.1",
