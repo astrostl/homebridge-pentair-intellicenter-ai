@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "telnet-client": "^2.2.6",
-    "uuid": "^11.1.0"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
