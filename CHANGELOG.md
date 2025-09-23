@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.3] - 2025-01-22
+
+### Fixed
+- **🔥 Critical Heat Pump State Detection**: Fixed heat pump heating state not showing in HomeKit
+  - **HTMODE type conversion fix** - fixed string-to-number conversion in util.ts updateBody function to properly handle IntelliCenter HTMODE parameter values
+  - **Heat pump heating detection** - heat pumps now correctly show "Heating" status when HTMODE=4 (heat pump heating mode)
+  - **Defensive type checking** - added backup type conversion in heaterAccessory.ts to handle any remaining string values
+  - **Test coverage updates** - updated test fixtures to expect correct number types for heatMode parameter
+
+### Updated
+- **📦 Dependency Updates**: Recent development dependency updates
+  - `ts-jest` updated from 29.4.3 to 29.4.4
+  - `eslint` updated from 9.35.0 to 9.36.0
+  - `@types/node` updated from 24.3.1 to 24.5.2
+
 ## [2.10.2] - 2025-08-29
 
 ### Fixed

@@ -18,7 +18,7 @@
               "name": "Pool",
               "objectType": "CIRCUIT"
             },
-            "heatMode": "2",
+            "heatMode": 2,
             "heaterId": "H0001",
             "highTemperature": "100",
             "id": "B1101",
@@ -78,7 +78,7 @@
               "name": "Spa",
               "objectType": "CIRCUIT"
             },
-            "heatMode": "2",
+            "heatMode": 2,
             "heaterId": "H0001",
             "highTemperature": "103",
             "id": "B1202",

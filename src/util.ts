@@ -154,7 +154,20 @@ export const updateCircuit = (circuit: Circuit | Body, params: IntelliCenterPara
 export const updateBody = (body: Body, params: IntelliCenterParams): void => {
   bodyParams.forEach((value, key) => {
     if (params[value]) {
-      body[key] = params[value];
+      // Convert numeric parameters to actual numbers
+      if (key === 'heatMode') {
+        const paramValue = params[value];
+        if (typeof paramValue === 'string') {
+          const numValue = Number(paramValue);
+          body[key] = isNaN(numValue) ? undefined : numValue;
+        } else if (typeof paramValue === 'number') {
+          body[key] = paramValue;
+        } else {
+          body[key] = undefined;
+        }
+      } else {
+        body[key] = params[value];
+      }
     }
   });
 };

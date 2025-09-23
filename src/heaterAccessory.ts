@@ -278,7 +278,11 @@ export class HeaterAccessory {
 
     // Non-00000 HTSRC + valid HTMODE determines heating status
     if (heatMode !== undefined && heatMode !== null) {
-      return this.getStateFromHeatMode(heatSource, heatMode);
+      // Ensure heatMode is a number (defensive type conversion)
+      const heatModeNum = typeof heatMode === 'string' ? Number(heatMode) : heatMode;
+      if (!isNaN(heatModeNum)) {
+        return this.getStateFromHeatMode(heatSource, heatModeNum);
+      }
     }
 
     return null; // No valid HTMODE, fall back to temperature comparison
