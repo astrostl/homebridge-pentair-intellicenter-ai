@@ -1059,5 +1059,48 @@ describe('HeaterAccessory', () => {
       // Should return HEAT from temperature comparison
       expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
     });
+
+    it('should update heatSource in updateTemperatureRanges', () => {
+      // Set initial state with no heatSource
+      mockPlatformAccessory.context.body.heatSource = undefined;
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      // Verify initial state is OFF due to missing heatSource
+      let result = heaterAccessory.getCurrentHeatingCoolingState();
+      expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.OFF);
+
+      // Update with new body data that includes heatSource
+      const updatedBody = {
+        ...mockPlatformAccessory.context.body,
+        heatSource: mockHeater.id, // Now has valid heat source
+        heatMode: 4, // Heat pump heating mode
+        temperature: 80,
+        lowTemperature: 85,
+        highTemperature: 90,
+      };
+
+      heaterAccessory.updateTemperatureRanges(updatedBody);
+
+      // Verify that heatSource was updated and state is now correct
+      result = heaterAccessory.getCurrentHeatingCoolingState();
+      expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
+    });
+
+    it('should use HTMODE fallback when HTSRC is missing but heatMode is available', () => {
+      // Set up scenario where HTSRC is missing but we have HTMODE=4 (heat pump heating)
+      mockPlatformAccessory.context.body = {
+        ...mockPlatformAccessory.context.body,
+        heatSource: undefined, // No HTSRC data
+        heatMode: 4, // HTMODE=4 (heat pump heating mode)
+        heaterId: mockHeater.id, // Heater is assigned
+        temperature: 84,
+        lowTemperature: 84, // At setpoint, would normally show OFF
+      };
+      heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+      // Should return HEAT due to HTMODE=4, not OFF due to temperature comparison
+      const result = heaterAccessory.getCurrentHeatingCoolingState();
+      expect(result).toBe(mockPlatform.Characteristic.CurrentHeatingCoolingState.HEAT);
+    });
   });
 });

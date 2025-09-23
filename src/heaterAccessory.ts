@@ -236,7 +236,9 @@ export class HeaterAccessory {
         ? this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
         : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS,
     );
-    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, this.getCurrentHeatingCoolingState());
+    const initialState = this.getCurrentHeatingCoolingState();
+    this.platform.log.debug(`[${this.heater.name}] bindStaticValues: Setting initial CurrentHeatingCoolingState to ${initialState}`);
+    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, initialState);
   }
 
   getCurrentHeatingCoolingState(): CharacteristicValue {
@@ -244,7 +246,7 @@ export class HeaterAccessory {
     const heatMode = this.body.heatMode;
 
     this.platform.log.debug(
-      `[${this.heater.name}] HTSRC: ${heatSource}, HTMODE: ${heatMode}, ` +
+      `[${this.heater.name}] getCurrentHeatingCoolingState: HTSRC: ${heatSource}, HTMODE: ${heatMode}, ` +
         `heater.id: ${this.heater.id}, temp: ${this.temperature}°C, low: ${this.lowTemperature}°C, high: ${this.highTemperature}°C`,
     );
 
@@ -256,6 +258,25 @@ export class HeaterAccessory {
 
     // Fallback to temperature comparison logic
     return this.checkTemperatureState();
+  }
+
+  private checkHeatModeState(): CharacteristicValue | null {
+    if (this.body.heatMode !== undefined && this.body.heatMode !== null) {
+      const heatModeNum = typeof this.body.heatMode === 'string' ? Number(this.body.heatMode) : this.body.heatMode;
+      if (!isNaN(heatModeNum)) {
+        this.platform.log.debug(`[${this.heater.name}] checkTemperatureState: Using available HTMODE=${heatModeNum} for heating detection`);
+        if (heatModeNum === 9) {
+          return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
+        } else if (heatModeNum >= 1) {
+          this.platform.log.debug(`[${this.heater.name}] checkTemperatureState: HTMODE=${heatModeNum} indicates active heating`);
+          return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+        } else {
+          this.platform.log.debug(`[${this.heater.name}] checkTemperatureState: HTMODE=${heatModeNum} indicates heater idle`);
+          return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+        }
+      }
+    }
+    return null;
   }
 
   private checkHeatSourceState(heatSource: string | undefined, heatMode: number | undefined): CharacteristicValue | null {
@@ -304,10 +325,20 @@ export class HeaterAccessory {
   private checkTemperatureState(): CharacteristicValue {
     // First check if this heater is even assigned to this body via heaterId
     if (this.body.heaterId !== this.heater.id) {
+      this.platform.log.debug(
+        `[${this.heater.name}] checkTemperatureState: Heater not assigned (${this.body.heaterId} != ${this.heater.id})`,
+      );
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
+    // If we have heatMode available, use it even without heatSource
+    const heatModeState = this.checkHeatModeState();
+    if (heatModeState !== null) {
+      return heatModeState;
+    }
+
     if (!this.temperature) {
+      this.platform.log.debug(`[${this.heater.name}] checkTemperatureState: No temperature data available`);
       return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
     }
 
@@ -415,9 +446,12 @@ export class HeaterAccessory {
       this.body.temperature = body.temperature;
     }
 
-    // Update body heating mode for HTMODE-based status
+    // Update body heating mode and heat source for HTMODE/HTSRC-based status
     if (body.heatMode !== undefined) {
       this.body.heatMode = body.heatMode;
+    }
+    if (body.heatSource !== undefined) {
+      this.body.heatSource = body.heatSource;
     }
 
     if (this.isFahrenheit) {
@@ -439,7 +473,9 @@ export class HeaterAccessory {
     }
 
     // Update heating/cooling status based on new body data (including HTMODE)
-    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, this.getCurrentHeatingCoolingState());
+    const newState = this.getCurrentHeatingCoolingState();
+    this.platform.log.debug(`[${this.heater.name}] updateTemperatureRanges: Updating CurrentHeatingCoolingState to ${newState}`);
+    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, newState);
 
     // Update HomeKit characteristic props if ranges changed
     const rangeChanged = oldLowTemp !== this.lowTemperature || oldHighTemp !== this.highTemperature;

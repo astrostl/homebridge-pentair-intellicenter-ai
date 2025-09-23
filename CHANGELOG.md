@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.4] - 2025-01-22
+
+### Fixed
+- **🔥 Heat Pump HTMODE Fallback Logic**: Fixed heat pump not showing "Heating" status when temperature reaches setpoint
+  - **HTMODE fallback detection** - added fallback logic to use HTMODE parameter even when HTSRC data is missing
+  - **Temperature-independent heating detection** - heat pumps with HTMODE=4 now correctly show "Heating" regardless of temperature comparison
+  - **Enhanced state synchronization** - ensured both heatSource and heatMode are properly updated during real-time updates
+  - **Comprehensive debug logging** - added detailed logging for heating state detection troubleshooting
+  - **Code complexity reduction** - refactored heating detection methods to improve maintainability and reduce cyclomatic complexity
+
+### Technical Details
+- Added `checkHeatModeState()` method for HTMODE-only detection scenarios
+- Enhanced `updateTemperatureRanges()` to update both heatSource and heatMode properties
+- Improved `checkTemperatureState()` with HTMODE fallback logic when HTSRC unavailable
+- Added comprehensive test coverage for HTMODE fallback scenarios
+
 ## [2.10.3] - 2025-01-22
 
 ### Fixed
