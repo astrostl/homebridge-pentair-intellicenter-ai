@@ -63,7 +63,7 @@
     "eslint-plugin-security": "^3.0.1",
     "homebridge": "^1.11.1",
     "jest": "^30.2.0",
-    "nodemon": "^3.1.10",
+    "nodemon": "^3.1.11",
     "prettier": "^3.6.2",
     "rimraf": "^6.1.0",
     "ts-jest": "^29.4.5",
