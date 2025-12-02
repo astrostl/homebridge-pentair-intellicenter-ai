@@ -161,5 +161,72 @@ describe('Final Branch Coverage Tests', () => {
       expect(result).toHaveLength(1);
       expect(result[0].type).toBeUndefined();
     });
+
+    it('should include GRP-prefixed circuits regardless of FEATR value', () => {
+      const circuits = [
+        {
+          objnam: 'GRP01', // GRP prefix should always be included
+          params: {
+            OBJTYP: 'CIRCUIT',
+            SNAME: 'Pool Mode',
+            SUBTYP: 'CIRCGRP',
+            FEATR: 'FEATR', // Not 'ON', but should still be included due to GRP prefix
+          },
+        },
+        {
+          objnam: 'C0005', // Regular circuit with FEATR=FEATR should be excluded
+          params: {
+            OBJTYP: 'CIRCUIT',
+            SNAME: 'Regular Circuit',
+            SUBTYP: 'GENERIC',
+            FEATR: 'FEATR',
+          },
+        },
+        {
+          objnam: 'GRP02', // Another GRP circuit
+          params: {
+            OBJTYP: 'CIRCUIT',
+            SNAME: 'Spa Mode',
+            SUBTYP: 'CIRCGRP',
+            FEATR: 'OFF',
+          },
+        },
+      ];
+
+      const result = transformFeatures(circuits, false); // includeAllCircuits = false
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('GRP01');
+      expect(result[0].name).toBe('Pool Mode');
+      expect(result[1].id).toBe('GRP02');
+      expect(result[1].name).toBe('Spa Mode');
+    });
+
+    it('should include both GRP and FEATR=ON circuits', () => {
+      const circuits = [
+        {
+          objnam: 'GRP01',
+          params: {
+            OBJTYP: 'CIRCUIT',
+            SNAME: 'Pool Mode',
+            SUBTYP: 'CIRCGRP',
+            FEATR: 'FEATR',
+          },
+        },
+        {
+          objnam: 'C0005',
+          params: {
+            OBJTYP: 'CIRCUIT',
+            SNAME: 'Pool Light',
+            SUBTYP: 'GENERIC',
+            FEATR: 'ON', // This should be included due to FEATR=ON
+          },
+        },
+      ];
+
+      const result = transformFeatures(circuits, false);
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('GRP01');
+      expect(result[1].id).toBe('C0005');
+    });
   });
 });

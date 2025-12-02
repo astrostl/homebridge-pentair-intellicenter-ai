@@ -251,13 +251,17 @@ const getFeatureProperties = (featureObj: IntelliCenterObject) => {
 };
 
 const shouldIncludeFeature = (props: ReturnType<typeof getFeatureProperties>, includeAllCircuits: boolean): boolean => {
-  const { subtype, isCircuit, featrValue } = props;
+  const { subtype, isCircuit, featrValue, objId } = props;
 
   if (!isCircuit || subtype === 'LEGACY') {
     return false;
   }
 
-  return includeAllCircuits || isFeatureEnabled(featrValue, includeAllCircuits) || isIntelliBriteCircuit(subtype);
+  return includeAllCircuits || isFeatureEnabled(featrValue, includeAllCircuits) || isIntelliBriteCircuit(subtype) || isCircuitGroup(objId);
+};
+
+const isCircuitGroup = (objId: string): boolean => {
+  return objId.startsWith('GRP');
 };
 
 const isFeatureEnabled = (featrValue: string, includeAllCircuits: boolean): boolean => {

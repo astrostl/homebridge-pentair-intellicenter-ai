@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2025-12-01
+
+### Added
+- **🔄 Circuit Group Support**: Automatic inclusion of IntelliCenter circuit groups in HomeKit
+  - **GRP-prefixed circuits** - circuits with IDs starting with "GRP" (circuit groups) are now automatically included regardless of FEATR value
+  - **Pool/Spa Mode support** - circuit groups like "Pool Mode" and "Spa Mode" now appear in HomeKit for convenient mode switching
+  - **No configuration required** - circuit groups are discovered and exposed automatically during device discovery
+
+### Updated
+- **📦 Dependency Updates**: Comprehensive dependency updates for improved security and compatibility
+  - **Production dependencies**:
+    - `telnet-client`: 2.2.6 → 2.2.9
+  - **Development dependencies**:
+    - `prettier`: 3.6.2 → 3.7.3
+    - `@typescript-eslint/eslint-plugin`: multiple incremental updates to 8.48.0
+    - `@typescript-eslint/parser`: multiple incremental updates to 8.48.0
+    - `eslint`: 9.35.0 → 9.39.1
+    - `jest`: 30.1.3 → 30.2.0
+    - `ts-jest`: 29.4.1 → 29.4.6
+    - `typescript`: 5.9.2 → 5.9.3
+    - `@types/node`: 24.3.1 → 24.10.1
+    - `rimraf`: 6.0.1 → 6.1.2
+    - `nodemon`: 3.1.10 → 3.1.11
+    - `homebridge`: 1.11.0 → 1.11.1
+
+### Technical
+- **Test coverage** - added comprehensive tests for circuit group detection logic
+- **Code quality** - maintained 89%+ statement coverage, 744 passing tests
+- **Zero vulnerabilities** - all security audits pass
+
 ## [2.10.4] - 2025-01-22
 
 ### Fixed
