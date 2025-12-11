@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2025-12-10
+
+### Changed
+- **🔐 Optional Authentication**: Username and password are no longer required configuration fields
+  - **Simplified setup** - IntelliCenter systems without authentication can now be configured without credentials
+  - **Backward compatible** - existing configurations with credentials continue to work unchanged
+
+### Fixed
+- **🌡️ Heater Temperature Range**: Fixed heater setpoint slider to allow full temperature range
+  - **Full range support** - heater setpoint slider now allows temperatures from minimum to maximum configured values
+  - **Improved control** - users can now set any valid temperature within the configured range
+
+### Updated
+- **📦 Dependency Updates**: Development dependency updates for improved tooling
+  - `prettier`: 3.7.3 → 3.7.4
+  - `@typescript-eslint/eslint-plugin`: multiple incremental updates
+  - `@types/node`: 24.10.1 → 24.10.2
+  - `ts-jest`: 29.4.5 → 29.4.6
+
+### Technical
+- **📝 Documentation**: Updated RELEASE.md to streamline release process
+  - Simplified prerequisites by making commit/push part of release steps
+  - Improved release workflow documentation
+
 ## [2.11.0] - 2025-12-01
 
 ### Added

@@ -7,7 +7,6 @@ This document outlines the steps to cut a new release for homebridge-pentair-int
 - You have push access to the repository
 - You are logged into npm (`npm whoami`)
 - You are logged into GitHub CLI (`gh auth status`)
-- All changes are committed and pushed to master
 
 ## Release Steps
 
@@ -87,11 +86,8 @@ Include:
 ### 5. Commit and Tag
 
 ```bash
-# Stage changes
-git add package.json CHANGELOG.md
-
-# Include any source/test changes
-git add src/ test/
+# Stage all changes
+git add -A
 
 # Commit with descriptive message
 git commit -m "$(cat <<'EOF'
