@@ -19,7 +19,7 @@ I have a dual-body setup with a pool (IntelliFlo VSF pump, cleaner pump, heat pu
 
 ## Features and Functionality
 
-Exposes all bodies, all features, and any circuits *marked as features in IntelliCenter*. Knows power curves for VF and VSF pumps and exposes virtual lights to report RPMs (actual), watts (estimated), and GPM (estimated on VSF only).
+Exposes all bodies, all features, all groups, and any circuits *marked as features in IntelliCenter*. Knows power curves for VF and VSF pumps and exposes virtual lights to report RPMs (actual), watts (estimated), and GPM (estimated on VSF only).
 
 ## Configuration Options
 
