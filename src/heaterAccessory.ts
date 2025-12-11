@@ -485,33 +485,31 @@ export class HeaterAccessory {
   }
 
   private updateCharacteristicProps(): void {
-    // Use actual body temperature limits if available, otherwise use platform limits
-    const actualMinValue = this.lowTemperature ? this.lowTemperature - 5 : this.minValue;
-    const actualMaxValue = this.highTemperature ? this.highTemperature + 5 : this.maxValue;
-
-    this.platform.log.info(
-      `Updating heater ${this.heater.name} temperature range: ${actualMinValue}°-${actualMaxValue}° ` +
-        `(low: ${this.lowTemperature}, high: ${this.highTemperature}) ${this.isFahrenheit ? 'F' : 'C'}`,
+    // Use platform-configured min/max limits for the full allowed range
+    // This ensures users can set any temperature within the configured bounds
+    this.platform.log.debug(
+      `[${this.heater.name}] Temperature range: ${this.minValue}°-${this.maxValue}°C ` +
+        `(low setpoint: ${this.lowTemperature}, high setpoint: ${this.highTemperature})`,
     );
 
     if (this.lowTemperature) {
       this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps({
-        minValue: actualMinValue,
-        maxValue: actualMaxValue,
+        minValue: this.minValue,
+        maxValue: this.maxValue,
         minStep: THERMOSTAT_STEP_VALUE,
       });
     }
 
     if (this.heater.coolingEnabled && this.highTemperature) {
       this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps({
-        minValue: actualMinValue,
-        maxValue: actualMaxValue,
+        minValue: this.minValue,
+        maxValue: this.maxValue,
         minStep: THERMOSTAT_STEP_VALUE,
       });
 
       this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps({
-        minValue: actualMinValue,
-        maxValue: actualMaxValue,
+        minValue: this.minValue,
+        maxValue: this.maxValue,
         minStep: THERMOSTAT_STEP_VALUE,
       });
     }

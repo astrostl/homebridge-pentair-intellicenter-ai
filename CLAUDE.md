@@ -389,7 +389,13 @@ cp homebridge-config/config.template.json homebridge-config/config.json
 
 # Build and start Homebridge (works with Docker or nerdctl)
 ./start-dev.sh
+
+# If auth.json has stale credentials, delete it:
+docker compose exec homebridge rm /homebridge/auth.json && docker compose restart homebridge
 ```
+
+**Network Configuration:**
+The Docker Compose config uses `network_mode: host` which is required for mDNS/Bonjour discovery (HomeKit pairing). Note that on macOS, host networking doesn't fully work due to Docker running in a VM - use the Homebridge UI at http://localhost:8581 to test accessories instead of pairing with Apple Home.
 
 **Development Workflow:**
 ```bash
@@ -410,9 +416,9 @@ nerdctl compose logs -f homebridge | grep "temperature range"
 **Local Testing Process:**
 The `test-local.sh` script provides instant testing of code changes:
 1. **Builds** your local plugin (`npm run build`)
-2. **Finds** the installed plugin in `/var/lib/homebridge/node_modules/`
+2. **Finds** the installed plugin (searches `/homebridge/node_modules/` and `/var/lib/homebridge/node_modules/`)
 3. **Copies** your `dist/` files directly into the container
-4. **Restarts** Homebridge to load changes
+4. **Restarts** Homebridge to load changes (may need manual `docker compose restart homebridge`)
 5. **No publishing required** - test immediately
 
 This mimics the SFTP approach of copying built files directly to the plugin directory.

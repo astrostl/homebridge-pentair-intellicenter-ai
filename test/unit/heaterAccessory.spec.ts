@@ -836,8 +836,8 @@ describe('HeaterAccessory', () => {
 
       heaterAccessory.updateTemperatureRanges(updatedBody);
 
-      // Should log the temperature range update
-      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Updating heater Pool Heater temperature range'));
+      // Should log the temperature range update (now debug level)
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Temperature range:'));
 
       // Should set props for target temperature
       expect(mockService.setProps).toHaveBeenCalledWith({
@@ -875,7 +875,7 @@ describe('HeaterAccessory', () => {
       );
     });
 
-    it('should calculate correct min/max values with buffer', () => {
+    it('should use platform-configured min/max values', () => {
       const updatedBody: Body = {
         ...mockBody,
         lowTemperature: 75, // 75°F = ~23.89°C
@@ -884,9 +884,9 @@ describe('HeaterAccessory', () => {
 
       heaterAccessory.updateTemperatureRanges(updatedBody);
 
-      // Should use temperature limits with 5-degree buffer
-      // lowTemp (23.89) - 5 = ~18.89, highTemp (29.44) + 5 = ~34.44
-      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringMatching(/temperature range: \d+\.?\d*°-\d+\.?\d*°/));
+      // Should use platform-configured limits (not dynamic buffer around current setpoint)
+      // This ensures users can set any temperature within the full configured range
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Temperature range:'));
     });
 
     it('should use platform limits when body temperatures are unavailable', () => {
@@ -908,8 +908,8 @@ describe('HeaterAccessory', () => {
 
       heaterAccessory.updateTemperatureRanges(updatedBody);
 
-      // Should use platform min/max values when body temps are unavailable initially but then get updated
-      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('temperature range'));
+      // Should use platform min/max values (configured in platform settings)
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(expect.stringContaining('Temperature range:'));
     });
   });
 

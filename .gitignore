@@ -128,4 +128,6 @@ homebridge-config/backups/
 homebridge-config/.uix-secrets
 homebridge-config/persist/
 homebridge-config/accessories/
+homebridge-config/node_modules/
+homebridge-config/homebridge.log
 

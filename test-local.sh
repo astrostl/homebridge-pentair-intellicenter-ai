@@ -19,7 +19,7 @@ else
 fi
 
 echo "📁 Finding plugin directory in container..."
-PLUGIN_DIR=$($COMPOSE_CMD exec homebridge find /var/lib/homebridge/node_modules -name "homebridge-pentair-intellicenter-ai" -type d 2>/dev/null | head -1 | tr -d '\r\n')
+PLUGIN_DIR=$($COMPOSE_CMD exec homebridge find /homebridge/node_modules /var/lib/homebridge/node_modules -name "homebridge-pentair-intellicenter-ai" -type d 2>/dev/null | head -1 | tr -d '\r\n')
 
 if [ -z "$PLUGIN_DIR" ]; then
     echo "❌ Plugin not found in container! Make sure it's installed via UI first."
