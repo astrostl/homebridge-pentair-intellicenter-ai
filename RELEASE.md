@@ -8,6 +8,8 @@ This document outlines the steps to cut a new release for homebridge-pentair-int
 - You are logged into npm (`npm whoami`)
 - You are logged into GitHub CLI (`gh auth status`)
 
+**npm Authentication Note**: npm is aggressive with session expiration and requires recent authentication with passkeys to publish. If `npm publish` fails with "Access token expired or revoked", run `npm login` first.
+
 ## Release Steps
 
 ### 1. Verify Current State
