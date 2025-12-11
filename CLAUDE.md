@@ -401,25 +401,22 @@ The Docker Compose config uses `network_mode: host` which is required for mDNS/B
 ```bash
 # Initial setup: Install plugin via Homebridge UI first
 # Then test local changes without publishing:
-./test-local.sh
+./test-local.sh && docker compose restart homebridge
 
-# View logs (Docker)
-docker compose logs -f homebridge
+# View logs (bounded, not streaming)
+docker compose logs --tail 50 homebridge
 
-# View logs (nerdctl/Rancher Desktop)
-nerdctl compose logs -f homebridge
-
-# Watch for specific logs (e.g., testing heat pump range fix)
-nerdctl compose logs -f homebridge | grep "temperature range"
+# Search for specific logs
+docker compose logs --tail 200 homebridge | grep "temperature range"
 ```
 
 **Local Testing Process:**
-The `test-local.sh` script provides instant testing of code changes:
+The `test-local.sh` script builds and copies code to the container:
 1. **Builds** your local plugin (`npm run build`)
 2. **Finds** the installed plugin (searches `/homebridge/node_modules/` and `/var/lib/homebridge/node_modules/`)
 3. **Copies** your `dist/` files directly into the container
-4. **Restarts** Homebridge to load changes (may need manual `docker compose restart homebridge`)
-5. **No publishing required** - test immediately
+
+**IMPORTANT**: Always run `docker compose restart homebridge` after `test-local.sh` to load changes. The script's internal restart may fail silently.
 
 This mimics the SFTP approach of copying built files directly to the plugin directory.
 

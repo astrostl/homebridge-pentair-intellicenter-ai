@@ -32,19 +32,6 @@
         "default": "192.168.1.XXX",
         "description": "IP Address of Pentair Intellicenter. Should be static or DHCP-reserved"
       },
-      "username": {
-        "title": "Username",
-        "type": "string",
-        "required": true,
-        "default": "john@doe.com"
-      },
-      "password": {
-        "title": "Password",
-        "type": "string",
-        "required": true,
-        "default": "*****",
-        "description": "Password for the Pentair Intellicenter account. Warning: This is stored in the plugin in plaintext"
-      },
       "temperatureUnits": {
         "title": "Temperature Units",
         "description": "Celsius or Fahrenheit as configured in IntelliCenter",

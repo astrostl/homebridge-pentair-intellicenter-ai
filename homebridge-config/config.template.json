@@ -10,9 +10,7 @@
     {
       "platform": "PentairIntelliCenter",
       "name": "Pentair IntelliCenter",
-      "host": "YOUR_INTELLICENTER_IP",
-      "username": "YOUR_USERNAME", 
-      "password": "YOUR_PASSWORD",
+      "ipAddress": "YOUR_INTELLICENTER_IP",
       "temperatureUnits": "F"
     }
   ]

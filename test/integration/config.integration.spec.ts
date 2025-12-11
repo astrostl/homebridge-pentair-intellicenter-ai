@@ -24,12 +24,12 @@ const mockLogger = {
   error: jest.fn(),
 } as unknown as Logger;
 
+// Note: username/password are no longer required from user config.
+// IntelliCenter telnet API does not require authentication.
 const baseConfig: PlatformConfig = {
   name: 'PentairIntelliCenter',
   platform: 'PentairIntelliCenter',
   ipAddress: '192.168.1.100',
-  username: 'admin',
-  password: 'password',
 };
 
 describe('Configuration Integration Tests', () => {
@@ -90,14 +90,11 @@ describe('Configuration Integration Tests', () => {
       expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('ipAddress is required and must be a string'));
     });
 
-    it('should handle missing credentials gracefully', () => {
-      const configWithoutCredentials = { ...baseConfig };
-      delete (configWithoutCredentials as any).username;
-      delete (configWithoutCredentials as any).password;
-
-      // Should not error during construction, but will fail on connection
+    it('should work without credentials (auth not required)', () => {
+      // IntelliCenter telnet API does not require authentication.
+      // Credentials are hardcoded placeholders for code compatibility.
       expect(() => {
-        createTrackedPlatform(mockLogger, configWithoutCredentials, mockAPI);
+        createTrackedPlatform(mockLogger, baseConfig, mockAPI);
       }).not.toThrow();
     });
   });
@@ -250,16 +247,14 @@ describe('Configuration Integration Tests', () => {
       expect(config.platform).toBeDefined();
       expect(config.ipAddress).toBeDefined();
 
-      // Provided fields should be preserved
-      expect(config.username).toBeDefined();
-      expect(config.password).toBeDefined();
+      // Username/password are hardcoded placeholders (auth not required)
+      expect(config.username).toBe('unused_placeholder');
+      expect(config.password).toBe('unused_placeholder_password');
     });
 
     it('should preserve all provided configuration values', () => {
       const fullConfig = {
         ...baseConfig,
-        username: 'testuser',
-        password: 'testpass',
         maxBufferSize: 2048000,
         temperatureUnits: 'C',
         minimumTemperature: 10,
@@ -272,8 +267,9 @@ describe('Configuration Integration Tests', () => {
       const platform = createTrackedPlatform(mockLogger, fullConfig, mockAPI);
       const config = platform.getConfig();
 
-      expect(config.username).toBe('testuser');
-      expect(config.password).toBe('testpass');
+      // Username/password are hardcoded placeholders (auth not required)
+      expect(config.username).toBe('unused_placeholder');
+      expect(config.password).toBe('unused_placeholder_password');
       expect(config.maxBufferSize).toBe(2048000);
       expect(config.temperatureUnits).toBe('C');
       expect(config.minimumTemperature).toBe(10);

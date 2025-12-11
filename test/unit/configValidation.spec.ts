@@ -6,12 +6,12 @@ describe('ConfigValidator', () => {
   let baseConfig: PlatformConfig;
 
   beforeEach(() => {
+    // Note: username/password are no longer required from user config.
+    // IntelliCenter telnet API does not require authentication.
     baseConfig = {
       platform: 'PentairIntelliCenter',
       name: 'Test Platform',
       ipAddress: '192.168.1.100',
-      username: 'testuser',
-      password: 'testpassword',
       temperatureUnits: TemperatureUnits.F,
       minimumTemperature: 40,
       maximumTemperature: 104,
@@ -34,8 +34,6 @@ describe('ConfigValidator', () => {
         platform: 'PentairIntelliCenter',
         name: 'Test Platform',
         ipAddress: '192.168.1.100',
-        username: 'testuser',
-        password: 'testpassword',
       };
 
       const result = ConfigValidator.validate(configWithMissingOptionals);
@@ -46,6 +44,9 @@ describe('ConfigValidator', () => {
       expect(result.sanitizedConfig!.airTemp).toBe(true);
       expect(result.sanitizedConfig!.includeAllCircuits).toBe(false);
       expect(result.sanitizedConfig!.maxBufferSize).toBe(1048576);
+      // Username/password are hardcoded placeholders (auth not required)
+      expect(result.sanitizedConfig!.username).toBe('unused_placeholder');
+      expect(result.sanitizedConfig!.password).toBe('unused_placeholder_password');
     });
 
     it('should handle Celsius temperature units', () => {
@@ -66,16 +67,15 @@ describe('ConfigValidator', () => {
       const configWithDirtyInput = {
         ...baseConfig,
         ipAddress: '  192.168.1.100  ',
-        username: 'test<script>user',
-        password: 'pass&w0rd"',
       };
 
       const result = ConfigValidator.validate(configWithDirtyInput);
 
       expect(result.isValid).toBe(true);
       expect(result.sanitizedConfig!.ipAddress).toBe('192.168.1.100');
-      expect(result.sanitizedConfig!.username).toBe('testscriptuser');
-      expect(result.sanitizedConfig!.password).toBe('passw0rd');
+      // Username/password are hardcoded placeholders (auth not required)
+      expect(result.sanitizedConfig!.username).toBe('unused_placeholder');
+      expect(result.sanitizedConfig!.password).toBe('unused_placeholder_password');
     });
   });
 
@@ -114,86 +114,9 @@ describe('ConfigValidator', () => {
     });
   });
 
-  describe('Username Validation', () => {
-    it('should reject usernames that are too short', () => {
-      const config = { ...baseConfig, username: 'ab' };
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors.some(error => error.includes('at least 3 characters'))).toBe(true);
-    });
-
-    it('should reject usernames that are too long', () => {
-      const config = { ...baseConfig, username: 'a'.repeat(101) };
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors.some(error => error.includes('less than 100 characters'))).toBe(true);
-    });
-
-    it('should sanitize usernames with dangerous characters', () => {
-      const dangerousUsernames = [
-        { input: 'user<script>', expected: 'userscript' },
-        { input: 'user"quotes', expected: 'userquotes' },
-        { input: "user'quotes", expected: 'userquotes' },
-        { input: 'user&amp', expected: 'useramp' },
-      ];
-
-      dangerousUsernames.forEach(({ input, expected }) => {
-        const config = { ...baseConfig, username: input };
-        const result = ConfigValidator.validate(config);
-
-        expect(result.isValid).toBe(true);
-        expect(result.sanitizedConfig!.username).toBe(expected);
-      });
-    });
-
-    it('should accept valid usernames', () => {
-      const validUsernames = ['testuser', 'user@example.com', 'user.name', 'user123', 'user_name', 'user-name'];
-
-      validUsernames.forEach(username => {
-        const config = { ...baseConfig, username };
-        const result = ConfigValidator.validate(config);
-
-        expect(result.isValid).toBe(true);
-      });
-    });
-  });
-
-  describe('Password Validation', () => {
-    it('should reject passwords that are too short', () => {
-      const config = { ...baseConfig, password: '12345' };
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors.some(error => error.includes('at least 6 characters'))).toBe(true);
-    });
-
-    it('should reject passwords that are too long', () => {
-      const config = { ...baseConfig, password: 'a'.repeat(201) };
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors.some(error => error.includes('less than 200 characters'))).toBe(true);
-    });
-
-    it('should accept valid passwords', () => {
-      const validPasswords = [
-        'MyStrongPassword123!',
-        'another-good-password',
-        'Complex_Pass_2023',
-        'password', // Now allowed since it's user's existing credential
-        'simple123',
-      ];
-
-      validPasswords.forEach(password => {
-        const config = { ...baseConfig, password };
-        const result = ConfigValidator.validate(config);
-
-        expect(result.isValid).toBe(true);
-      });
-    });
-  });
+  // Note: Username/Password validation tests removed.
+  // IntelliCenter telnet API does not require authentication.
+  // Credentials are now hardcoded placeholders in configValidation.ts.
 
   describe('Temperature Validation', () => {
     it('should reject invalid temperature units', () => {
@@ -354,25 +277,7 @@ describe('ConfigValidator', () => {
       expect(result.errors.some(error => error.includes('ipAddress is required'))).toBe(true);
     });
 
-    it('should reject configuration missing username', () => {
-      const config = { ...baseConfig };
-      delete config.username;
-
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors.some(error => error.includes('username is required'))).toBe(true);
-    });
-
-    it('should reject configuration missing password', () => {
-      const config = { ...baseConfig };
-      delete config.password;
-
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors.some(error => error.includes('password is required'))).toBe(true);
-    });
+    // Note: Username/password tests removed - auth not required by IntelliCenter
   });
 
   describe('Edge Cases', () => {
@@ -406,17 +311,7 @@ describe('ConfigValidator', () => {
   });
 
   describe('Additional Coverage Tests', () => {
-    it('should handle password validation with dangerous characters', () => {
-      const config = {
-        ...baseConfig,
-        password: 'weak<script>alert("xss")</script>',
-      };
-      const result = ConfigValidator.validate(config);
-
-      expect(result.isValid).toBe(true);
-      // Password gets sanitized but no warning is generated (as designed)
-      expect(result.sanitizedConfig!.password).toBe('weakscriptalert(xss)/script');
-    });
+    // Note: Password validation tests removed - auth not required by IntelliCenter
 
     it('should handle IP address octet validation', () => {
       const config = {
@@ -445,8 +340,6 @@ describe('ConfigValidator', () => {
       // Test multiple edge cases to cover remaining uncovered lines
       const edgeCaseConfig = {
         ...baseConfig,
-        username: 'user<script>danger</script>',
-        password: 'pass<script>danger</script>',
         minimumTemperature: 40.999999,
         maximumTemperature: 104.111111,
       };
@@ -454,8 +347,9 @@ describe('ConfigValidator', () => {
       const result = ConfigValidator.validate(edgeCaseConfig);
 
       expect(result.isValid).toBe(true);
-      expect(result.sanitizedConfig!.username).toBe('userscriptdanger/script');
-      expect(result.sanitizedConfig!.password).toBe('passscriptdanger/script');
+      // Username/password are hardcoded placeholders (auth not required)
+      expect(result.sanitizedConfig!.username).toBe('unused_placeholder');
+      expect(result.sanitizedConfig!.password).toBe('unused_placeholder_password');
       expect(result.sanitizedConfig!.minimumTemperature).toBe(41.0);
       expect(result.sanitizedConfig!.maximumTemperature).toBe(104.1);
     });
@@ -550,16 +444,7 @@ describe('ConfigValidator', () => {
       expect(result5.isValid).toBe(true);
       expect(result5.warnings.some(warning => warning.includes('Buffer size must be a number'))).toBe(true);
 
-      // Cover lines 78-79: Password warning
-      // Create a password with many dangerous characters to trigger sanitization warning
-      const configWithDangerousPassword = {
-        ...baseConfig,
-        password: "mypassword<script><>\"\"&&&'''&&&<><><script><script>", // Many dangerous chars to trigger warning
-      };
-
-      const result6 = ConfigValidator.validate(configWithDangerousPassword);
-      expect(result6.isValid).toBe(true);
-      expect(result6.warnings.some(warning => warning.includes('potentially unsafe characters'))).toBe(true);
+      // Note: Password warning test removed - auth not required by IntelliCenter
     });
   });
 

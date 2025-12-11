@@ -55,8 +55,9 @@ jest.mock('../../src/configValidation', () => ({
       warnings: [],
       sanitizedConfig: {
         ipAddress: '192.168.1.100',
-        username: 'testuser',
-        password: 'testpass',
+        // Username/password are hardcoded placeholders (auth not required)
+        username: 'unused_placeholder',
+        password: 'unused_placeholder_password',
         temperatureUnits: 'F',
         minimumTemperature: 40,
         maximumTemperature: 104,
@@ -153,13 +154,11 @@ describe('Platform Integration Tests', () => {
 
     MockedTelnet.mockImplementation(() => mockTelnetInstance);
 
-    // Mock config
+    // Mock config (username/password no longer required - auth not used)
     mockConfig = {
       platform: 'PentairIntelliCenter',
       name: 'Test Platform',
       ipAddress: '192.168.1.100',
-      username: 'testuser',
-      password: 'testpass',
       temperatureUnits: TemperatureUnits.F,
       minimumTemperature: 40,
       maximumTemperature: 104,
@@ -208,8 +207,9 @@ describe('Platform Integration Tests', () => {
         negotiationMandatory: false,
         timeout: 1500,
         debug: true,
-        username: 'testuser',
-        password: 'testpass',
+        // Username/password are hardcoded placeholders (auth not required)
+        username: 'unused_placeholder',
+        password: 'unused_placeholder_password',
       });
     });
 

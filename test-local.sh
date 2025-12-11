@@ -31,6 +31,9 @@ echo "📋 Found plugin at: $PLUGIN_DIR"
 echo "📂 Copying dist/ files to container..."
 $COMPOSE_CMD cp dist/. homebridge:$PLUGIN_DIR/dist/
 
+echo "📂 Copying config.schema.json to container..."
+$COMPOSE_CMD cp config.schema.json homebridge:$PLUGIN_DIR/config.schema.json
+
 echo "🔄 Restarting Homebridge..."
 $COMPOSE_CMD exec homebridge bash -c "
     echo '🛑 Stopping Homebridge...'

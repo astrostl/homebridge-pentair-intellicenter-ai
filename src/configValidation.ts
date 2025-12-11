@@ -47,8 +47,20 @@ export type PentairConfig = {
 export class ConfigValidator {
   private static validateRequiredFields(config: PlatformConfig, errors: string[], warnings: string[], sanitizedConfig: PentairConfig) {
     this.validateRequiredIpAddress(config, errors, sanitizedConfig);
-    this.validateRequiredUsername(config, errors, sanitizedConfig);
-    this.validateRequiredPassword(config, errors, warnings, sanitizedConfig);
+    // Username/password are no longer required from user config.
+    // IntelliCenter's telnet interface does not actually require authentication,
+    // but the code structure remains in case auth is needed in the future.
+    // Hardcoded dummy values satisfy the existing code paths.
+    this.setDummyCredentials(sanitizedConfig);
+  }
+
+  private static setDummyCredentials(sanitizedConfig: PentairConfig) {
+    // IntelliCenter telnet API does not require authentication.
+    // These dummy values maintain code compatibility while removing user burden.
+    // If auth becomes required in the future, restore validateRequiredUsername/Password calls
+    // and add username/password back to config.schema.json.
+    sanitizedConfig.username = 'unused_placeholder';
+    sanitizedConfig.password = 'unused_placeholder_password';
   }
 
   private static validateRequiredIpAddress(config: PlatformConfig, errors: string[], sanitizedConfig: PentairConfig) {
