@@ -1,4 +1,5 @@
 ***All code is AI-generated (currently Claude Code) and directed, overseen, and tested by me. If running stuff from the internet scared you, this might horrify you.**
+
 ***Provided strictly as-is with no warranty, guarantee, etc.***
 
 # Homebridge Pentair IntelliCenter
