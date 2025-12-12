@@ -12,6 +12,7 @@ export const CIRCUITS_KEY = 'CIRCUITS';
 export const CIRCUIT_KEY = 'CIRCUIT';
 export const STATUS_KEY = 'STATUS';
 export const ACT_KEY = 'ACT';
+export const USE_KEY = 'USE';
 export const LAST_TEMP_KEY = 'LSTTMP';
 export const HEAT_SOURCE_KEY = 'HTSRC';
 export const HEATER_KEY = 'HEATER';
@@ -157,3 +158,32 @@ export const PUMP_PERFORMANCE_CURVES = {
     },
   },
 } as const;
+
+// IntelliBrite color-changing light options
+export type IntelliBriteOption = {
+  readonly code: string;
+  readonly name: string;
+};
+
+// Fixed colors (5)
+export const INTELLIBRITE_COLORS: readonly IntelliBriteOption[] = [
+  { code: 'WHITER', name: 'White' },
+  { code: 'REDR', name: 'Red' },
+  { code: 'GREENR', name: 'Green' },
+  { code: 'BLUER', name: 'Blue' },
+  { code: 'MAGNTAR', name: 'Magenta' },
+] as const;
+
+// Light shows (7)
+export const INTELLIBRITE_SHOWS: readonly IntelliBriteOption[] = [
+  { code: 'SAMMOD', name: 'Sam' },
+  { code: 'PARTY', name: 'Party' },
+  { code: 'ROMAN', name: 'Romance' },
+  { code: 'CARIB', name: 'Caribbean' },
+  { code: 'AMERCA', name: 'American' },
+  { code: 'SSET', name: 'Sunset' },
+  { code: 'ROYAL', name: 'Royal' },
+] as const;
+
+// All IntelliBrite options combined
+export const INTELLIBRITE_OPTIONS: readonly IntelliBriteOption[] = [...INTELLIBRITE_COLORS, ...INTELLIBRITE_SHOWS] as const;

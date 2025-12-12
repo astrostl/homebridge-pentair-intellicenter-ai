@@ -105,6 +105,7 @@ export type IntelliCenterResponse = {
 
 export enum CircuitType {
   IntelliBrite = 'INTELLI',
+  LightShowGroup = 'LITSHO',
   Generic = 'GENERIC',
 }
 

@@ -2,7 +2,12 @@ services:
   homebridge:
     image: homebridge/homebridge:latest
     restart: unless-stopped
-    network_mode: host
+    # Use bridge networking with port forwarding (works better on macOS with Docker VMs)
+    # network_mode: host  # Uncomment for Linux
+    ports:
+      - "8581:8581"   # Homebridge UI
+      - "51826:51826" # HAP (HomeKit) port
+      - "5353:5353/udp" # mDNS (Bonjour discovery)
     volumes:
       # Mount Homebridge config directory
       - ./homebridge-config:/homebridge

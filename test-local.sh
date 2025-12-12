@@ -35,13 +35,8 @@ echo "📂 Copying config.schema.json to container..."
 $COMPOSE_CMD cp config.schema.json homebridge:$PLUGIN_DIR/config.schema.json
 
 echo "🔄 Restarting Homebridge..."
-$COMPOSE_CMD exec homebridge bash -c "
-    echo '🛑 Stopping Homebridge...'
-    supervisorctl stop homebridge 2>/dev/null || pkill -f homebridge || true
-    sleep 2
-    echo '▶️ Starting Homebridge...'
-    supervisorctl start homebridge 2>/dev/null || echo 'Homebridge will restart automatically'
-"
+# Use compose restart instead of exec to avoid SIGTERM exit codes
+$COMPOSE_CMD restart homebridge
 
 echo "✅ Local plugin files updated!"
 echo "📊 Watch logs with: $COMPOSE_CMD logs -f homebridge"

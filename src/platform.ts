@@ -3,6 +3,7 @@ import * as net from 'net';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { CircuitAccessory } from './circuitAccessory';
+import { IntelliBriteAccessory } from './intelliBriteAccessory';
 import { Telnet } from 'telnet-client';
 import {
   BaseCircuit,
@@ -10,6 +11,7 @@ import {
   Circuit,
   CircuitStatus,
   CircuitStatusMessage,
+  CircuitType,
   CircuitTypes,
   DiscoveryAnswer,
   Heater,
@@ -45,6 +47,7 @@ import {
   SELECT_KEY,
   SPEED_KEY,
   STATUS_KEY,
+  USE_KEY,
 } from './constants';
 import { HeaterAccessory } from './heaterAccessory';
 import EventEmitter from 'events';
@@ -790,7 +793,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
     this.logPumpUpdateComplete(pumpCircuit);
     this.api.updatePlatformAccessories([accessory]);
-    new CircuitAccessory(this, accessory);
+    this.createCircuitAccessory(accessory);
     this.updateAllPumpSensorsForChangedCircuit(pumpCircuit);
   }
 
@@ -813,6 +816,28 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     if (accessory.context.circuit.objectType === ObjectType.Body) {
       this.updateBodyCircuit(accessory.context.circuit as Body, params);
     }
+
+    // Handle IntelliBrite color/show updates
+    this.updateIntelliBriteColor(accessory, params);
+  }
+
+  private updateIntelliBriteColor(accessory: PlatformAccessory, params: IntelliCenterParams): void {
+    const circuit = accessory.context.circuit as Circuit | undefined;
+    const circuitType = circuit?.type;
+    const isIntelliBrite = circuitType === CircuitType.IntelliBrite || circuitType === CircuitType.LightShowGroup;
+
+    if (!isIntelliBrite || !circuit) {
+      return;
+    }
+
+    // Individual lights use USE, groups use ACT
+    const colorKey = circuitType === CircuitType.LightShowGroup ? ACT_KEY : USE_KEY;
+    const newColor = params[colorKey] as string | undefined;
+
+    if (newColor !== undefined) {
+      this.log.debug(`[IntelliBrite] ${circuit.name} color update: ${newColor}`);
+      accessory.context.activeColor = newColor;
+    }
   }
 
   private updateBodyCircuit(body: Body, params: IntelliCenterParams): void {
@@ -828,7 +853,19 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
   private updateAccessoryAndCreateCircuit(accessory: PlatformAccessory): void {
     this.api.updatePlatformAccessories([accessory]);
-    new CircuitAccessory(this, accessory);
+    this.createCircuitAccessory(accessory);
+  }
+
+  private createCircuitAccessory(accessory: PlatformAccessory): void {
+    const circuit = accessory.context.circuit as Circuit | undefined;
+    const circuitType = circuit?.type;
+    const isIntelliBrite = circuitType === CircuitType.IntelliBrite || circuitType === CircuitType.LightShowGroup;
+
+    if (isIntelliBrite) {
+      new IntelliBriteAccessory(this, accessory);
+    } else {
+      new CircuitAccessory(this, accessory);
+    }
   }
 
   private handlePumpSensorUpdates(accessory: PlatformAccessory): void {
@@ -1481,7 +1518,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         discoveredAccessoryIds.add(feature.id);
         const pumpCircuit = circuitIdPumpMap.get(feature.id);
         this.discoverCircuit(panel, module, feature, pumpCircuit);
-        this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
+        this.subscribeForUpdates(feature, this.getFeatureSubscriptionKeys(feature));
       }
     }
   }
@@ -1491,8 +1528,17 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       discoveredAccessoryIds.add(feature.id);
       const pumpCircuit = circuitIdPumpMap.get(feature.id);
       this.discoverCircuit(panel, null, feature, pumpCircuit);
-      this.subscribeForUpdates(feature, [STATUS_KEY, ACT_KEY]);
+      this.subscribeForUpdates(feature, this.getFeatureSubscriptionKeys(feature));
     }
+  }
+
+  private getFeatureSubscriptionKeys(feature: Circuit): ReadonlyArray<string> {
+    const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+    if (isIntelliBrite) {
+      // IntelliBrite lights need USE (individual) or ACT (groups) for color/show state
+      return [STATUS_KEY, ACT_KEY, USE_KEY];
+    }
+    return [STATUS_KEY, ACT_KEY];
   }
 
   private collectModuleHeaters(panel: Panel, heaters: ReadonlyArray<Heater>): ReadonlyArray<Heater> {
@@ -1675,7 +1721,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       existingAccessory.context.pumpCircuit = pumpCircuit;
       existingAccessory.context.controllingPumpId = controllingPumpId;
       this.api.updatePlatformAccessories([existingAccessory]);
-      new CircuitAccessory(this, existingAccessory);
+      this.createCircuitAccessory(existingAccessory);
     } else {
       this.log.debug(`Adding new circuit: ${circuit.name}${controllingPumpId ? ` (controlled by pump ${controllingPumpId})` : ''}`);
       const accessory = new this.api.platformAccessory(circuit.name, uuid);
@@ -1684,7 +1730,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       accessory.context.panel = panel;
       accessory.context.pumpCircuit = pumpCircuit;
       accessory.context.controllingPumpId = controllingPumpId;
-      new CircuitAccessory(this, accessory);
+      this.createCircuitAccessory(accessory);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.accessoryMap.set(accessory.UUID, accessory);
     }
