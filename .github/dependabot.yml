@@ -7,3 +7,8 @@ updates:
     # Always increase the version requirement
     # to match the new version.
     versioning-strategy: increase
+    ignore:
+      # @types/node 25 is for Node.js 25 (odd-numbered, non-LTS)
+      # Homebridge only supports even-numbered LTS versions (20, 22, 24)
+      - dependency-name: "@types/node"
+        versions: [">=25.0.0"]
