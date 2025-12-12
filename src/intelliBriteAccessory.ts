@@ -13,7 +13,7 @@ import {
   Panel,
 } from './types';
 import { MANUFACTURER } from './settings';
-import { ACT_KEY, INTELLIBRITE_OPTIONS, STATUS_KEY, USE_KEY } from './constants';
+import { ACT_KEY, INTELLIBRITE_OPTIONS, STATUS_KEY } from './constants';
 
 const MODEL = 'IntelliBrite';
 
@@ -73,11 +73,12 @@ export class IntelliBriteAccessory {
       }
 
       service.setCharacteristic(this.platform.Characteristic.Name, option.name);
-      service
-        .getCharacteristic(this.platform.Characteristic.On)
-        .onSet(this.createSetHandler(option.code))
-        .onGet(this.createGetHandler(option.code));
 
+      const characteristic = service.getCharacteristic(this.platform.Characteristic.On);
+      characteristic.onSet(this.createSetHandler(option.code));
+      characteristic.onGet(this.createGetHandler(option.code));
+
+      this.platform.log.debug(`[${this.circuit.name}] Bound handlers for ${option.name} (${option.code})`);
       this.colorSwitches.set(option.code, service);
     }
 
@@ -106,27 +107,23 @@ export class IntelliBriteAccessory {
 
   private createSetHandler(colorCode: string): (value: CharacteristicValue) => Promise<void> {
     return async (value: CharacteristicValue) => {
+      this.platform.log.debug(`[${this.circuit.name}] Switch ${colorCode} set to ${value}`);
       if (value) {
+        // Turning on - set color and turn on light
         await this.setColor(colorCode);
+      } else {
+        // Turning off the active color switch turns off the light
+        const activeColor = this.accessory.context.activeColor as string | undefined;
+        if (colorCode === activeColor) {
+          await this.turnOff();
+        }
+        // If turning off a non-active switch, do nothing (it's already off)
       }
-      // If turning off, we don't send a command - just update the UI
-      // The switch will auto-correct based on the actual state from IntelliCenter
     };
   }
 
-  private createGetHandler(colorCode: string): () => Promise<CharacteristicValue> {
-    return async () => {
-      const activeColor = this.accessory.context.activeColor as string | undefined;
-      return activeColor === colorCode;
-    };
-  }
-
-  private async setColor(colorCode: string): Promise<void> {
-    this.platform.log.info(`Setting ${this.circuit.name} to ${colorCode}`);
-
-    // Determine which parameter to use based on circuit type
-    // Individual IntelliBrite lights use USE, light groups use ACT
-    const paramKey = this.circuit.type === CircuitType.LightShowGroup ? ACT_KEY : USE_KEY;
+  private async turnOff(): Promise<void> {
+    this.platform.log.info(`Turning off ${this.circuit.name}`);
 
     const command = {
       command: IntelliCenterRequestCommand.SetParamList,
@@ -134,7 +131,7 @@ export class IntelliBriteAccessory {
       objectList: [
         {
           objnam: this.circuit.id,
-          params: { [paramKey]: colorCode } as never,
+          params: { [STATUS_KEY]: CircuitStatus.Off } as never,
         } as CircuitStatusMessage,
       ],
     } as IntelliCenterRequest;
@@ -142,6 +139,44 @@ export class IntelliBriteAccessory {
     this.platform.sendCommandNoWait(command);
 
     // Optimistically update the UI
+    this.circuit.status = CircuitStatus.Off;
+    this.updateSwitchStates();
+  }
+
+  private createGetHandler(colorCode: string): () => Promise<CharacteristicValue> {
+    return async () => {
+      const activeColor = this.accessory.context.activeColor as string | undefined;
+      const isCircuitOn = this.circuit.status === CircuitStatus.On;
+      // Only return true if circuit is ON and this is the active color
+      return isCircuitOn && activeColor === colorCode;
+    };
+  }
+
+  private async setColor(colorCode: string): Promise<void> {
+    this.platform.log.info(`Setting ${this.circuit.name} to ${colorCode}`);
+
+    // Use ACT to directly trigger color changes (USE is read-only for the selected default)
+    const paramKey = ACT_KEY;
+
+    // Turn on the light AND set the color in one command
+    const command = {
+      command: IntelliCenterRequestCommand.SetParamList,
+      messageID: uuidv4(),
+      objectList: [
+        {
+          objnam: this.circuit.id,
+          params: {
+            [STATUS_KEY]: CircuitStatus.On,
+            [paramKey]: colorCode,
+          } as never,
+        } as CircuitStatusMessage,
+      ],
+    } as IntelliCenterRequest;
+
+    this.platform.sendCommandNoWait(command);
+
+    // Optimistically update the UI
+    this.circuit.status = CircuitStatus.On;
     this.accessory.context.activeColor = colorCode;
     this.updateSwitchStates();
   }
@@ -158,9 +193,12 @@ export class IntelliBriteAccessory {
 
   private updateSwitchStates(): void {
     const activeColor = this.accessory.context.activeColor as string | undefined;
+    const circuitStatus = this.circuit.status;
+    const isCircuitOn = circuitStatus === CircuitStatus.On;
 
     for (const [code, service] of this.colorSwitches) {
-      const isActive = code === activeColor;
+      // Only show color as active if the circuit is ON and this is the active color
+      const isActive = isCircuitOn && code === activeColor;
       service.updateCharacteristic(this.platform.Characteristic.On, isActive);
     }
   }
