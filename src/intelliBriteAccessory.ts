@@ -66,6 +66,7 @@ export class IntelliBriteAccessory {
       // Set both displayName and characteristics for proper HomeKit display
       service.displayName = option.name;
       service.setCharacteristic(this.platform.Characteristic.Name, option.name);
+      service.addOptionalCharacteristic(this.platform.Characteristic.ConfiguredName);
       service.setCharacteristic(this.platform.Characteristic.ConfiguredName, option.name);
 
       const characteristic = service.getCharacteristic(this.platform.Characteristic.On);

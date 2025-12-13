@@ -10,10 +10,12 @@ const createMockSwitchService = () => ({
   setCharacteristic: jest.fn().mockReturnThis(),
   updateCharacteristic: jest.fn().mockReturnThis(),
   getCharacteristic: jest.fn().mockReturnThis(),
+  addOptionalCharacteristic: jest.fn().mockReturnThis(),
   onSet: jest.fn().mockReturnThis(),
   onGet: jest.fn().mockReturnThis(),
   UUID: 'switch-uuid',
   subtype: '',
+  displayName: '',
 });
 
 const mockAccessoryInformation = {
