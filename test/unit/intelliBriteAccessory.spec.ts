@@ -1,54 +1,76 @@
-import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
+import { PlatformAccessory, Service } from 'homebridge';
 import { IntelliBriteAccessory } from '../../src/intelliBriteAccessory';
 import { PentairPlatform } from '../../src/platform';
 import { Circuit, CircuitStatus, CircuitType, Module, Panel, ObjectType } from '../../src/types';
 import { MANUFACTURER } from '../../src/settings';
-import { INTELLIBRITE_OPTIONS, ACT_KEY, STATUS_KEY } from '../../src/constants';
+import { STATUS_KEY } from '../../src/constants';
 
-// Create mock services for each color switch
-const createMockSwitchService = () => ({
-  setCharacteristic: jest.fn().mockReturnThis(),
-  updateCharacteristic: jest.fn().mockReturnThis(),
-  getCharacteristic: jest.fn().mockReturnThis(),
-  addOptionalCharacteristic: jest.fn().mockReturnThis(),
-  setPrimaryService: jest.fn().mockReturnThis(),
-  testCharacteristic: jest.fn().mockReturnValue(false),
-  onSet: jest.fn().mockReturnThis(),
-  onGet: jest.fn().mockReturnThis(),
-  UUID: 'switch-uuid',
-  subtype: '',
-  displayName: '',
-});
+// Track captured handlers
+let capturedOnSetHandler: ((value: unknown) => Promise<void>) | null = null;
+let capturedOnGetHandler: (() => Promise<unknown>) | null = null;
+let capturedBrightnessGetHandler: (() => Promise<unknown>) | null = null;
 
-// Create mock Lightbulb service for primary ON/OFF control
-const createMockLightbulbService = () => ({
-  setCharacteristic: jest.fn().mockReturnThis(),
-  updateCharacteristic: jest.fn().mockReturnThis(),
-  getCharacteristic: jest.fn().mockReturnThis(),
-  addOptionalCharacteristic: jest.fn().mockReturnThis(),
-  setPrimaryService: jest.fn().mockReturnThis(),
-  testCharacteristic: jest.fn().mockReturnValue(false),
-  onSet: jest.fn().mockReturnThis(),
-  onGet: jest.fn().mockReturnThis(),
-  UUID: 'lightbulb-uuid',
-  subtype: '',
-  displayName: '',
-});
+// Mock characteristic type
+interface MockCharacteristic {
+  onSet: jest.Mock;
+  onGet: jest.Mock;
+}
+
+// Create mock Lightbulb service
+const createMockLightbulbService = () => {
+  const mockCharacteristic: MockCharacteristic = {
+    onSet: jest.fn(),
+    onGet: jest.fn(),
+  };
+
+  // Set up chained returns
+  mockCharacteristic.onSet.mockImplementation(handler => {
+    capturedOnSetHandler = handler;
+    return mockCharacteristic;
+  });
+  mockCharacteristic.onGet.mockImplementation(handler => {
+    capturedOnGetHandler = handler;
+    return mockCharacteristic;
+  });
+
+  const mockBrightnessCharacteristic: MockCharacteristic = {
+    onSet: jest.fn(),
+    onGet: jest.fn(),
+  };
+  mockBrightnessCharacteristic.onGet.mockImplementation(handler => {
+    capturedBrightnessGetHandler = handler;
+    return mockBrightnessCharacteristic;
+  });
+
+  return {
+    setCharacteristic: jest.fn().mockReturnThis(),
+    updateCharacteristic: jest.fn().mockReturnThis(),
+    getCharacteristic: jest.fn((type: string) => {
+      if (type === 'On') return mockCharacteristic;
+      if (type === 'Brightness') return mockBrightnessCharacteristic;
+      return mockCharacteristic;
+    }),
+    testCharacteristic: jest.fn().mockReturnValue(false),
+    UUID: 'lightbulb-uuid',
+    subtype: '',
+    displayName: '',
+  };
+};
 
 const mockAccessoryInformation = {
   setCharacteristic: jest.fn().mockReturnThis(),
 };
 
-// Track all created services
-let createdServices: Map<string, any>;
 let mockLightbulbService: ReturnType<typeof createMockLightbulbService> | null;
 
 const createMockPlatformAccessory = () => {
-  createdServices = new Map();
   mockLightbulbService = null;
+  capturedOnSetHandler = null;
+  capturedOnGetHandler = null;
+  capturedBrightnessGetHandler = null;
 
   return {
-    getService: jest.fn((serviceType: any) => {
+    getService: jest.fn((serviceType: unknown) => {
       if (serviceType === 'AccessoryInformation') {
         return mockAccessoryInformation;
       }
@@ -57,24 +79,16 @@ const createMockPlatformAccessory = () => {
       }
       return null;
     }),
-    getServiceById: jest.fn((serviceType: any, subtype: string) => {
-      return createdServices.get(subtype) || null;
-    }),
-    addService: jest.fn((serviceType: any, name: string, subtype?: string) => {
+    addService: jest.fn((serviceType: unknown) => {
       if (serviceType === 'Lightbulb') {
         mockLightbulbService = createMockLightbulbService();
         return mockLightbulbService;
       }
-      const service = createMockSwitchService();
-      if (subtype) {
-        service.subtype = subtype;
-        createdServices.set(subtype, service);
-      }
-      return service;
+      return null;
     }),
     removeService: jest.fn(),
-    services: [] as any[],
-    context: {} as any,
+    services: [] as unknown[],
+    context: {} as Record<string, unknown>,
     UUID: 'test-uuid',
     displayName: 'Test Accessory',
   } as unknown as PlatformAccessory;
@@ -91,7 +105,6 @@ const mockPlatform = {
     Model: 'Model',
     SerialNumber: 'SerialNumber',
     Name: 'Name',
-    ConfiguredName: 'ConfiguredName',
     On: 'On',
     Brightness: 'Brightness',
   },
@@ -128,14 +141,6 @@ const mockIntelliBriteCircuit: Circuit = {
   status: CircuitStatus.Off,
 };
 
-const mockLightShowGroupCircuit: Circuit = {
-  id: 'GRP01',
-  name: 'All Lights',
-  objectType: ObjectType.Circuit,
-  type: CircuitType.LightShowGroup,
-  status: CircuitStatus.Off,
-};
-
 describe('IntelliBriteAccessory', () => {
   let mockAccessory: PlatformAccessory;
 
@@ -145,7 +150,7 @@ describe('IntelliBriteAccessory', () => {
   });
 
   describe('Constructor and Initialization', () => {
-    it('should create an IntelliBrite accessory with all 12 color switches', () => {
+    it('should create a Lightbulb accessory for IntelliBrite', () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
@@ -154,16 +159,9 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      // Should create 12 switch services (5 colors + 7 shows) + 1 Lightbulb for primary ON/OFF
-      expect(mockAccessory.addService).toHaveBeenCalledTimes(INTELLIBRITE_OPTIONS.length + 1);
-
-      // Verify Lightbulb service was added for primary ON/OFF control
+      // Should create only 1 Lightbulb service
+      expect(mockAccessory.addService).toHaveBeenCalledTimes(1);
       expect(mockAccessory.addService).toHaveBeenCalledWith(mockPlatform.Service.Lightbulb, mockIntelliBriteCircuit.name);
-
-      // Verify each color/show option was added
-      for (const option of INTELLIBRITE_OPTIONS) {
-        expect(mockAccessory.addService).toHaveBeenCalledWith(mockPlatform.Service.Switch, option.name, `intellibrite_${option.code}`);
-      }
     });
 
     it('should set correct accessory information', () => {
@@ -198,9 +196,9 @@ describe('IntelliBriteAccessory', () => {
       );
     });
 
-    it('should reuse existing Lightbulb service for primary ON/OFF', () => {
+    it('should reuse existing Lightbulb service', () => {
       const existingLightbulbService = createMockLightbulbService();
-      (mockAccessory.getService as jest.Mock) = jest.fn((serviceType: any) => {
+      (mockAccessory.getService as jest.Mock) = jest.fn((serviceType: unknown) => {
         if (serviceType === 'AccessoryInformation') {
           return mockAccessoryInformation;
         }
@@ -218,21 +216,11 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      // Should NOT remove the existing Lightbulb service - we use it as primary
-      expect(mockAccessory.removeService).not.toHaveBeenCalledWith(existingLightbulbService);
-      // Should set it as primary service
-      expect(existingLightbulbService.setPrimaryService).toHaveBeenCalledWith(true);
+      // Should NOT add a new Lightbulb service - reuse existing
+      expect(mockAccessory.addService).not.toHaveBeenCalled();
     });
 
-    it('should reuse existing switch services', () => {
-      const existingService = createMockSwitchService();
-      existingService.subtype = 'intellibrite_WHITER';
-      createdServices.set('intellibrite_WHITER', existingService);
-
-      mockAccessory.getServiceById = jest.fn((serviceType: any, subtype: string) => {
-        return createdServices.get(subtype) || null;
-      });
-
+    it('should configure On characteristic handlers', () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
@@ -241,14 +229,11 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      // Should not add a new service for WHITER since it already exists
-      // Total: 11 switches (12 - 1 existing) + 1 Lightbulb = 12
-      expect(mockAccessory.addService).toHaveBeenCalledTimes(INTELLIBRITE_OPTIONS.length);
+      expect(capturedOnSetHandler).not.toBeNull();
+      expect(capturedOnGetHandler).not.toBeNull();
     });
-  });
 
-  describe('Color Selection', () => {
-    it('should send USE parameter for individual IntelliBrite lights', async () => {
+    it('should log service configuration', () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
@@ -257,272 +242,22 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      // Get the first switch service and its set handler
-      const firstService = createdServices.get('intellibrite_WHITER');
-      expect(firstService).toBeDefined();
-
-      // Get the onSet callback
-      const onSetCallback = firstService.getCharacteristic().onSet.mock.calls[0]?.[0];
-      expect(onSetCallback).toBeDefined();
-
-      // Call the set handler with true (turn on)
-      await onSetCallback(true);
-
-      expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
-        expect.objectContaining({
-          command: 'SetParamList',
-          objectList: expect.arrayContaining([
-            expect.objectContaining({
-              objnam: mockIntelliBriteCircuit.id,
-              params: { [STATUS_KEY]: CircuitStatus.On, [ACT_KEY]: 'WHITER' },
-            }),
-          ]),
-        }),
-      );
-    });
-
-    it('should send ACT parameter for light show groups', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: mockLightShowGroupCircuit,
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Get the first switch service and its set handler
-      const firstService = createdServices.get('intellibrite_WHITER');
-      const onSetCallback = firstService.getCharacteristic().onSet.mock.calls[0]?.[0];
-
-      await onSetCallback(true);
-
-      expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
-        expect.objectContaining({
-          command: 'SetParamList',
-          objectList: expect.arrayContaining([
-            expect.objectContaining({
-              objnam: mockLightShowGroupCircuit.id,
-              params: { [STATUS_KEY]: CircuitStatus.On, [ACT_KEY]: 'WHITER' },
-            }),
-          ]),
-        }),
-      );
-    });
-
-    it('should not send command when turning off non-active switch', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'REDR', // Red is active, not White
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Try to turn off White (which is not active)
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onSetCallback = whiteService.getCharacteristic().onSet.mock.calls[0]?.[0];
-
-      await onSetCallback(false);
-
-      // Should not send command since White is not the active color
-      expect(mockPlatform.sendCommandNoWait).not.toHaveBeenCalled();
-    });
-
-    it('should turn off light when turning off the active switch', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'WHITER',
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Turn off White (which is active)
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onSetCallback = whiteService.getCharacteristic().onSet.mock.calls[0]?.[0];
-
-      await onSetCallback(false);
-
-      // Should send turn off command
-      expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
-        expect.objectContaining({
-          command: 'SetParamList',
-          objectList: expect.arrayContaining([
-            expect.objectContaining({
-              objnam: mockIntelliBriteCircuit.id,
-              params: { [STATUS_KEY]: CircuitStatus.Off },
-            }),
-          ]),
-        }),
-      );
-    });
-
-    it('should optimistically update activeColor on set', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: mockIntelliBriteCircuit,
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      const redService = createdServices.get('intellibrite_REDR');
-      const onSetCallback = redService.getCharacteristic().onSet.mock.calls[0]?.[0];
-
-      await onSetCallback(true);
-
-      expect(mockAccessory.context.activeColor).toBe('REDR');
-    });
-  });
-
-  describe('Color State Queries', () => {
-    it('should return true for active color switch', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'BLUER',
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      const blueService = createdServices.get('intellibrite_BLUER');
-      const onGetCallback = blueService.getCharacteristic().onGet.mock.calls[0]?.[0];
-
-      const result = await onGetCallback();
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false for inactive color switch', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: mockIntelliBriteCircuit,
-        activeColor: 'BLUER',
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      const redService = createdServices.get('intellibrite_REDR');
-      const onGetCallback = redService.getCharacteristic().onGet.mock.calls[0]?.[0];
-
-      const result = await onGetCallback();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false when no color is active', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: mockIntelliBriteCircuit,
-        activeColor: undefined,
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onGetCallback = whiteService.getCharacteristic().onGet.mock.calls[0]?.[0];
-
-      const result = await onGetCallback();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false when circuit is OFF even with activeColor set', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.Off },
-        activeColor: 'WHITER',
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onGetCallback = whiteService.getCharacteristic().onGet.mock.calls[0]?.[0];
-
-      const result = await onGetCallback();
-
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('Update Methods', () => {
-    it('should update all switch states based on active color', () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'PARTY',
-      };
-
-      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Call updateActiveColor
-      accessory.updateActiveColor();
-
-      // Check that only PARTY switch is ON (circuit is ON)
-      const partyService = createdServices.get('intellibrite_PARTY');
-      expect(partyService.updateCharacteristic).toHaveBeenCalledWith('On', true);
-
-      // Check that other switches are OFF
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      expect(whiteService.updateCharacteristic).toHaveBeenCalledWith('On', false);
-    });
-
-    it('should turn off all switches when light is off', () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.Off },
-        activeColor: 'PARTY',
-      };
-
-      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Call updateStatus
-      accessory.updateStatus();
-
-      // All switches should be OFF when circuit is off
-      for (const [, service] of createdServices) {
-        expect(service.updateCharacteristic).toHaveBeenCalledWith('On', false);
-      }
-    });
-
-    it('should show active color when light is on', () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'ROMAN',
-      };
-
-      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Call updateStatus
-      accessory.updateStatus();
-
-      // ROMAN should be ON
-      const romanService = createdServices.get('intellibrite_ROMAN');
-      expect(romanService.updateCharacteristic).toHaveBeenCalledWith('On', true);
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(`[${mockIntelliBriteCircuit.name}] Lightbulb service configured`);
     });
   });
 
   describe('On/Off Control', () => {
-    it('should send ON command', async () => {
+    it('should send ON command via handleSet', async () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: mockIntelliBriteCircuit,
+        circuit: { ...mockIntelliBriteCircuit },
       };
 
-      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      await accessory.setOn(true);
+      // Invoke the captured handler
+      await capturedOnSetHandler!(true);
 
       expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -537,16 +272,17 @@ describe('IntelliBriteAccessory', () => {
       );
     });
 
-    it('should send OFF command', async () => {
+    it('should send OFF command via handleSet', async () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: mockIntelliBriteCircuit,
+        circuit: { ...mockIntelliBriteCircuit },
       };
 
-      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      await accessory.setOn(false);
+      // Invoke the captured handler
+      await capturedOnSetHandler!(false);
 
       expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -560,18 +296,141 @@ describe('IntelliBriteAccessory', () => {
         }),
       );
     });
+
+    it('should log when setting ON', async () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit },
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      await capturedOnSetHandler!(true);
+
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(`Setting ${mockIntelliBriteCircuit.name} to ON`);
+    });
+
+    it('should log when setting OFF', async () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit },
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      await capturedOnSetHandler!(false);
+
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(`Setting ${mockIntelliBriteCircuit.name} to OFF`);
+    });
+
+    it('should optimistically update UI on set', async () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit },
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      await capturedOnSetHandler!(true);
+
+      expect(mockLightbulbService!.updateCharacteristic).toHaveBeenCalledWith('On', true);
+    });
+
+    it('should return correct status on get', async () => {
+      const circuitOn = { ...mockIntelliBriteCircuit, status: CircuitStatus.On };
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: circuitOn,
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+
+      const result = await capturedOnGetHandler!();
+      expect(result).toBe(true);
+    });
+
+    it('should return false when circuit is off', async () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.Off },
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+
+      const result = await capturedOnGetHandler!();
+      expect(result).toBe(false);
+    });
   });
 
-  describe('Service Cleanup', () => {
-    it('should remove obsolete switches', () => {
-      // Add an obsolete service to the services array
-      const obsoleteService = {
+  describe('Brightness Handling', () => {
+    it('should return 100 when on and brightness characteristic exists', async () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
+      };
+
+      // Mock testCharacteristic to return true for Brightness
+      const serviceMock = createMockLightbulbService();
+      serviceMock.testCharacteristic = jest.fn().mockReturnValue(true);
+      mockLightbulbService = serviceMock;
+
+      (mockAccessory.getService as jest.Mock) = jest.fn((serviceType: unknown) => {
+        if (serviceType === 'AccessoryInformation') return mockAccessoryInformation;
+        if (serviceType === 'Lightbulb') return serviceMock;
+        return null;
+      });
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+
+      // The brightness handler should be captured
+      expect(capturedBrightnessGetHandler).not.toBeNull();
+      const brightness = await capturedBrightnessGetHandler!();
+      expect(brightness).toBe(100);
+    });
+
+    it('should return 0 when off and brightness characteristic exists', async () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.Off },
+      };
+
+      const serviceMock = createMockLightbulbService();
+      serviceMock.testCharacteristic = jest.fn().mockReturnValue(true);
+      mockLightbulbService = serviceMock;
+
+      (mockAccessory.getService as jest.Mock) = jest.fn((serviceType: unknown) => {
+        if (serviceType === 'AccessoryInformation') return mockAccessoryInformation;
+        if (serviceType === 'Lightbulb') return serviceMock;
+        return null;
+      });
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+
+      const brightness = await capturedBrightnessGetHandler!();
+      expect(brightness).toBe(0);
+    });
+  });
+
+  describe('Legacy Service Cleanup', () => {
+    it('should remove legacy intellibrite switch services', () => {
+      const legacySwitch1 = {
         UUID: 'switch-uuid',
-        subtype: 'intellibrite_OBSOLETE',
-      } as unknown as Service;
+        subtype: 'intellibrite_WHITER',
+      };
+      const legacySwitch2 = {
+        UUID: 'switch-uuid',
+        subtype: 'intellibrite_GREEN',
+      };
+      const regularService = {
+        UUID: 'other-uuid',
+        subtype: 'some_other',
+      };
 
-      (mockAccessory as any).services = [obsoleteService];
-
+      mockAccessory.services = [legacySwitch1, legacySwitch2, regularService] as unknown as Service[];
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
@@ -580,19 +439,38 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      expect(mockAccessory.removeService).toHaveBeenCalledWith(obsoleteService);
-      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Removing obsolete IntelliBrite switch'));
+      expect(mockAccessory.removeService).toHaveBeenCalledTimes(2);
+      expect(mockAccessory.removeService).toHaveBeenCalledWith(legacySwitch1);
+      expect(mockAccessory.removeService).toHaveBeenCalledWith(legacySwitch2);
     });
 
-    it('should not remove non-IntelliBrite switches', () => {
-      // Add a non-IntelliBrite service
-      const otherService = {
+    it('should log when removing legacy services', () => {
+      const legacySwitch = {
+        UUID: 'switch-uuid',
+        subtype: 'intellibrite_BLUE',
+      };
+
+      mockAccessory.services = [legacySwitch] as unknown as Service[];
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: mockIntelliBriteCircuit,
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+
+      expect(mockPlatform.log.info).toHaveBeenCalledWith(
+        `[${mockIntelliBriteCircuit.name}] Removing 1 legacy color switches (now in separate accessory)`,
+      );
+    });
+
+    it('should not remove non-intellibrite switch services', () => {
+      const regularSwitch = {
         UUID: 'switch-uuid',
         subtype: 'some_other_switch',
-      } as unknown as Service;
+      };
 
-      (mockAccessory as any).services = [otherService];
-
+      mockAccessory.services = [regularSwitch] as unknown as Service[];
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
@@ -601,41 +479,92 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      expect(mockAccessory.removeService).not.toHaveBeenCalledWith(otherService);
+      expect(mockAccessory.removeService).not.toHaveBeenCalled();
+    });
+
+    it('should not remove switch services without subtype', () => {
+      const noSubtypeSwitch = {
+        UUID: 'switch-uuid',
+        subtype: undefined,
+      };
+
+      mockAccessory.services = [noSubtypeSwitch] as unknown as Service[];
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: mockIntelliBriteCircuit,
+      };
+
+      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+
+      expect(mockAccessory.removeService).not.toHaveBeenCalled();
     });
   });
 
-  describe('All Color Options', () => {
-    it('should support all 5 fixed colors', () => {
-      const colors = ['WHITER', 'REDR', 'GREENR', 'BLUER', 'MAGNTAR'];
-
+  describe('Status Updates', () => {
+    it('should update characteristic when updateStatus is called with ON', () => {
+      const circuitOn = { ...mockIntelliBriteCircuit, status: CircuitStatus.On };
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: mockIntelliBriteCircuit,
+        circuit: circuitOn,
       };
 
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      for (const color of colors) {
-        expect(createdServices.has(`intellibrite_${color}`)).toBe(true);
-      }
+      // Clear the initial update calls
+      jest.clearAllMocks();
+
+      accessory.updateStatus();
+
+      expect(mockLightbulbService!.updateCharacteristic).toHaveBeenCalledWith('On', true);
     });
 
-    it('should support all 7 light shows', () => {
-      const shows = ['SAMMOD', 'PARTY', 'ROMAN', 'CARIB', 'AMERCA', 'SSET', 'ROYAL'];
-
+    it('should update characteristic when updateStatus is called with OFF', () => {
+      const circuitOff = { ...mockIntelliBriteCircuit, status: CircuitStatus.Off };
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: mockIntelliBriteCircuit,
+        circuit: circuitOff,
       };
 
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      jest.clearAllMocks();
 
-      for (const show of shows) {
-        expect(createdServices.has(`intellibrite_${show}`)).toBe(true);
-      }
+      accessory.updateStatus();
+
+      expect(mockLightbulbService!.updateCharacteristic).toHaveBeenCalledWith('On', false);
+    });
+
+    it('should log status on update', () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
+      };
+
+      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      jest.clearAllMocks();
+
+      accessory.updateStatus();
+
+      expect(mockPlatform.log.debug).toHaveBeenCalledWith(`${mockIntelliBriteCircuit.name} status: ${CircuitStatus.On}`);
+    });
+
+    it('updateActiveColor should call updateStatus', () => {
+      mockAccessory.context = {
+        panel: mockPanel,
+        module: mockModule,
+        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
+      };
+
+      const accessory = new IntelliBriteAccessory(mockPlatform, mockAccessory);
+      jest.clearAllMocks();
+
+      accessory.updateActiveColor();
+
+      // updateActiveColor calls updateStatus, which updates the characteristic
+      expect(mockLightbulbService!.updateCharacteristic).toHaveBeenCalledWith('On', true);
     });
   });
 });

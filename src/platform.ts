@@ -4,6 +4,7 @@ import * as net from 'net';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { CircuitAccessory } from './circuitAccessory';
 import { IntelliBriteAccessory } from './intelliBriteAccessory';
+import { IntelliBriteColorsAccessory } from './intelliBriteColorsAccessory';
 import { Telnet } from 'telnet-client';
 import {
   BaseCircuit,
@@ -74,6 +75,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   public readonly heaters: Map<string, PlatformAccessory> = new Map();
   public readonly heaterInstances: Map<string, HeaterAccessory> = new Map();
   public readonly intelliBriteInstances: Map<string, IntelliBriteAccessory> = new Map();
+  public readonly intelliBriteColorsInstances: Map<string, IntelliBriteColorsAccessory> = new Map();
 
   private connection!: Telnet;
   private maxBufferSize!: number;
@@ -956,9 +958,49 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           const instance = new IntelliBriteAccessory(this, accessory);
           this.intelliBriteInstances.set(circuitId, instance);
         }
+
+        // Also update the colors accessory if it exists
+        this.updateIntelliBriteColorsAccessory(circuitId, accessory);
       }
     } else {
       new CircuitAccessory(this, accessory);
+    }
+  }
+
+  /**
+   * Update the IntelliBrite colors accessory with status changes.
+   * The colors accessory shares the same circuit context but is a separate accessory.
+   */
+  private updateIntelliBriteColorsAccessory(circuitId: string, mainAccessory: PlatformAccessory): void {
+    const colorsInstance = this.intelliBriteColorsInstances.get(circuitId);
+    if (colorsInstance) {
+      // Sync the circuit status to the colors accessory
+      const colorsAccessory = this.accessoryMap.get(this.api.hap.uuid.generate(`${circuitId}-colors`));
+      if (colorsAccessory) {
+        colorsAccessory.context.circuit = mainAccessory.context.circuit;
+        colorsAccessory.context.activeColor = mainAccessory.context.activeColor;
+        colorsInstance.updateStatus();
+        colorsInstance.updateActiveColor();
+      }
+    }
+  }
+
+  /**
+   * Create or update the IntelliBrite colors accessory.
+   */
+  private createIntelliBriteColorsAccessory(colorsAccessory: PlatformAccessory): void {
+    const circuit = colorsAccessory.context.circuit as Circuit | undefined;
+    const circuitId = circuit?.id;
+
+    if (circuitId) {
+      const existingInstance = this.intelliBriteColorsInstances.get(circuitId);
+      if (existingInstance) {
+        existingInstance.updateStatus();
+        existingInstance.updateActiveColor();
+      } else {
+        const instance = new IntelliBriteColorsAccessory(this, colorsAccessory);
+        this.intelliBriteColorsInstances.set(circuitId, instance);
+      }
     }
   }
 
@@ -1610,6 +1652,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     for (const module of panel.modules) {
       for (const feature of module.features) {
         discoveredAccessoryIds.add(feature.id);
+        // IntelliBrite lights have a separate colors accessory
+        const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+        if (isIntelliBrite) {
+          discoveredAccessoryIds.add(`${feature.id}-colors`);
+        }
         const pumpCircuit = circuitIdPumpMap.get(feature.id);
         this.discoverCircuit(panel, module, feature, pumpCircuit);
         this.subscribeForUpdates(feature, this.getFeatureSubscriptionKeys(feature));
@@ -1620,6 +1667,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private processPanelFeatures(panel: Panel, discoveredAccessoryIds: Set<string>, circuitIdPumpMap: Map<string, PumpCircuit>) {
     for (const feature of panel.features) {
       discoveredAccessoryIds.add(feature.id);
+      // IntelliBrite lights have a separate colors accessory
+      const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+      if (isIntelliBrite) {
+        discoveredAccessoryIds.add(`${feature.id}-colors`);
+      }
       const pumpCircuit = circuitIdPumpMap.get(feature.id);
       this.discoverCircuit(panel, null, feature, pumpCircuit);
       this.subscribeForUpdates(feature, this.getFeatureSubscriptionKeys(feature));
@@ -1830,6 +1882,42 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
     if (pumpCircuit) {
       this.pumpIdToCircuitMap.set(pumpCircuit.id, circuit);
+    }
+
+    // For IntelliBrite circuits, also create a colors accessory
+    const isIntelliBrite = circuit.type === CircuitType.IntelliBrite || circuit.type === CircuitType.LightShowGroup;
+    if (isIntelliBrite) {
+      this.discoverIntelliBriteColors(panel, module, circuit);
+    }
+  }
+
+  /**
+   * Discover/create the IntelliBrite colors accessory.
+   * This is a separate accessory with color switches, allowing the main
+   * IntelliBrite accessory to be a simple Lightbulb that lights up the tile.
+   */
+  private discoverIntelliBriteColors(panel: Panel, module: Module | null, circuit: Circuit) {
+    const colorsUuid = this.api.hap.uuid.generate(`${circuit.id}-colors`);
+    const colorsName = `${circuit.name} Colors`;
+
+    const existingColorsAccessory = this.accessoryMap.get(colorsUuid);
+
+    if (existingColorsAccessory) {
+      this.log.debug(`Restoring existing IntelliBrite colors accessory from cache: ${existingColorsAccessory.displayName}`);
+      existingColorsAccessory.context.circuit = circuit;
+      existingColorsAccessory.context.module = module;
+      existingColorsAccessory.context.panel = panel;
+      this.api.updatePlatformAccessories([existingColorsAccessory]);
+      this.createIntelliBriteColorsAccessory(existingColorsAccessory);
+    } else {
+      this.log.debug(`Adding new IntelliBrite colors accessory: ${colorsName}`);
+      const colorsAccessory = new this.api.platformAccessory(colorsName, colorsUuid);
+      colorsAccessory.context.circuit = circuit;
+      colorsAccessory.context.module = module;
+      colorsAccessory.context.panel = panel;
+      this.createIntelliBriteColorsAccessory(colorsAccessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [colorsAccessory]);
+      this.accessoryMap.set(colorsAccessory.UUID, colorsAccessory);
     }
   }
 
