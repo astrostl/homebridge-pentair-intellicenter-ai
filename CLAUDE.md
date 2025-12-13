@@ -95,21 +95,46 @@ Before any release, ensure all quality checks pass:
 
 ### npm Authentication
 
-This repository uses **passkey authentication** for npm publishing. When running `npm publish`:
+This repository uses **passkey authentication** for npm publishing. The publish process requires browser-based authentication.
 
-1. The command will display an authentication URL and prompt to press ENTER
-2. A browser window will open for passkey authentication
-3. Complete the authentication in your browser
-4. The publish will proceed automatically after successful authentication
+**Automated publishing with expect (recommended for AI assistants)**:
 
-**Important for AI assistants (Claude Code)**: The `npm publish` command requires interactive browser authentication that cannot be completed programmatically. When assisting with releases:
-- Run the appropriate publish command (see below)
-- The command will show an authentication URL - the user must complete this step manually
-- Wait for user confirmation that the publish succeeded before proceeding to GitHub release creation
+Use this `expect` script to automate the ENTER key press and open the browser for passkey auth:
 
-**Publish commands by release type**:
-- **Beta releases**: `npm publish --tag beta` - publishes to the `beta` dist-tag
-- **Stable releases**: `npm publish` - publishes to the `latest` dist-tag (default)
+```bash
+# For beta releases:
+expect -c '
+set timeout 300
+spawn npm publish --tag beta
+expect {
+    -re "Press ENTER" { send "\r"; exp_continue }
+    -re "one-time password" { puts "OTP mode - web auth not available"; exit 1 }
+    eof
+}
+wait
+'
+
+# For stable releases:
+expect -c '
+set timeout 300
+spawn npm publish
+expect {
+    -re "Press ENTER" { send "\r"; exp_continue }
+    -re "one-time password" { puts "OTP mode - web auth not available"; exit 1 }
+    eof
+}
+wait
+'
+```
+
+This script:
+1. Spawns `npm publish` with a pseudo-TTY (required for web auth mode)
+2. Waits for the "Press ENTER" prompt and automatically sends ENTER
+3. Opens the browser for passkey authentication
+4. User completes passkey auth in browser
+5. Publish completes automatically
+
+**Manual publishing**: If expect is unavailable, run `npm publish --tag beta` (or `npm publish`) directly and press ENTER when prompted.
 
 **Verifying successful publish**: After publishing, always verify with:
 ```bash
@@ -118,7 +143,7 @@ npm view homebridge-pentair-intellicenter-ai dist-tags
 
 Example output:
 ```
-{ latest: '2.12.0', beta: '2.13.0-beta.1' }
+{ latest: '2.12.0', beta: '2.13.0-beta.3' }
 ```
 
 ## Architecture Overview
