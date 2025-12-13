@@ -19,6 +19,7 @@ export class IntelliBriteAccessory {
   private panel!: Panel;
   private module!: Module | null;
   private colorSwitches: Map<string, Service> = new Map();
+  private primaryService!: Service;
 
   constructor(
     private readonly platform: PentairPlatform,
@@ -26,6 +27,7 @@ export class IntelliBriteAccessory {
   ) {
     this.initializeContext();
     this.setupAccessoryInformation();
+    this.setupPrimaryService();
     this.setupColorSwitches();
     this.updateActiveColor();
   }
@@ -45,14 +47,52 @@ export class IntelliBriteAccessory {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, serial);
   }
 
-  private setupColorSwitches(): void {
-    // Remove any existing Lightbulb service from previous implementation
-    const existingLightbulb = this.accessory.getService(this.platform.Service.Lightbulb);
-    if (existingLightbulb) {
-      this.platform.log.info(`Removing legacy Lightbulb service from ${this.circuit.name}`);
-      this.accessory.removeService(existingLightbulb);
+  private setupPrimaryService(): void {
+    // Create or get the primary Lightbulb service for overall ON/OFF control
+    // This makes the HomeKit tile show ON when any color is active
+    this.primaryService =
+      this.accessory.getService(this.platform.Service.Lightbulb) ||
+      this.accessory.addService(this.platform.Service.Lightbulb, this.circuit.name);
+
+    this.primaryService.setCharacteristic(this.platform.Characteristic.Name, this.circuit.name);
+
+    // Set as primary service so HomeKit uses it for tile state
+    this.primaryService.setPrimaryService(true);
+
+    // Handle ON/OFF for the primary service
+    this.primaryService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onSet(this.handlePrimarySet.bind(this))
+      .onGet(this.handlePrimaryGet.bind(this));
+
+    // IntelliBrite doesn't support variable brightness - fix at 100%
+    if (this.primaryService.testCharacteristic(this.platform.Characteristic.Brightness)) {
+      this.primaryService.getCharacteristic(this.platform.Characteristic.Brightness).onGet(() => 100);
     }
 
+    this.platform.log.debug(`[${this.circuit.name}] Primary Lightbulb service configured`);
+  }
+
+  private async handlePrimarySet(value: CharacteristicValue): Promise<void> {
+    this.platform.log.info(`Setting ${this.circuit.name} to ${value ? 'ON' : 'OFF'}`);
+
+    if (value) {
+      // Turning on - use the last active color, or default to first option
+      const lastColor = this.accessory.context.activeColor as string | undefined;
+      const defaultColor = INTELLIBRITE_OPTIONS[0]?.code ?? 'White';
+      const colorToUse = lastColor || defaultColor;
+      await this.setColor(colorToUse);
+    } else {
+      // Turning off
+      await this.turnOff();
+    }
+  }
+
+  private async handlePrimaryGet(): Promise<CharacteristicValue> {
+    return this.circuit.status === CircuitStatus.On;
+  }
+
+  private setupColorSwitches(): void {
     // Create a switch for each color/show option
     for (const option of INTELLIBRITE_OPTIONS) {
       const subtype = `intellibrite_${option.code}`;
@@ -135,6 +175,7 @@ export class IntelliBriteAccessory {
 
     // Optimistically update the UI
     this.circuit.status = CircuitStatus.Off;
+    this.primaryService.updateCharacteristic(this.platform.Characteristic.On, false);
     this.updateSwitchStates();
   }
 
@@ -173,6 +214,7 @@ export class IntelliBriteAccessory {
     // Optimistically update the UI
     this.circuit.status = CircuitStatus.On;
     this.accessory.context.activeColor = colorCode;
+    this.primaryService.updateCharacteristic(this.platform.Characteristic.On, true);
     this.updateSwitchStates();
   }
 
@@ -191,6 +233,9 @@ export class IntelliBriteAccessory {
     const circuitStatus = this.circuit.status;
     const isCircuitOn = circuitStatus === CircuitStatus.On;
 
+    // Update primary service to reflect overall ON/OFF state
+    this.primaryService.updateCharacteristic(this.platform.Characteristic.On, isCircuitOn);
+
     for (const [code, service] of this.colorSwitches) {
       // Only show color as active if the circuit is ON and this is the active color
       const isActive = isCircuitOn && code === activeColor;
@@ -204,10 +249,14 @@ export class IntelliBriteAccessory {
    */
   public updateStatus(): void {
     const status = this.accessory.context.circuit?.status;
+    const isOn = status === CircuitStatus.On;
     this.platform.log.debug(`${this.circuit.name} status: ${status}`);
 
-    if (status === CircuitStatus.Off) {
-      // When light is off, clear all switches
+    // Always update primary service to reflect ON/OFF state
+    this.primaryService.updateCharacteristic(this.platform.Characteristic.On, isOn);
+
+    if (!isOn) {
+      // When light is off, clear all color switches
       for (const service of this.colorSwitches.values()) {
         service.updateCharacteristic(this.platform.Characteristic.On, false);
       }

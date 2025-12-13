@@ -122,6 +122,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private deadLetterQueue!: DeadLetterQueue;
   private validatedConfig: PentairConfig | null = null;
 
+  // Auto re-discovery when new devices are detected
+  private reDiscoveryPending = false;
+  private reDiscoveryTimer: NodeJS.Timeout | null = null;
+  private static readonly REDISCOVERY_DEBOUNCE_MS = 5000; // Wait 5 seconds to batch multiple new devices
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -620,14 +625,87 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private handleUnregisteredDevice(change: CircuitStatusMessage) {
     this.log.warn(`Device ${change.objnam} sending updates but not registered as accessory. ` + `Params: ${JSON.stringify(change.params)}`);
 
-    const objType = change.params!['OBJTYP'];
-    const subType = change.params!['SUBTYP'];
+    const objType = change.params!['OBJTYP'] as string | undefined;
+    const subType = change.params!['SUBTYP'] as string | undefined;
     const name = change.params!['SNAME'];
     const feature = change.params!['FEATR'];
+    const objnam = change.objnam!;
 
     this.log.info(
-      `Unregistered device details - ID: ${change.objnam}, ` + `Type: ${objType}, SubType: ${subType}, Name: ${name}, Feature: ${feature}`,
+      `Unregistered device details - ID: ${objnam}, ` + `Type: ${objType}, SubType: ${subType}, Name: ${name}, Feature: ${feature}`,
     );
+
+    // Check if this is a device type that should trigger re-discovery
+    if (this.shouldTriggerReDiscovery(objnam, objType, subType)) {
+      this.scheduleReDiscovery();
+    }
+  }
+
+  /**
+   * Determine if an unregistered device should trigger re-discovery.
+   * We want to re-discover for:
+   * - Circuit groups (GRP prefix) - user-created groups
+   * - IntelliBrite circuits (INTELLI subtype)
+   * - Light show groups (LITSHO subtype)
+   * - Feature circuits (CIRCUIT type with FEATR=ON)
+   */
+  private shouldTriggerReDiscovery(objnam: string, objType?: string, subType?: string): boolean {
+    // Circuit groups (GRP01, GRP02, etc.) - user-created groups
+    if (objnam.toUpperCase().startsWith('GRP')) {
+      this.log.info(`New circuit group detected: ${objnam} - will trigger re-discovery`);
+      return true;
+    }
+
+    // Circuits that could be features
+    if (objType === 'CIRCUIT') {
+      // IntelliBrite or Light Show circuits
+      if (subType === 'INTELLI' || subType === 'LITSHO') {
+        this.log.info(`New IntelliBrite/LightShow circuit detected: ${objnam} - will trigger re-discovery`);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Schedule a re-discovery with debouncing to batch multiple new devices.
+   */
+  private scheduleReDiscovery(): void {
+    if (this.reDiscoveryPending) {
+      this.log.debug('Re-discovery already scheduled, skipping duplicate request');
+      return;
+    }
+
+    this.reDiscoveryPending = true;
+
+    // Clear any existing timer
+    if (this.reDiscoveryTimer) {
+      clearTimeout(this.reDiscoveryTimer);
+    }
+
+    this.log.info(`Scheduling re-discovery in ${PentairPlatform.REDISCOVERY_DEBOUNCE_MS / 1000} seconds...`);
+
+    this.reDiscoveryTimer = setTimeout(() => {
+      this.performReDiscovery();
+    }, PentairPlatform.REDISCOVERY_DEBOUNCE_MS);
+  }
+
+  /**
+   * Perform the actual re-discovery process.
+   */
+  private performReDiscovery(): void {
+    this.log.info('Starting re-discovery to detect new devices...');
+    this.reDiscoveryPending = false;
+    this.reDiscoveryTimer = null;
+
+    // Reset discovery state and start fresh
+    this.discoverCommandsSent = [];
+    this.discoverCommandsFailed = [];
+    this.discoveryBuffer = null;
+
+    // Start the discovery process
+    this.discoverDevices();
   }
 
   private processChange(change: CircuitStatusMessage) {
@@ -2894,6 +2972,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       clearInterval(this.temperatureValidationInterval);
       this.temperatureValidationInterval = null;
       this.log.debug('Temperature validation interval cleared');
+    }
+
+    if (this.reDiscoveryTimer) {
+      clearTimeout(this.reDiscoveryTimer);
+      this.reDiscoveryTimer = null;
+      this.reDiscoveryPending = false;
+      this.log.debug('Re-discovery timer cleared');
     }
   }
 

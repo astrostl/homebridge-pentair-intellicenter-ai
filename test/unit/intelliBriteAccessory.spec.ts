@@ -11,9 +11,26 @@ const createMockSwitchService = () => ({
   updateCharacteristic: jest.fn().mockReturnThis(),
   getCharacteristic: jest.fn().mockReturnThis(),
   addOptionalCharacteristic: jest.fn().mockReturnThis(),
+  setPrimaryService: jest.fn().mockReturnThis(),
+  testCharacteristic: jest.fn().mockReturnValue(false),
   onSet: jest.fn().mockReturnThis(),
   onGet: jest.fn().mockReturnThis(),
   UUID: 'switch-uuid',
+  subtype: '',
+  displayName: '',
+});
+
+// Create mock Lightbulb service for primary ON/OFF control
+const createMockLightbulbService = () => ({
+  setCharacteristic: jest.fn().mockReturnThis(),
+  updateCharacteristic: jest.fn().mockReturnThis(),
+  getCharacteristic: jest.fn().mockReturnThis(),
+  addOptionalCharacteristic: jest.fn().mockReturnThis(),
+  setPrimaryService: jest.fn().mockReturnThis(),
+  testCharacteristic: jest.fn().mockReturnValue(false),
+  onSet: jest.fn().mockReturnThis(),
+  onGet: jest.fn().mockReturnThis(),
+  UUID: 'lightbulb-uuid',
   subtype: '',
   displayName: '',
 });
@@ -24,24 +41,35 @@ const mockAccessoryInformation = {
 
 // Track all created services
 let createdServices: Map<string, any>;
+let mockLightbulbService: ReturnType<typeof createMockLightbulbService> | null;
 
 const createMockPlatformAccessory = () => {
   createdServices = new Map();
+  mockLightbulbService = null;
 
   return {
     getService: jest.fn((serviceType: any) => {
       if (serviceType === 'AccessoryInformation') {
         return mockAccessoryInformation;
       }
+      if (serviceType === 'Lightbulb') {
+        return mockLightbulbService;
+      }
       return null;
     }),
     getServiceById: jest.fn((serviceType: any, subtype: string) => {
       return createdServices.get(subtype) || null;
     }),
-    addService: jest.fn((serviceType: any, name: string, subtype: string) => {
+    addService: jest.fn((serviceType: any, name: string, subtype?: string) => {
+      if (serviceType === 'Lightbulb') {
+        mockLightbulbService = createMockLightbulbService();
+        return mockLightbulbService;
+      }
       const service = createMockSwitchService();
-      service.subtype = subtype;
-      createdServices.set(subtype, service);
+      if (subtype) {
+        service.subtype = subtype;
+        createdServices.set(subtype, service);
+      }
       return service;
     }),
     removeService: jest.fn(),
@@ -63,7 +91,9 @@ const mockPlatform = {
     Model: 'Model',
     SerialNumber: 'SerialNumber',
     Name: 'Name',
+    ConfiguredName: 'ConfiguredName',
     On: 'On',
+    Brightness: 'Brightness',
   },
   log: {
     info: jest.fn(),
@@ -124,8 +154,11 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      // Should create 12 switch services (5 colors + 7 shows)
-      expect(mockAccessory.addService).toHaveBeenCalledTimes(INTELLIBRITE_OPTIONS.length);
+      // Should create 12 switch services (5 colors + 7 shows) + 1 Lightbulb for primary ON/OFF
+      expect(mockAccessory.addService).toHaveBeenCalledTimes(INTELLIBRITE_OPTIONS.length + 1);
+
+      // Verify Lightbulb service was added for primary ON/OFF control
+      expect(mockAccessory.addService).toHaveBeenCalledWith(mockPlatform.Service.Lightbulb, mockIntelliBriteCircuit.name);
 
       // Verify each color/show option was added
       for (const option of INTELLIBRITE_OPTIONS) {
@@ -165,14 +198,14 @@ describe('IntelliBriteAccessory', () => {
       );
     });
 
-    it('should remove legacy Lightbulb service if present', () => {
-      const mockLightbulbService = { UUID: 'lightbulb-uuid' } as unknown as Service;
+    it('should reuse existing Lightbulb service for primary ON/OFF', () => {
+      const existingLightbulbService = createMockLightbulbService();
       (mockAccessory.getService as jest.Mock) = jest.fn((serviceType: any) => {
         if (serviceType === 'AccessoryInformation') {
           return mockAccessoryInformation;
         }
         if (serviceType === mockPlatform.Service.Lightbulb) {
-          return mockLightbulbService;
+          return existingLightbulbService;
         }
         return undefined;
       });
@@ -185,8 +218,10 @@ describe('IntelliBriteAccessory', () => {
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      expect(mockAccessory.removeService).toHaveBeenCalledWith(mockLightbulbService);
-      expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('Removing legacy Lightbulb service'));
+      // Should NOT remove the existing Lightbulb service - we use it as primary
+      expect(mockAccessory.removeService).not.toHaveBeenCalledWith(existingLightbulbService);
+      // Should set it as primary service
+      expect(existingLightbulbService.setPrimaryService).toHaveBeenCalledWith(true);
     });
 
     it('should reuse existing switch services', () => {
@@ -207,7 +242,8 @@ describe('IntelliBriteAccessory', () => {
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
       // Should not add a new service for WHITER since it already exists
-      expect(mockAccessory.addService).toHaveBeenCalledTimes(INTELLIBRITE_OPTIONS.length - 1);
+      // Total: 11 switches (12 - 1 existing) + 1 Lightbulb = 12
+      expect(mockAccessory.addService).toHaveBeenCalledTimes(INTELLIBRITE_OPTIONS.length);
     });
   });
 
