@@ -63,7 +63,10 @@ export class IntelliBriteAccessory {
         this.platform.log.debug(`Added IntelliBrite switch: ${option.name} (${option.code}) to ${this.circuit.name}`);
       }
 
+      // Set both displayName and characteristics for proper HomeKit display
+      service.displayName = option.name;
       service.setCharacteristic(this.platform.Characteristic.Name, option.name);
+      service.setCharacteristic(this.platform.Characteristic.ConfiguredName, option.name);
 
       const characteristic = service.getCharacteristic(this.platform.Characteristic.On);
       characteristic.onSet(this.createSetHandler(option.code));
