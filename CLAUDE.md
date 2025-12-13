@@ -99,7 +99,9 @@ This repository uses **passkey authentication** for npm publishing. The publish 
 
 **Automated publishing with expect (recommended for AI assistants)**:
 
-Use this `expect` script to automate the ENTER key press and open the browser for passkey auth:
+Use this `expect` script to automate publishing. It handles both scenarios:
+- **Auth required**: Auto-presses ENTER to open browser, waits for user to complete passkey auth
+- **Auth cached**: Publish proceeds directly without prompting (npm caches auth for ~5 minutes)
 
 ```bash
 # For beta releases:
@@ -129,9 +131,9 @@ wait
 
 This script:
 1. Spawns `npm publish` with a pseudo-TTY (required for web auth mode)
-2. Waits for the "Press ENTER" prompt and automatically sends ENTER
-3. Opens the browser for passkey authentication
-4. User completes passkey auth in browser
+2. If auth cached: publish completes directly without prompting
+3. If auth needed: waits for "Press ENTER" prompt, sends ENTER, opens browser
+4. User completes passkey auth in browser (if prompted)
 5. Publish completes automatically
 
 **Manual publishing**: If expect is unavailable, run `npm publish --tag beta` (or `npm publish`) directly and press ENTER when prompted.
