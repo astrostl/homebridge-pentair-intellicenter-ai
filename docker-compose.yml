@@ -1,6 +1,7 @@
 services:
   homebridge:
     image: homebridge/homebridge:latest
+    pull_policy: always
     restart: unless-stopped
     # Use bridge networking with port forwarding (works better on macOS with Docker VMs)
     # network_mode: host  # Uncomment for Linux
