@@ -65,9 +65,12 @@ Before any release, ensure all quality checks pass:
 3. **Make changes**: Implement features, tests, bug fixes on beta branch
 4. **Version bump**: Update package.json to `X.Y.Z-beta.N`
 5. **Quality check**: Run `npm run prepublishOnly` (must pass)
-6. **Commit and push**: `git push origin beta/vX.Y.Z`
-7. **Publish to npm**: `npm publish --tag beta`
-8. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease`
+6. **Commit and push**: `git push -u origin beta/vX.Y.Z`
+7. **Publish to npm**: `npm publish --tag beta` (see [npm Authentication](#npm-authentication) below)
+8. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N"`
+9. **Verify dist-tags**: Run `npm view homebridge-pentair-intellicenter-ai dist-tags` to confirm `beta` tag points to new version while `latest` remains unchanged
+
+**Important**: The `--tag beta` flag is critical - it ensures beta versions are installed only when users explicitly request `@beta`, keeping regular users on stable releases.
 
 ### Stable Release Process
 
@@ -89,6 +92,34 @@ Before any release, ensure all quality checks pass:
 - Ensure both npm and GitHub releases succeed before considering release complete
 - Manual verification that all tests pass (~99%+ coverage)
 - No test quality compromises are acceptable for release deadlines
+
+### npm Authentication
+
+This repository uses **passkey authentication** for npm publishing. When running `npm publish`:
+
+1. The command will display an authentication URL and prompt to press ENTER
+2. A browser window will open for passkey authentication
+3. Complete the authentication in your browser
+4. The publish will proceed automatically after successful authentication
+
+**Important for AI assistants (Claude Code)**: The `npm publish` command requires interactive browser authentication that cannot be completed programmatically. When assisting with releases:
+- Run the appropriate publish command (see below)
+- The command will show an authentication URL - the user must complete this step manually
+- Wait for user confirmation that the publish succeeded before proceeding to GitHub release creation
+
+**Publish commands by release type**:
+- **Beta releases**: `npm publish --tag beta` - publishes to the `beta` dist-tag
+- **Stable releases**: `npm publish` - publishes to the `latest` dist-tag (default)
+
+**Verifying successful publish**: After publishing, always verify with:
+```bash
+npm view homebridge-pentair-intellicenter-ai dist-tags
+```
+
+Example output:
+```
+{ latest: '2.12.0', beta: '2.13.0-beta.1' }
+```
 
 ## Architecture Overview
 
