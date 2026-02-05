@@ -5,6 +5,7 @@ import {
   Body,
   CircuitStatus,
   CircuitStatusMessage,
+  CircuitType,
   Heater,
   HeatMode,
   IntelliCenterRequest,
@@ -19,6 +20,9 @@ import {
   LOW_TEMP_KEY,
   HIGH_TEMP_KEY,
   STATUS_KEY,
+  MODE_KEY,
+  HEAT_MODE_OFF,
+  HEAT_MODE_DEFAULT_ON,
   THERMOSTAT_STEP_VALUE,
   CURRENT_TEMP_MIN_C,
   CURRENT_TEMP_MAX_C,
@@ -37,6 +41,7 @@ export class HeaterAccessory {
   private readonly isFahrenheit: boolean;
   private readonly minValue: number;
   private readonly maxValue: number;
+  private readonly heatModeOverride: number | undefined;
   private temperature: number | undefined;
   private lowTemperature: number | undefined;
   private highTemperature: number | undefined;
@@ -50,6 +55,7 @@ export class HeaterAccessory {
 
     this.platform.log.debug(`Setting accessory details for device: ${JSON.stringify(this.heater, null, 2)}`);
     this.isFahrenheit = this.platform.getConfig().temperatureUnits !== TemperatureUnits.C;
+    this.heatModeOverride = this.platform.getConfig().heatModeOverride;
 
     this.minValue = this.platform.getConfig().minimumTemperature;
     this.maxValue = this.platform.getConfig().maximumTemperature;
@@ -202,8 +208,8 @@ export class HeaterAccessory {
     }
 
     if (mode === HeatMode.On) {
-      // Turn on the pump.
-      const command = {
+      // Turn on the pump (body circuit) before engaging the heater
+      const pumpCommand = {
         command: IntelliCenterRequestCommand.SetParamList,
         messageID: uuidv4(),
         objectList: [
@@ -213,7 +219,38 @@ export class HeaterAccessory {
           } as CircuitStatusMessage,
         ],
       } as IntelliCenterRequest;
-      this.platform.sendCommandNoWait(command);
+      this.platform.sendCommandNoWait(pumpCommand);
+    }
+
+    // Determine if we should use MODE-based control (for multi-mode heaters) or HEATER-based control (standard)
+    const isMultiModeHeater = this.heater.type === CircuitType.HCombo;
+    const useModeControl = this.heatModeOverride !== undefined || isMultiModeHeater;
+
+    // Determine the params to send based on heater type and desired state
+    let params: Record<string, string>;
+
+    if (useModeControl) {
+      // MODE-based control for multi-mode heaters
+      const onModeValue = this.heatModeOverride ?? HEAT_MODE_DEFAULT_ON;
+      const modeValue = mode === HeatMode.On ? String(onModeValue) : String(HEAT_MODE_OFF);
+      params = { [MODE_KEY]: modeValue };
+
+      if (mode === HeatMode.On) {
+        const source = this.heatModeOverride ? 'override' : 'auto-detected HCOMBO';
+        this.platform.log.info(`[${this.heater.name}] Sending ON (MODE=${onModeValue}) on body=${this.body.id} [${source}]`);
+      } else {
+        this.platform.log.info(`[${this.heater.name}] Sending OFF (MODE=${HEAT_MODE_OFF}) on body=${this.body.id}`);
+      }
+    } else {
+      // Standard HEATER-based control for basic heaters
+      const heaterValue = mode === HeatMode.On ? heater : NO_HEATER_ID;
+      params = { [HEATER_KEY]: heaterValue };
+
+      if (mode === HeatMode.On) {
+        this.platform.log.info(`[${this.heater.name}] Sending ON (HEATER=${heater}) on body=${this.body.id}`);
+      } else {
+        this.platform.log.info(`[${this.heater.name}] Sending OFF (HEATER=${NO_HEATER_ID}) on body=${this.body.id}`);
+      }
     }
 
     const command = {
@@ -222,7 +259,7 @@ export class HeaterAccessory {
       objectList: [
         {
           objnam: this.body.id,
-          params: { [HEATER_KEY]: heater } as never,
+          params: params as never,
         } as CircuitStatusMessage,
       ],
     } as IntelliCenterRequest;

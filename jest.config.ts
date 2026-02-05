@@ -43,4 +43,8 @@ module.exports = {
     '/node_modules/',
     '/dist/',
   ],
+  // uuid v13+ is ESM-only; map to CJS mock for Jest compatibility
+  moduleNameMapper: {
+    '^uuid$': '<rootDir>/test/__mocks__/uuid.ts',
+  },
 };
