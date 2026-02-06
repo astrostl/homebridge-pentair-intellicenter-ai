@@ -43,4 +43,8 @@ module.exports = {
     '/node_modules/',
     '/dist/',
   ],
+  // Mock uuid module to avoid ESM compatibility issues
+  moduleNameMapper: {
+    '^uuid$': '<rootDir>/test/__mocks__/uuid.ts',
+  },
 };

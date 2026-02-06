@@ -1,27 +1,9 @@
 import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { HeaterAccessory } from '../../src/heaterAccessory';
 import { PentairPlatform } from '../../src/platform';
-import {
-  Body,
-  BodyType,
-  CircuitStatus,
-  CircuitType,
-  Heater,
-  HeatMode,
-  IntelliCenterRequestCommand,
-  ObjectType,
-  TemperatureUnits,
-} from '../../src/types';
+import { Body, BodyType, CircuitType, Heater, HeatMode, IntelliCenterRequestCommand, ObjectType, TemperatureUnits } from '../../src/types';
 import { MANUFACTURER } from '../../src/settings';
-import {
-  HEATER_KEY,
-  NO_HEATER_ID,
-  LOW_TEMP_KEY,
-  STATUS_KEY,
-  THERMOSTAT_STEP_VALUE,
-  CURRENT_TEMP_MIN_C,
-  CURRENT_TEMP_MAX_C,
-} from '../../src/constants';
+import { HEATER_KEY, NO_HEATER_ID, LOW_TEMP_KEY, THERMOSTAT_STEP_VALUE, CURRENT_TEMP_MIN_C, CURRENT_TEMP_MAX_C } from '../../src/constants';
 
 // Mock Homebridge services and characteristics
 const mockService = {
@@ -375,35 +357,22 @@ describe('HeaterAccessory', () => {
     });
 
     describe('setMode', () => {
-      it('should turn on heater and pump when setting to HEAT', async () => {
+      it('should turn on heater when setting to HEAT (standard heater)', async () => {
         await heaterAccessory.setMode(1); // HEAT
 
-        // Should send two commands: one for pump, one for heater
-        expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(2);
+        // Should send one command with HEATER set to heater ID
+        expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(1);
 
-        // First command: turn on pump
-        expect(mockPlatform.sendCommandNoWait).toHaveBeenNthCalledWith(
-          1,
+        // Standard heater: just set HEATER to the heater ID
+        expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
           expect.objectContaining({
             command: IntelliCenterRequestCommand.SetParamList,
             objectList: [
               expect.objectContaining({
                 objnam: 'B01',
-                params: { [STATUS_KEY]: CircuitStatus.On },
-              }),
-            ],
-          }),
-        );
-
-        // Second command: set heater
-        expect(mockPlatform.sendCommandNoWait).toHaveBeenNthCalledWith(
-          2,
-          expect.objectContaining({
-            command: IntelliCenterRequestCommand.SetParamList,
-            objectList: [
-              expect.objectContaining({
-                objnam: 'B01',
-                params: { [HEATER_KEY]: 'H01' },
+                params: {
+                  [HEATER_KEY]: 'H01',
+                },
               }),
             ],
           }),
@@ -413,7 +382,7 @@ describe('HeaterAccessory', () => {
       it('should turn off heater when setting to OFF', async () => {
         await heaterAccessory.setMode(0); // OFF
 
-        // Should send only heater command (no pump command)
+        // Should send only heater command
         expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(1);
 
         expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
@@ -433,6 +402,124 @@ describe('HeaterAccessory', () => {
         await heaterAccessory.setMode(1);
 
         expect(mockPlatform.log.info).toHaveBeenCalledWith('Set heat power to 1 for heater Pool Heater');
+      });
+
+      describe('multi-mode heater control (HCOMBO)', () => {
+        beforeEach(() => {
+          // Set heater type to HCOMBO (multi-mode heater like ETi Hybrid)
+          mockPlatformAccessory.context.heater = {
+            ...mockHeater,
+            type: 'HCOMBO' as any,
+          };
+          heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+        });
+
+        it('should use MODE-based control for HCOMBO heaters when turning ON', async () => {
+          await heaterAccessory.setMode(1); // HEAT
+
+          expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(1);
+          expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
+            expect.objectContaining({
+              command: IntelliCenterRequestCommand.SetParamList,
+              objectList: [
+                expect.objectContaining({
+                  objnam: 'B01',
+                  params: { MODE: '10' }, // Default to Hybrid-Dual mode
+                }),
+              ],
+            }),
+          );
+        });
+
+        it('should use MODE=1 for HCOMBO heaters when turning OFF', async () => {
+          await heaterAccessory.setMode(0); // OFF
+
+          expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledTimes(1);
+          expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
+            expect.objectContaining({
+              command: IntelliCenterRequestCommand.SetParamList,
+              objectList: [
+                expect.objectContaining({
+                  objnam: 'B01',
+                  params: { MODE: '1' }, // Heat Source OFF
+                }),
+              ],
+            }),
+          );
+        });
+
+        it('should log auto-detected HCOMBO when no override is set', async () => {
+          await heaterAccessory.setMode(1);
+
+          expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('auto-detected HCOMBO'));
+        });
+      });
+
+      describe('heatModeOverride config', () => {
+        it('should use heatModeOverride value when set', async () => {
+          // Set override to Gas Only mode (7)
+          (mockPlatform.getConfig as jest.Mock).mockReturnValue({
+            temperatureUnits: TemperatureUnits.F,
+            minimumTemperature: 40,
+            maximumTemperature: 104,
+            heatModeOverride: 7,
+          });
+          heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+          await heaterAccessory.setMode(1); // HEAT
+
+          expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
+            expect.objectContaining({
+              objectList: [
+                expect.objectContaining({
+                  params: { MODE: '7' }, // Gas Only mode
+                }),
+              ],
+            }),
+          );
+        });
+
+        it('should log override when heatModeOverride is set', async () => {
+          (mockPlatform.getConfig as jest.Mock).mockReturnValue({
+            temperatureUnits: TemperatureUnits.F,
+            minimumTemperature: 40,
+            maximumTemperature: 104,
+            heatModeOverride: 8,
+          });
+          heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+          await heaterAccessory.setMode(1);
+
+          expect(mockPlatform.log.info).toHaveBeenCalledWith(expect.stringContaining('override'));
+        });
+
+        it('should use MODE control even for non-HCOMBO heaters when override is set', async () => {
+          // Standard heater type but with override
+          mockPlatformAccessory.context.heater = {
+            ...mockHeater,
+            type: CircuitType.Generic,
+          };
+          (mockPlatform.getConfig as jest.Mock).mockReturnValue({
+            temperatureUnits: TemperatureUnits.F,
+            minimumTemperature: 40,
+            maximumTemperature: 104,
+            heatModeOverride: 9, // Hybrid mode
+          });
+          heaterAccessory = new HeaterAccessory(mockPlatform, mockPlatformAccessory);
+
+          await heaterAccessory.setMode(1); // HEAT
+
+          // Should use MODE control despite not being HCOMBO
+          expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
+            expect.objectContaining({
+              objectList: [
+                expect.objectContaining({
+                  params: { MODE: '9' },
+                }),
+              ],
+            }),
+          );
+        });
       });
     });
   });

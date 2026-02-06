@@ -2,16 +2,7 @@ import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PentairPlatform } from './platform';
-import {
-  Circuit,
-  CircuitStatus,
-  CircuitStatusMessage,
-  CircuitType,
-  IntelliCenterRequest,
-  IntelliCenterRequestCommand,
-  Module,
-  Panel,
-} from './types';
+import { Circuit, CircuitStatus, CircuitStatusMessage, IntelliCenterRequest, IntelliCenterRequestCommand, Module, Panel } from './types';
 import { MANUFACTURER } from './settings';
 import { ACT_KEY, INTELLIBRITE_OPTIONS, STATUS_KEY } from './constants';
 

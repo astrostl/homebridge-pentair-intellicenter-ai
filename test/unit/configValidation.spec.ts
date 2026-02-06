@@ -266,6 +266,83 @@ describe('ConfigValidator', () => {
     });
   });
 
+  describe('heatModeOverride Validation', () => {
+    it('should accept valid heatModeOverride values (1-15)', () => {
+      const config = { ...baseConfig, heatModeOverride: 10 };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBe(10);
+    });
+
+    it('should treat 0 as auto-detect (undefined)', () => {
+      const config = { ...baseConfig, heatModeOverride: 0 };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBeUndefined();
+    });
+
+    it('should accept heatModeOverride as string and convert to number', () => {
+      const config = { ...baseConfig, heatModeOverride: '7' as any };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBe(7);
+    });
+
+    it('should leave heatModeOverride undefined when not provided', () => {
+      const config = { ...baseConfig };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBeUndefined();
+    });
+
+    it('should warn and ignore invalid heatModeOverride values', () => {
+      const config = { ...baseConfig, heatModeOverride: -5 };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.warnings.some(w => w.includes('heatModeOverride'))).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBeUndefined();
+    });
+
+    it('should warn and ignore non-numeric heatModeOverride values', () => {
+      const config = { ...baseConfig, heatModeOverride: 'invalid' as any };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.warnings.some(w => w.includes('heatModeOverride'))).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBeUndefined();
+    });
+
+    it('should accept boundary value 1', () => {
+      const config = { ...baseConfig, heatModeOverride: 1 };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBe(1);
+    });
+
+    it('should accept boundary value 15', () => {
+      const config = { ...baseConfig, heatModeOverride: 15 };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBe(15);
+    });
+
+    it('should warn for values above 15', () => {
+      const config = { ...baseConfig, heatModeOverride: 16 };
+      const result = ConfigValidator.validate(config);
+
+      expect(result.isValid).toBe(true);
+      expect(result.warnings.some(w => w.includes('heatModeOverride'))).toBe(true);
+      expect(result.sanitizedConfig!.heatModeOverride).toBeUndefined();
+    });
+  });
+
   describe('Missing Required Fields', () => {
     it('should reject configuration missing ipAddress', () => {
       const config = { ...baseConfig };
