@@ -42,6 +42,7 @@ export type PentairConfig = {
   supportVSP: boolean;
   airTemp: boolean;
   includeAllCircuits?: boolean;
+  heatModeOverride?: number;
 } & PlatformConfig;
 
 export class ConfigValidator {
@@ -138,6 +139,23 @@ export class ConfigValidator {
     sanitizedConfig.supportVSP = this.validateBoolean(config.supportVSP, false);
     sanitizedConfig.airTemp = this.validateBoolean(config.airTemp, true);
     sanitizedConfig.includeAllCircuits = this.validateBoolean(config.includeAllCircuits, false);
+
+    // Heat mode override for multi-mode heaters (0 = auto-detect, 2-15 = specific modes)
+    // Note: MODE=1 means "Heat Source OFF" in IntelliCenter, so it is not a valid ON mode
+    if (config.heatModeOverride !== undefined && config.heatModeOverride !== null && config.heatModeOverride !== '') {
+      const modeValue = Number(config.heatModeOverride);
+      if (!isNaN(modeValue) && modeValue >= 2 && modeValue <= 15) {
+        sanitizedConfig.heatModeOverride = modeValue;
+      } else if (modeValue === 0) {
+        // 0 means auto-detect, don't set the override
+        sanitizedConfig.heatModeOverride = undefined;
+      } else if (modeValue === 1) {
+        warnings.push('heatModeOverride=1 is "Heat Source OFF" and cannot be used as an ON mode, ignoring');
+        sanitizedConfig.heatModeOverride = undefined;
+      } else {
+        warnings.push(`heatModeOverride must be 0 (auto) or a number between 2 and 15, ignoring value: ${config.heatModeOverride}`);
+      }
+    }
 
     // Buffer size validation
     this.validateBufferSizeConfig(config, warnings, sanitizedConfig);

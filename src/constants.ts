@@ -29,6 +29,14 @@ export const GPM_KEY = 'GPM';
 export const WATTS_KEY = 'WATTS';
 export const RPM_KEY = 'RPM';
 
+// Heat mode values for multi-mode heaters (e.g., Pentair UltraTemp ETi Hybrid)
+export const HEAT_MODE_OFF = 1;
+export const HEAT_MODE_GAS_ONLY = 7;
+export const HEAT_MODE_HEAT_PUMP_ONLY = 8;
+export const HEAT_MODE_HYBRID = 9;
+export const HEAT_MODE_DUAL = 10;
+export const HEAT_MODE_DEFAULT_ON = HEAT_MODE_DUAL;
+
 export const THERMOSTAT_STEP_VALUE = 0.5;
 export const NO_HEATER_ID = '00000';
 export const DEFAULT_COLOR_TEMPERATURE = 140;
