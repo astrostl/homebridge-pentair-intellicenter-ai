@@ -1507,7 +1507,14 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       for (const body of module.bodies) {
         discoveredAccessoryIds.add(body.id);
         const pumpCircuit = circuitIdPumpMap.get(body.circuit?.id as string);
-        this.discoverCircuit(panel, module, body, pumpCircuit);
+        // Only skip creating a switch for this body if the matching circuit will also
+        // create a switch via processModuleFeatures(). If the circuit exists but was filtered
+        // out of features (e.g., FEATR=OFF), we must keep the body-based switch so the user
+        // doesn't lose on/off control.
+        const circuitInFeatures = body.circuit && module.features.some(f => f.id === body.circuit?.id);
+        if (!circuitInFeatures) {
+          this.discoverCircuit(panel, module, body, pumpCircuit);
+        }
         this.associateBodyWithPump(body, pumpCircuit);
         this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, HTMODE_KEY, HIGH_TEMP_KEY, LOW_TEMP_KEY]);
         bodyIdMap.set(body.id, body);
