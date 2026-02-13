@@ -2,16 +2,7 @@ import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PentairPlatform } from './platform';
-import {
-  Circuit,
-  CircuitStatus,
-  CircuitStatusMessage,
-  CircuitType,
-  IntelliCenterRequest,
-  IntelliCenterRequestCommand,
-  Module,
-  Panel,
-} from './types';
+import { Circuit, CircuitStatus, CircuitStatusMessage, IntelliCenterRequest, IntelliCenterRequestCommand, Module, Panel } from './types';
 import { MANUFACTURER } from './settings';
 import { ACT_KEY, INTELLIBRITE_OPTIONS, STATUS_KEY } from './constants';
 
@@ -62,17 +53,18 @@ export class IntelliBriteAccessory {
       this.accessory.removeService(existingLightbulb);
     }
 
-    // Create a switch for each color/show option
+    // Create a lightbulb for each color/show option
     for (const option of INTELLIBRITE_OPTIONS) {
       const subtype = `intellibrite_${option.code}`;
-      let service = this.accessory.getServiceById(this.platform.Service.Switch, subtype);
+      let service = this.accessory.getServiceById(this.platform.Service.Lightbulb, subtype);
 
       if (!service) {
-        service = this.accessory.addService(this.platform.Service.Switch, option.name, subtype);
-        this.platform.log.debug(`Added IntelliBrite switch: ${option.name} (${option.code}) to ${this.circuit.name}`);
+        service = this.accessory.addService(this.platform.Service.Lightbulb, option.name, subtype);
+        this.platform.log.debug(`Added IntelliBrite light: ${option.name} (${option.code}) to ${this.circuit.name}`);
       }
 
       service.setCharacteristic(this.platform.Characteristic.Name, option.name);
+      service.setCharacteristic(this.platform.Characteristic.ConfiguredName, option.name);
 
       const characteristic = service.getCharacteristic(this.platform.Characteristic.On);
       characteristic.onSet(this.createSetHandler(option.code));
@@ -91,9 +83,12 @@ export class IntelliBriteAccessory {
     const servicesToRemove: Service[] = [];
 
     for (const service of this.accessory.services) {
-      if (service.UUID === this.platform.Service.Switch.UUID) {
-        const subtype = service.subtype;
-        if (subtype && subtype.startsWith('intellibrite_') && !validSubtypes.has(subtype)) {
+      const subtype = service.subtype;
+      if (subtype && subtype.startsWith('intellibrite_')) {
+        // Remove old Switch services (migrated to Lightbulb) or obsolete Lightbulb subtypes
+        if (service.UUID === this.platform.Service.Switch.UUID) {
+          servicesToRemove.push(service);
+        } else if (service.UUID === this.platform.Service.Lightbulb.UUID && !validSubtypes.has(subtype)) {
           servicesToRemove.push(service);
         }
       }

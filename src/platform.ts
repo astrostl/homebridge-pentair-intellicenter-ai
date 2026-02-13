@@ -862,9 +862,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private createCircuitAccessory(accessory: PlatformAccessory): void {
     const circuit = accessory.context.circuit as Circuit | undefined;
     const circuitType = circuit?.type;
-    const isIntelliBrite = circuitType === CircuitType.IntelliBrite || circuitType === CircuitType.LightShowGroup;
+    const isIntelliBrite = circuitType === CircuitType.IntelliBrite;
+    const isLightShowGroup = circuitType === CircuitType.LightShowGroup;
+    const useColorWheel = this.getConfig().intelliBriteColorWheel !== false;
 
-    if (isIntelliBrite) {
+    if (isLightShowGroup || (isIntelliBrite && !useColorWheel)) {
+      // LightShowGroup always uses preset switches.
+      // IntelliBrite uses preset switches when color wheel is disabled.
       const circuitId = circuit?.id;
       if (circuitId) {
         // Check if we already have an instance for this circuit
@@ -880,6 +884,14 @@ export class PentairPlatform implements DynamicPlatformPlugin {
         }
       }
     } else {
+      // Generic circuits AND IntelliBrite circuits in color wheel mode.
+      // Clean up any stale IntelliBrite instance tracking from a previous mode.
+      if (isIntelliBrite) {
+        const circuitId = circuit?.id;
+        if (circuitId && this.intelliBriteInstances.has(circuitId)) {
+          this.intelliBriteInstances.delete(circuitId);
+        }
+      }
       new CircuitAccessory(this, accessory);
     }
   }
@@ -1507,7 +1519,14 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       for (const body of module.bodies) {
         discoveredAccessoryIds.add(body.id);
         const pumpCircuit = circuitIdPumpMap.get(body.circuit?.id as string);
-        this.discoverCircuit(panel, module, body, pumpCircuit);
+        // Only skip creating a switch for this body if the matching circuit will also
+        // create a switch via processModuleFeatures(). If the circuit exists but was filtered
+        // out of features (e.g., FEATR=OFF), we must keep the body-based switch so the user
+        // doesn't lose on/off control.
+        const circuitInFeatures = body.circuit && module.features.some(f => f.id === body.circuit?.id);
+        if (!circuitInFeatures) {
+          this.discoverCircuit(panel, module, body, pumpCircuit);
+        }
         this.associateBodyWithPump(body, pumpCircuit);
         this.subscribeForUpdates(body, [STATUS_KEY, LAST_TEMP_KEY, HEAT_SOURCE_KEY, HEATER_KEY, HTMODE_KEY, HIGH_TEMP_KEY, LOW_TEMP_KEY]);
         bodyIdMap.set(body.id, body);

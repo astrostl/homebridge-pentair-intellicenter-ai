@@ -42,6 +42,9 @@ export class CircuitAccessory {
     this.setupService();
     this.configureServiceCharacteristics();
     this.configureFanService();
+    if (CircuitType.IntelliBrite === this.circuit.type) {
+      this.syncColorFromActiveColor();
+    }
   }
 
   private initializeContext(): void {
@@ -62,11 +65,28 @@ export class CircuitAccessory {
 
   private setupService(): void {
     if (CircuitType.IntelliBrite === this.circuit.type) {
+      this.removeIntelliBriteSwitchServices();
       this.service =
         this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
       this.setupLightbulbCharacteristics();
     } else {
       this.service = this.accessory.getService(this.platform.Service.Switch) || this.accessory.addService(this.platform.Service.Switch);
+    }
+  }
+
+  private removeIntelliBriteSwitchServices(): void {
+    const servicesToRemove: Service[] = [];
+    for (const service of this.accessory.services) {
+      if (
+        service.subtype?.startsWith('intellibrite_') &&
+        (service.UUID === this.platform.Service.Switch.UUID || service.UUID === this.platform.Service.Lightbulb.UUID)
+      ) {
+        servicesToRemove.push(service);
+      }
+    }
+    for (const service of servicesToRemove) {
+      this.platform.log.info(`Removing IntelliBrite preset: ${service.subtype} from ${this.circuit.name} (color wheel mode)`);
+      this.accessory.removeService(service);
     }
   }
 
@@ -108,6 +128,29 @@ export class CircuitAccessory {
     } else if (fanService) {
       this.platform.log.info(`Removing VSP Fan service from ${this.circuit.name} due to config`);
       this.accessory.removeService(fanService);
+    }
+  }
+
+  private syncColorFromActiveColor(): void {
+    const activeColorCode = this.accessory.context.activeColor as string | undefined;
+    if (!activeColorCode) {
+      return;
+    }
+
+    const colorMap: Record<string, Color> = {
+      [Color.White.intellicenterCode]: Color.White,
+      [Color.Red.intellicenterCode]: Color.Red,
+      [Color.Green.intellicenterCode]: Color.Green,
+      [Color.Blue.intellicenterCode]: Color.Blue,
+      [Color.Magenta.intellicenterCode]: Color.Magenta,
+    };
+
+    const matchedColor = colorMap[activeColorCode];
+    if (matchedColor) {
+      this.accessory.context.color = matchedColor;
+      this.accessory.context.saturation = matchedColor.saturation;
+      this.service.updateCharacteristic(this.platform.Characteristic.Hue, matchedColor.hue);
+      this.service.updateCharacteristic(this.platform.Characteristic.Saturation, matchedColor.saturation);
     }
   }
 
@@ -168,7 +211,7 @@ export class CircuitAccessory {
   }
 
   async getColorHue(): Promise<CharacteristicValue> {
-    return this.accessory.context.color?.hue ?? Color.White.saturation;
+    return this.accessory.context.color?.hue ?? Color.White.hue;
   }
 
   async getColorSaturation(): Promise<CharacteristicValue> {

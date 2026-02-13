@@ -42,6 +42,7 @@ export type PentairConfig = {
   supportVSP: boolean;
   airTemp: boolean;
   includeAllCircuits?: boolean;
+  intelliBriteColorWheel?: boolean;
 } & PlatformConfig;
 
 export class ConfigValidator {
@@ -138,6 +139,7 @@ export class ConfigValidator {
     sanitizedConfig.supportVSP = this.validateBoolean(config.supportVSP, false);
     sanitizedConfig.airTemp = this.validateBoolean(config.airTemp, true);
     sanitizedConfig.includeAllCircuits = this.validateBoolean(config.includeAllCircuits, false);
+    sanitizedConfig.intelliBriteColorWheel = this.validateBoolean(config.intelliBriteColorWheel, false);
 
     // Buffer size validation
     this.validateBufferSizeConfig(config, warnings, sanitizedConfig);
