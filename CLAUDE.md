@@ -65,9 +65,12 @@ Before any release, ensure all quality checks pass:
 3. **Make changes**: Implement features, tests, bug fixes on beta branch
 4. **Version bump**: Update package.json to `X.Y.Z-beta.N`
 5. **Quality check**: Run `npm run prepublishOnly` (must pass)
-6. **Commit and push**: `git push origin beta/vX.Y.Z`
-7. **Publish to npm**: `npm publish --tag beta`
-8. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease`
+6. **Commit and push**: `git push -u origin beta/vX.Y.Z`
+7. **Publish to npm**: `npm publish --tag beta` (see [npm Authentication](#npm-authentication) below)
+8. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N"`
+9. **Verify dist-tags**: Run `npm view homebridge-pentair-intellicenter-ai dist-tags` to confirm `beta` tag points to new version while `latest` remains unchanged
+
+**Important**: The `--tag beta` flag is critical - it ensures beta versions are installed only when users explicitly request `@beta`, keeping regular users on stable releases.
 
 ### Stable Release Process
 
@@ -89,6 +92,61 @@ Before any release, ensure all quality checks pass:
 - Ensure both npm and GitHub releases succeed before considering release complete
 - Manual verification that all tests pass (~99%+ coverage)
 - No test quality compromises are acceptable for release deadlines
+
+### npm Authentication
+
+This repository uses **passkey authentication** for npm publishing. The publish process requires browser-based authentication.
+
+**Automated publishing with expect (recommended for AI assistants)**:
+
+Use this `expect` script to automate publishing. It handles both scenarios:
+- **Auth required**: Auto-presses ENTER to open browser, waits for user to complete passkey auth
+- **Auth cached**: Publish proceeds directly without prompting (npm caches auth for ~5 minutes)
+
+```bash
+# For beta releases:
+expect -c '
+set timeout 300
+spawn npm publish --tag beta
+expect {
+    -re "Press ENTER" { send "\r"; exp_continue }
+    -re "one-time password" { puts "OTP mode - web auth not available"; exit 1 }
+    eof
+}
+wait
+'
+
+# For stable releases:
+expect -c '
+set timeout 300
+spawn npm publish
+expect {
+    -re "Press ENTER" { send "\r"; exp_continue }
+    -re "one-time password" { puts "OTP mode - web auth not available"; exit 1 }
+    eof
+}
+wait
+'
+```
+
+This script:
+1. Spawns `npm publish` with a pseudo-TTY (required for web auth mode)
+2. If auth cached: publish completes directly without prompting
+3. If auth needed: waits for "Press ENTER" prompt, sends ENTER, opens browser
+4. User completes passkey auth in browser (if prompted)
+5. Publish completes automatically
+
+**Manual publishing**: If expect is unavailable, run `npm publish --tag beta` (or `npm publish`) directly and press ENTER when prompted.
+
+**Verifying successful publish**: After publishing, always verify with:
+```bash
+npm view homebridge-pentair-intellicenter-ai dist-tags
+```
+
+Example output:
+```
+{ latest: '2.12.0', beta: '2.13.0-beta.3' }
+```
 
 ## Architecture Overview
 

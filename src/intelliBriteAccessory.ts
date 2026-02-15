@@ -2,32 +2,25 @@ import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PentairPlatform } from './platform';
-import {
-  Circuit,
-  CircuitStatus,
-  CircuitStatusMessage,
-  CircuitType,
-  IntelliCenterRequest,
-  IntelliCenterRequestCommand,
-  Module,
-  Panel,
-} from './types';
+import { Circuit, CircuitStatus, CircuitStatusMessage, IntelliCenterRequest, IntelliCenterRequestCommand, Module, Panel } from './types';
 import { MANUFACTURER } from './settings';
-import { ACT_KEY, INTELLIBRITE_OPTIONS, STATUS_KEY } from './constants';
+import { STATUS_KEY } from './constants';
 
 const MODEL = 'IntelliBrite';
 
 /**
- * IntelliBrite Accessory
- * Exposes IntelliBrite color-changing lights as a set of Switch services.
- * Each color/show option is a separate switch - HomeKit groups them into a collapsible tile.
- * Only the active color/show switch is ON; all others are OFF.
+ * IntelliBrite Accessory (Light Only)
+ * Exposes IntelliBrite as a simple Lightbulb for ON/OFF control.
+ * The tile will light up when the light is on.
+ * Color selection is handled by the separate IntelliBriteColorsAccessory.
+ *
+ * When turned ON, IntelliCenter uses the last active color automatically.
  */
 export class IntelliBriteAccessory {
   private circuit!: Circuit;
   private panel!: Panel;
   private module!: Module | null;
-  private colorSwitches: Map<string, Service> = new Map();
+  private lightbulbService!: Service;
 
   constructor(
     private readonly platform: PentairPlatform,
@@ -35,8 +28,9 @@ export class IntelliBriteAccessory {
   ) {
     this.initializeContext();
     this.setupAccessoryInformation();
-    this.setupColorSwitches();
-    this.updateActiveColor();
+    this.setupLightbulbService();
+    this.cleanupLegacyServices();
+    this.updateStatus();
   }
 
   private initializeContext(): void {
@@ -54,179 +48,56 @@ export class IntelliBriteAccessory {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, serial);
   }
 
-  private setupColorSwitches(): void {
-    // Remove any existing Lightbulb service from previous implementation
-    const existingLightbulb = this.accessory.getService(this.platform.Service.Lightbulb);
-    if (existingLightbulb) {
-      this.platform.log.info(`Removing legacy Lightbulb service from ${this.circuit.name}`);
-      this.accessory.removeService(existingLightbulb);
+  private setupLightbulbService(): void {
+    // Create or get the Lightbulb service for ON/OFF control
+    this.lightbulbService =
+      this.accessory.getService(this.platform.Service.Lightbulb) ||
+      this.accessory.addService(this.platform.Service.Lightbulb, this.circuit.name);
+
+    this.lightbulbService.setCharacteristic(this.platform.Characteristic.Name, this.circuit.name);
+
+    // Handle ON/OFF
+    this.lightbulbService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onSet(this.handleSet.bind(this))
+      .onGet(this.handleGet.bind(this));
+
+    // IntelliBrite doesn't support variable brightness - fix at 100% when on
+    if (this.lightbulbService.testCharacteristic(this.platform.Characteristic.Brightness)) {
+      this.lightbulbService.getCharacteristic(this.platform.Characteristic.Brightness).onGet(() => {
+        return this.circuit.status === CircuitStatus.On ? 100 : 0;
+      });
     }
 
-    // Create a switch for each color/show option
-    for (const option of INTELLIBRITE_OPTIONS) {
-      const subtype = `intellibrite_${option.code}`;
-      let service = this.accessory.getServiceById(this.platform.Service.Switch, subtype);
-
-      if (!service) {
-        service = this.accessory.addService(this.platform.Service.Switch, option.name, subtype);
-        this.platform.log.debug(`Added IntelliBrite switch: ${option.name} (${option.code}) to ${this.circuit.name}`);
-      }
-
-      service.setCharacteristic(this.platform.Characteristic.Name, option.name);
-
-      const characteristic = service.getCharacteristic(this.platform.Characteristic.On);
-      characteristic.onSet(this.createSetHandler(option.code));
-      characteristic.onGet(this.createGetHandler(option.code));
-
-      this.platform.log.debug(`[${this.circuit.name}] Bound handlers for ${option.name} (${option.code})`);
-      this.colorSwitches.set(option.code, service);
-    }
-
-    // Clean up any old switches that are no longer in INTELLIBRITE_OPTIONS
-    this.cleanupOldServices();
+    this.platform.log.debug(`[${this.circuit.name}] Lightbulb service configured`);
   }
 
-  private cleanupOldServices(): void {
-    const validSubtypes = new Set(INTELLIBRITE_OPTIONS.map(o => `intellibrite_${o.code}`));
+  /**
+   * Remove any legacy Switch services from previous implementation.
+   * Color switches are now in a separate accessory.
+   */
+  private cleanupLegacyServices(): void {
     const servicesToRemove: Service[] = [];
 
     for (const service of this.accessory.services) {
       if (service.UUID === this.platform.Service.Switch.UUID) {
         const subtype = service.subtype;
-        if (subtype && subtype.startsWith('intellibrite_') && !validSubtypes.has(subtype)) {
+        if (subtype && subtype.startsWith('intellibrite_')) {
           servicesToRemove.push(service);
         }
       }
     }
 
-    for (const service of servicesToRemove) {
-      this.platform.log.info(`Removing obsolete IntelliBrite switch: ${service.subtype}`);
-      this.accessory.removeService(service);
-    }
-  }
-
-  private createSetHandler(colorCode: string): (value: CharacteristicValue) => Promise<void> {
-    return async (value: CharacteristicValue) => {
-      this.platform.log.debug(`[${this.circuit.name}] Switch ${colorCode} set to ${value}`);
-      if (value) {
-        // Turning on - set color and turn on light
-        await this.setColor(colorCode);
-      } else {
-        // Turning off the active color switch turns off the light
-        const activeColor = this.accessory.context.activeColor as string | undefined;
-        if (colorCode === activeColor) {
-          await this.turnOff();
-        }
-        // If turning off a non-active switch, do nothing (it's already off)
+    if (servicesToRemove.length > 0) {
+      const count = servicesToRemove.length;
+      this.platform.log.info(`[${this.circuit.name}] Removing ${count} legacy color switches (now in separate accessory)`);
+      for (const service of servicesToRemove) {
+        this.accessory.removeService(service);
       }
-    };
-  }
-
-  private async turnOff(): Promise<void> {
-    this.platform.log.info(`Turning off ${this.circuit.name}`);
-
-    const command = {
-      command: IntelliCenterRequestCommand.SetParamList,
-      messageID: uuidv4(),
-      objectList: [
-        {
-          objnam: this.circuit.id,
-          params: { [STATUS_KEY]: CircuitStatus.Off } as never,
-        } as CircuitStatusMessage,
-      ],
-    } as IntelliCenterRequest;
-
-    this.platform.sendCommandNoWait(command);
-
-    // Optimistically update the UI
-    this.circuit.status = CircuitStatus.Off;
-    this.updateSwitchStates();
-  }
-
-  private createGetHandler(colorCode: string): () => Promise<CharacteristicValue> {
-    return async () => {
-      const activeColor = this.accessory.context.activeColor as string | undefined;
-      const isCircuitOn = this.circuit.status === CircuitStatus.On;
-      // Only return true if circuit is ON and this is the active color
-      return isCircuitOn && activeColor === colorCode;
-    };
-  }
-
-  private async setColor(colorCode: string): Promise<void> {
-    this.platform.log.info(`Setting ${this.circuit.name} to ${colorCode}`);
-
-    // Use ACT to directly trigger color changes (USE is read-only for the selected default)
-    const paramKey = ACT_KEY;
-
-    // Turn on the light AND set the color in one command
-    const command = {
-      command: IntelliCenterRequestCommand.SetParamList,
-      messageID: uuidv4(),
-      objectList: [
-        {
-          objnam: this.circuit.id,
-          params: {
-            [STATUS_KEY]: CircuitStatus.On,
-            [paramKey]: colorCode,
-          } as never,
-        } as CircuitStatusMessage,
-      ],
-    } as IntelliCenterRequest;
-
-    this.platform.sendCommandNoWait(command);
-
-    // Optimistically update the UI
-    this.circuit.status = CircuitStatus.On;
-    this.accessory.context.activeColor = colorCode;
-    this.updateSwitchStates();
-  }
-
-  /**
-   * Update all switch states based on the active color.
-   * Called when we receive an update from IntelliCenter or after setting a color.
-   */
-  public updateActiveColor(): void {
-    const activeColor = this.accessory.context.activeColor as string | undefined;
-    this.platform.log.debug(`${this.circuit.name} active color: ${activeColor ?? 'unknown'}`);
-    this.updateSwitchStates();
-  }
-
-  private updateSwitchStates(): void {
-    const activeColor = this.accessory.context.activeColor as string | undefined;
-    const circuitStatus = this.circuit.status;
-    const isCircuitOn = circuitStatus === CircuitStatus.On;
-
-    for (const [code, service] of this.colorSwitches) {
-      // Only show color as active if the circuit is ON and this is the active color
-      const isActive = isCircuitOn && code === activeColor;
-      service.updateCharacteristic(this.platform.Characteristic.On, isActive);
     }
   }
 
-  /**
-   * Handle the circuit on/off status update.
-   * When the light is off, all color switches should show as off.
-   */
-  public updateStatus(): void {
-    const status = this.accessory.context.circuit?.status;
-    this.platform.log.debug(`${this.circuit.name} status: ${status}`);
-
-    if (status === CircuitStatus.Off) {
-      // When light is off, clear all switches
-      for (const service of this.colorSwitches.values()) {
-        service.updateCharacteristic(this.platform.Characteristic.On, false);
-      }
-    } else {
-      // When light is on, show the active color
-      this.updateSwitchStates();
-    }
-  }
-
-  /**
-   * Turn the light on or off.
-   * This is separate from color selection.
-   */
-  public async setOn(value: CharacteristicValue): Promise<void> {
+  private async handleSet(value: CharacteristicValue): Promise<void> {
     this.platform.log.info(`Setting ${this.circuit.name} to ${value ? 'ON' : 'OFF'}`);
 
     const command = {
@@ -241,5 +112,33 @@ export class IntelliBriteAccessory {
     } as IntelliCenterRequest;
 
     this.platform.sendCommandNoWait(command);
+
+    // Optimistically update the UI
+    this.circuit.status = value ? CircuitStatus.On : CircuitStatus.Off;
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.On, !!value);
+  }
+
+  private async handleGet(): Promise<CharacteristicValue> {
+    return this.circuit.status === CircuitStatus.On;
+  }
+
+  /**
+   * Handle the circuit on/off status update from IntelliCenter.
+   */
+  public updateStatus(): void {
+    const status = this.accessory.context.circuit?.status;
+    const isOn = status === CircuitStatus.On;
+    this.platform.log.debug(`${this.circuit.name} status: ${status}`);
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.On, isOn);
+  }
+
+  /**
+   * Called when active color changes - not used in light-only accessory
+   * but kept for API compatibility with platform updates.
+   */
+  public updateActiveColor(): void {
+    // Color is handled by the separate colors accessory
+    // Just update status in case it changed
+    this.updateStatus();
   }
 }

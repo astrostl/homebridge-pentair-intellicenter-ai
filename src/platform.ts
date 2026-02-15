@@ -4,6 +4,7 @@ import * as net from 'net';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { CircuitAccessory } from './circuitAccessory';
 import { IntelliBriteAccessory } from './intelliBriteAccessory';
+import { IntelliBriteColorsAccessory } from './intelliBriteColorsAccessory';
 import { Telnet } from 'telnet-client';
 import {
   BaseCircuit,
@@ -74,6 +75,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   public readonly heaters: Map<string, PlatformAccessory> = new Map();
   public readonly heaterInstances: Map<string, HeaterAccessory> = new Map();
   public readonly intelliBriteInstances: Map<string, IntelliBriteAccessory> = new Map();
+  public readonly intelliBriteColorsInstances: Map<string, IntelliBriteColorsAccessory> = new Map();
 
   private connection!: Telnet;
   private maxBufferSize!: number;
@@ -121,6 +123,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private rateLimiter!: RateLimiter;
   private deadLetterQueue!: DeadLetterQueue;
   private validatedConfig: PentairConfig | null = null;
+
+  // Auto re-discovery when new devices are detected
+  private reDiscoveryPending = false;
+  private reDiscoveryTimer: NodeJS.Timeout | null = null;
+  private static readonly REDISCOVERY_DEBOUNCE_MS = 5000; // Wait 5 seconds to batch multiple new devices
 
   constructor(
     public readonly log: Logger,
@@ -620,14 +627,87 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private handleUnregisteredDevice(change: CircuitStatusMessage) {
     this.log.warn(`Device ${change.objnam} sending updates but not registered as accessory. ` + `Params: ${JSON.stringify(change.params)}`);
 
-    const objType = change.params!['OBJTYP'];
-    const subType = change.params!['SUBTYP'];
+    const objType = change.params!['OBJTYP'] as string | undefined;
+    const subType = change.params!['SUBTYP'] as string | undefined;
     const name = change.params!['SNAME'];
     const feature = change.params!['FEATR'];
+    const objnam = change.objnam!;
 
     this.log.info(
-      `Unregistered device details - ID: ${change.objnam}, ` + `Type: ${objType}, SubType: ${subType}, Name: ${name}, Feature: ${feature}`,
+      `Unregistered device details - ID: ${objnam}, ` + `Type: ${objType}, SubType: ${subType}, Name: ${name}, Feature: ${feature}`,
     );
+
+    // Check if this is a device type that should trigger re-discovery
+    if (this.shouldTriggerReDiscovery(objnam, objType, subType)) {
+      this.scheduleReDiscovery();
+    }
+  }
+
+  /**
+   * Determine if an unregistered device should trigger re-discovery.
+   * We want to re-discover for:
+   * - Circuit groups (GRP prefix) - user-created groups
+   * - IntelliBrite circuits (INTELLI subtype)
+   * - Light show groups (LITSHO subtype)
+   * - Feature circuits (CIRCUIT type with FEATR=ON)
+   */
+  private shouldTriggerReDiscovery(objnam: string, objType?: string, subType?: string): boolean {
+    // Circuit groups (GRP01, GRP02, etc.) - user-created groups
+    if (objnam.toUpperCase().startsWith('GRP')) {
+      this.log.info(`New circuit group detected: ${objnam} - will trigger re-discovery`);
+      return true;
+    }
+
+    // Circuits that could be features
+    if (objType === 'CIRCUIT') {
+      // IntelliBrite or Light Show circuits
+      if (subType === 'INTELLI' || subType === 'LITSHO') {
+        this.log.info(`New IntelliBrite/LightShow circuit detected: ${objnam} - will trigger re-discovery`);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Schedule a re-discovery with debouncing to batch multiple new devices.
+   */
+  private scheduleReDiscovery(): void {
+    if (this.reDiscoveryPending) {
+      this.log.debug('Re-discovery already scheduled, skipping duplicate request');
+      return;
+    }
+
+    this.reDiscoveryPending = true;
+
+    // Clear any existing timer
+    if (this.reDiscoveryTimer) {
+      clearTimeout(this.reDiscoveryTimer);
+    }
+
+    this.log.info(`Scheduling re-discovery in ${PentairPlatform.REDISCOVERY_DEBOUNCE_MS / 1000} seconds...`);
+
+    this.reDiscoveryTimer = setTimeout(() => {
+      this.performReDiscovery();
+    }, PentairPlatform.REDISCOVERY_DEBOUNCE_MS);
+  }
+
+  /**
+   * Perform the actual re-discovery process.
+   */
+  private performReDiscovery(): void {
+    this.log.info('Starting re-discovery to detect new devices...');
+    this.reDiscoveryPending = false;
+    this.reDiscoveryTimer = null;
+
+    // Reset discovery state and start fresh
+    this.discoverCommandsSent = [];
+    this.discoverCommandsFailed = [];
+    this.discoveryBuffer = null;
+
+    // Start the discovery process
+    this.discoverDevices();
   }
 
   private processChange(change: CircuitStatusMessage) {
@@ -878,9 +958,49 @@ export class PentairPlatform implements DynamicPlatformPlugin {
           const instance = new IntelliBriteAccessory(this, accessory);
           this.intelliBriteInstances.set(circuitId, instance);
         }
+
+        // Also update the colors accessory if it exists
+        this.updateIntelliBriteColorsAccessory(circuitId, accessory);
       }
     } else {
       new CircuitAccessory(this, accessory);
+    }
+  }
+
+  /**
+   * Update the IntelliBrite colors accessory with status changes.
+   * The colors accessory shares the same circuit context but is a separate accessory.
+   */
+  private updateIntelliBriteColorsAccessory(circuitId: string, mainAccessory: PlatformAccessory): void {
+    const colorsInstance = this.intelliBriteColorsInstances.get(circuitId);
+    if (colorsInstance) {
+      // Sync the circuit status to the colors accessory
+      const colorsAccessory = this.accessoryMap.get(this.api.hap.uuid.generate(`${circuitId}-colors`));
+      if (colorsAccessory) {
+        colorsAccessory.context.circuit = mainAccessory.context.circuit;
+        colorsAccessory.context.activeColor = mainAccessory.context.activeColor;
+        colorsInstance.updateStatus();
+        colorsInstance.updateActiveColor();
+      }
+    }
+  }
+
+  /**
+   * Create or update the IntelliBrite colors accessory.
+   */
+  private createIntelliBriteColorsAccessory(colorsAccessory: PlatformAccessory): void {
+    const circuit = colorsAccessory.context.circuit as Circuit | undefined;
+    const circuitId = circuit?.id;
+
+    if (circuitId) {
+      const existingInstance = this.intelliBriteColorsInstances.get(circuitId);
+      if (existingInstance) {
+        existingInstance.updateStatus();
+        existingInstance.updateActiveColor();
+      } else {
+        const instance = new IntelliBriteColorsAccessory(this, colorsAccessory);
+        this.intelliBriteColorsInstances.set(circuitId, instance);
+      }
     }
   }
 
@@ -1532,6 +1652,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     for (const module of panel.modules) {
       for (const feature of module.features) {
         discoveredAccessoryIds.add(feature.id);
+        // IntelliBrite lights have a separate colors accessory
+        const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+        if (isIntelliBrite) {
+          discoveredAccessoryIds.add(`${feature.id}-colors`);
+        }
         const pumpCircuit = circuitIdPumpMap.get(feature.id);
         this.discoverCircuit(panel, module, feature, pumpCircuit);
         this.subscribeForUpdates(feature, this.getFeatureSubscriptionKeys(feature));
@@ -1542,6 +1667,11 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   private processPanelFeatures(panel: Panel, discoveredAccessoryIds: Set<string>, circuitIdPumpMap: Map<string, PumpCircuit>) {
     for (const feature of panel.features) {
       discoveredAccessoryIds.add(feature.id);
+      // IntelliBrite lights have a separate colors accessory
+      const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+      if (isIntelliBrite) {
+        discoveredAccessoryIds.add(`${feature.id}-colors`);
+      }
       const pumpCircuit = circuitIdPumpMap.get(feature.id);
       this.discoverCircuit(panel, null, feature, pumpCircuit);
       this.subscribeForUpdates(feature, this.getFeatureSubscriptionKeys(feature));
@@ -1752,6 +1882,42 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     }
     if (pumpCircuit) {
       this.pumpIdToCircuitMap.set(pumpCircuit.id, circuit);
+    }
+
+    // For IntelliBrite circuits, also create a colors accessory
+    const isIntelliBrite = circuit.type === CircuitType.IntelliBrite || circuit.type === CircuitType.LightShowGroup;
+    if (isIntelliBrite) {
+      this.discoverIntelliBriteColors(panel, module, circuit);
+    }
+  }
+
+  /**
+   * Discover/create the IntelliBrite colors accessory.
+   * This is a separate accessory with color switches, allowing the main
+   * IntelliBrite accessory to be a simple Lightbulb that lights up the tile.
+   */
+  private discoverIntelliBriteColors(panel: Panel, module: Module | null, circuit: Circuit) {
+    const colorsUuid = this.api.hap.uuid.generate(`${circuit.id}-colors`);
+    const colorsName = `${circuit.name} Colors`;
+
+    const existingColorsAccessory = this.accessoryMap.get(colorsUuid);
+
+    if (existingColorsAccessory) {
+      this.log.debug(`Restoring existing IntelliBrite colors accessory from cache: ${existingColorsAccessory.displayName}`);
+      existingColorsAccessory.context.circuit = circuit;
+      existingColorsAccessory.context.module = module;
+      existingColorsAccessory.context.panel = panel;
+      this.api.updatePlatformAccessories([existingColorsAccessory]);
+      this.createIntelliBriteColorsAccessory(existingColorsAccessory);
+    } else {
+      this.log.debug(`Adding new IntelliBrite colors accessory: ${colorsName}`);
+      const colorsAccessory = new this.api.platformAccessory(colorsName, colorsUuid);
+      colorsAccessory.context.circuit = circuit;
+      colorsAccessory.context.module = module;
+      colorsAccessory.context.panel = panel;
+      this.createIntelliBriteColorsAccessory(colorsAccessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [colorsAccessory]);
+      this.accessoryMap.set(colorsAccessory.UUID, colorsAccessory);
     }
   }
 
@@ -2894,6 +3060,13 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       clearInterval(this.temperatureValidationInterval);
       this.temperatureValidationInterval = null;
       this.log.debug('Temperature validation interval cleared');
+    }
+
+    if (this.reDiscoveryTimer) {
+      clearTimeout(this.reDiscoveryTimer);
+      this.reDiscoveryTimer = null;
+      this.reDiscoveryPending = false;
+      this.log.debug('Re-discovery timer cleared');
     }
   }
 
