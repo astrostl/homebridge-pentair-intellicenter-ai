@@ -85,7 +85,7 @@ Include:
 - Dependency updates (production and development)
 - Test coverage and quality metrics
 
-### 5. Commit and Tag
+### 5. Commit and Push
 
 ```bash
 # Stage all changes
@@ -98,18 +98,12 @@ feat: release vX.Y.Z
 - Summary of main changes
 - Additional notable changes
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 
-# Create tag
-git tag vX.Y.Z
-
-# Push commit and tag
+# Push commit (NO tag yet — tag after npm publish)
 git push origin master
-git push origin vX.Y.Z
 ```
 
 ### 6. Publish to npm
@@ -120,40 +114,48 @@ npm publish
 
 This automatically runs `prepublishOnly` again before publishing.
 
-Verify publication:
+### 7. Tag the Published Commit
+
+**CRITICAL**: Always tag AFTER npm publish, using the commit npm actually published from.
+Never create tags before publishing — if anything goes wrong, you'll have a tag pointing to unpublished code.
+
 ```bash
-npm view homebridge-pentair-intellicenter-ai version
+# Get the exact commit npm published
+PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead)
+echo "npm published from: $PUBLISHED_SHA"
+echo "current HEAD: $(git rev-parse HEAD)"
+
+# These MUST match. If they don't, investigate before proceeding.
+git tag vX.Y.Z $PUBLISHED_SHA
+git push origin vX.Y.Z
+
+# Verify
+git rev-parse vX.Y.Z  # must equal $PUBLISHED_SHA
 ```
 
-### 7. Create GitHub Release
+### 8. Create GitHub Release
 
 ```bash
-gh release create vX.Y.Z --title "vX.Y.Z - Short Description" --notes "$(cat <<'EOF'
+# --verify-tag ensures the tag already exists (won't auto-create a wrong one)
+gh release create vX.Y.Z --title "vX.Y.Z - Short Description" --verify-tag --notes "$(cat <<'EOF'
 ## What's New
 
 ### Feature Category
 - Feature details
 
-### 📦 Dependency Updates
+### Dependency Updates
 - List of updates
 
-### Technical
-- Internal improvements
-
----
-
 **Full Changelog**: https://github.com/astrostl/homebridge-pentair-intellicenter-ai/compare/vPREVIOUS...vX.Y.Z
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```
 
-### 8. Verify Release
+### 9. Verify Release
 
 - [ ] npm package visible: https://www.npmjs.com/package/homebridge-pentair-intellicenter-ai
 - [ ] GitHub release visible: https://github.com/astrostl/homebridge-pentair-intellicenter-ai/releases
-- [ ] Version numbers match everywhere
+- [ ] `git rev-parse vX.Y.Z` matches `npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead`
 
 ## Beta Releases
 
@@ -168,7 +170,7 @@ X.Y.Z-beta.N
 ```bash
 # Create beta branch
 git checkout -b beta/vX.Y.Z
-git push origin beta/vX.Y.Z
+git push -u origin beta/vX.Y.Z
 ```
 
 ### Publish with Beta Tag
@@ -176,9 +178,28 @@ git push origin beta/vX.Y.Z
 npm publish --tag beta
 ```
 
-### GitHub Pre-release
+### Tag and Create GitHub Pre-release
+
+**Same rule as stable: tag AFTER npm publish, verify the SHA matches.**
+
 ```bash
-gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N" --notes "..."
+PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z-beta.N gitHead)
+echo "npm published from: $PUBLISHED_SHA"
+echo "current HEAD: $(git rev-parse HEAD)"
+git tag vX.Y.Z-beta.N $PUBLISHED_SHA
+git push origin vX.Y.Z-beta.N
+
+# Verify tag matches
+git rev-parse vX.Y.Z-beta.N  # must equal $PUBLISHED_SHA
+
+# Create release with --verify-tag
+gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N" --verify-tag --notes "..."
+```
+
+### Verify dist-tags
+```bash
+npm view homebridge-pentair-intellicenter-ai dist-tags
+# beta should point to new version, latest should be unchanged
 ```
 
 ### Promote Beta to Stable
@@ -189,19 +210,24 @@ git merge beta/vX.Y.Z
 
 # Update version (remove -beta.N suffix)
 # Update CHANGELOG.md
-# Follow normal release process
+# Follow normal release process (steps 5-9 above)
 ```
 
 ## Troubleshooting
 
 ### npm publish fails
 - Check `npm whoami` - must be logged in
-- Check npm 2FA if enabled
+- If "Access token expired", run `npm login` first
 - Verify version doesn't already exist
 
 ### GitHub release fails
 - Check `gh auth status`
 - Verify tag was pushed: `git ls-remote --tags origin`
+
+### Git tag doesn't match npm gitHead
+- Delete the wrong tag: `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`
+- Re-tag with correct SHA from `npm view ... gitHead`
+- Update GitHub release if needed
 
 ### Tests fail during prepublishOnly
 - Fix failing tests before release
@@ -214,14 +240,22 @@ git merge beta/vX.Y.Z
 ## Quick Reference
 
 ```bash
-# Full release in one session
+# Full stable release
 git checkout master && git pull
 npm run prepublishOnly
-# Edit package.json version
-# Edit CHANGELOG.md
+# Edit package.json version, CHANGELOG.md
 git add -A && git commit -m "feat: release vX.Y.Z"
-git tag vX.Y.Z
-git push origin master && git push origin vX.Y.Z
+git push origin master
 npm publish
-gh release create vX.Y.Z --title "vX.Y.Z - Description" --notes "Release notes..."
+PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead)
+git tag vX.Y.Z $PUBLISHED_SHA && git push origin vX.Y.Z
+gh release create vX.Y.Z --title "vX.Y.Z - Description" --verify-tag --notes "..."
+
+# Full beta release
+git checkout beta/vX.Y.Z
+npm run prepublishOnly
+npm publish --tag beta
+PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z-beta.N gitHead)
+git tag vX.Y.Z-beta.N $PUBLISHED_SHA && git push origin vX.Y.Z-beta.N
+gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N" --verify-tag --notes "..."
 ```

@@ -67,10 +67,22 @@ Before any release, ensure all quality checks pass:
 5. **Quality check**: Run `npm run prepublishOnly` (must pass)
 6. **Commit and push**: `git push -u origin beta/vX.Y.Z`
 7. **Publish to npm**: `npm publish --tag beta` (see [npm Authentication](#npm-authentication) below)
-8. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N"`
-9. **Verify dist-tags**: Run `npm view homebridge-pentair-intellicenter-ai dist-tags` to confirm `beta` tag points to new version while `latest` remains unchanged
+8. **Tag the published commit**: After npm publish succeeds, verify and tag the exact commit npm published:
+   ```bash
+   PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z-beta.N gitHead)
+   echo "npm published from: $PUBLISHED_SHA"
+   echo "current HEAD: $(git rev-parse HEAD)"
+   # These MUST match. If they don't, something went wrong.
+   git tag vX.Y.Z-beta.N $PUBLISHED_SHA
+   git push origin vX.Y.Z-beta.N
+   ```
+9. **Verify tag matches npm**: `git rev-parse vX.Y.Z-beta.N` must equal `npm view homebridge-pentair-intellicenter-ai@X.Y.Z-beta.N gitHead`
+10. **Create GitHub release**: `gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N" --verify-tag`
+11. **Verify dist-tags**: Run `npm view homebridge-pentair-intellicenter-ai dist-tags` to confirm `beta` tag points to new version while `latest` remains unchanged
 
 **Important**: The `--tag beta` flag is critical - it ensures beta versions are installed only when users explicitly request `@beta`, keeping regular users on stable releases.
+
+**CRITICAL**: Always tag AFTER npm publish, using the gitHead from npm. Never let `gh release create` auto-create tags — it may tag the wrong commit (e.g., if you switched branches). Use `--verify-tag` to ensure the tag already exists.
 
 ### Stable Release Process
 
@@ -78,9 +90,18 @@ Before any release, ensure all quality checks pass:
 2. **Version bump**: Update package.json to `X.Y.Z` (remove beta suffix)
 3. **Quality check**: Run `npm run prepublishOnly` (must pass)
 4. **Commit and push**: `git push origin master`
-5. **Create git tag**: `git tag vX.Y.Z && git push origin vX.Y.Z`
-6. **Publish to npm**: `npm publish` (defaults to latest tag)
-7. **Create GitHub release**: `gh release create vX.Y.Z --title "vX.Y.Z - Description"`
+5. **Publish to npm**: `npm publish` (defaults to latest tag)
+6. **Tag the published commit**: After npm publish succeeds:
+   ```bash
+   PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead)
+   echo "npm published from: $PUBLISHED_SHA"
+   echo "current HEAD: $(git rev-parse HEAD)"
+   # These MUST match.
+   git tag vX.Y.Z $PUBLISHED_SHA
+   git push origin vX.Y.Z
+   ```
+7. **Verify tag matches npm**: `git rev-parse vX.Y.Z` must equal `npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead`
+8. **Create GitHub release**: `gh release create vX.Y.Z --title "vX.Y.Z - Description" --verify-tag`
 
 ### Release Quality Requirements
 
