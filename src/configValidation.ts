@@ -40,6 +40,7 @@ export type PentairConfig = {
   minimumTemperature: number;
   maximumTemperature: number;
   supportVSP: boolean;
+  supportIntelliBrite: boolean;
   airTemp: boolean;
   includeAllCircuits?: boolean;
 } & PlatformConfig;
@@ -136,6 +137,7 @@ export class ConfigValidator {
   private static validateOptionalFields(config: PlatformConfig, warnings: string[], sanitizedConfig: PentairConfig) {
     // Boolean fields with defaults
     sanitizedConfig.supportVSP = this.validateBoolean(config.supportVSP, false);
+    sanitizedConfig.supportIntelliBrite = this.validateBoolean(config.supportIntelliBrite, false);
     sanitizedConfig.airTemp = this.validateBoolean(config.airTemp, true);
     sanitizedConfig.includeAllCircuits = this.validateBoolean(config.includeAllCircuits, false);
 

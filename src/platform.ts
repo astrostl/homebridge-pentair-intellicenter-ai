@@ -647,8 +647,8 @@ export class PentairPlatform implements DynamicPlatformPlugin {
    * Determine if an unregistered device should trigger re-discovery.
    * We want to re-discover for:
    * - Circuit groups (GRP prefix) - user-created groups
-   * - IntelliBrite circuits (INTELLI subtype)
-   * - Light show groups (LITSHO subtype)
+   * - IntelliBrite circuits (INTELLI subtype) - only if supportIntelliBrite is enabled
+   * - Light show groups (LITSHO subtype) - only if supportIntelliBrite is enabled
    * - Feature circuits (CIRCUIT type with FEATR=ON)
    */
   private shouldTriggerReDiscovery(objnam: string, objType?: string, subType?: string): boolean {
@@ -660,10 +660,12 @@ export class PentairPlatform implements DynamicPlatformPlugin {
 
     // Circuits that could be features
     if (objType === 'CIRCUIT') {
-      // IntelliBrite or Light Show circuits
+      // IntelliBrite or Light Show circuits - only trigger if supportIntelliBrite is enabled
       if (subType === 'INTELLI' || subType === 'LITSHO') {
-        this.log.info(`New IntelliBrite/LightShow circuit detected: ${objnam} - will trigger re-discovery`);
-        return true;
+        if (this.getConfig().supportIntelliBrite) {
+          this.log.info(`New IntelliBrite/LightShow circuit detected: ${objnam} - will trigger re-discovery`);
+          return true;
+        }
       }
     }
 
@@ -943,8 +945,9 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const circuit = accessory.context.circuit as Circuit | undefined;
     const circuitType = circuit?.type;
     const isIntelliBrite = circuitType === CircuitType.IntelliBrite || circuitType === CircuitType.LightShowGroup;
+    const supportIntelliBrite = this.getConfig().supportIntelliBrite;
 
-    if (isIntelliBrite) {
+    if (isIntelliBrite && supportIntelliBrite) {
       const circuitId = circuit?.id;
       if (circuitId) {
         // Check if we already have an instance for this circuit
@@ -1649,13 +1652,16 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   private processModuleFeatures(panel: Panel, discoveredAccessoryIds: Set<string>, circuitIdPumpMap: Map<string, PumpCircuit>) {
+    const supportIntelliBrite = this.getConfig().supportIntelliBrite;
     for (const module of panel.modules) {
       for (const feature of module.features) {
         discoveredAccessoryIds.add(feature.id);
-        // IntelliBrite lights have a separate colors accessory
-        const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
-        if (isIntelliBrite) {
-          discoveredAccessoryIds.add(`${feature.id}-colors`);
+        // IntelliBrite lights have a separate colors accessory (only if enabled)
+        if (supportIntelliBrite) {
+          const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+          if (isIntelliBrite) {
+            discoveredAccessoryIds.add(`${feature.id}-colors`);
+          }
         }
         const pumpCircuit = circuitIdPumpMap.get(feature.id);
         this.discoverCircuit(panel, module, feature, pumpCircuit);
@@ -1665,12 +1671,15 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   }
 
   private processPanelFeatures(panel: Panel, discoveredAccessoryIds: Set<string>, circuitIdPumpMap: Map<string, PumpCircuit>) {
+    const supportIntelliBrite = this.getConfig().supportIntelliBrite;
     for (const feature of panel.features) {
       discoveredAccessoryIds.add(feature.id);
-      // IntelliBrite lights have a separate colors accessory
-      const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
-      if (isIntelliBrite) {
-        discoveredAccessoryIds.add(`${feature.id}-colors`);
+      // IntelliBrite lights have a separate colors accessory (only if enabled)
+      if (supportIntelliBrite) {
+        const isIntelliBrite = feature.type === CircuitType.IntelliBrite || feature.type === CircuitType.LightShowGroup;
+        if (isIntelliBrite) {
+          discoveredAccessoryIds.add(`${feature.id}-colors`);
+        }
       }
       const pumpCircuit = circuitIdPumpMap.get(feature.id);
       this.discoverCircuit(panel, null, feature, pumpCircuit);
@@ -1884,10 +1893,12 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       this.pumpIdToCircuitMap.set(pumpCircuit.id, circuit);
     }
 
-    // For IntelliBrite circuits, also create a colors accessory
-    const isIntelliBrite = circuit.type === CircuitType.IntelliBrite || circuit.type === CircuitType.LightShowGroup;
-    if (isIntelliBrite) {
-      this.discoverIntelliBriteColors(panel, module, circuit);
+    // For IntelliBrite circuits, also create a colors accessory (only if enabled)
+    if (this.getConfig().supportIntelliBrite) {
+      const isIntelliBrite = circuit.type === CircuitType.IntelliBrite || circuit.type === CircuitType.LightShowGroup;
+      if (isIntelliBrite) {
+        this.discoverIntelliBriteColors(panel, module, circuit);
+      }
     }
   }
 

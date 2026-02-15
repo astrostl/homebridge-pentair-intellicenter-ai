@@ -57,19 +57,19 @@
         "required": true,
         "default": "104"
       },
-      "supportVSP": {
-        "title": "Show Variable Speed Pumps (VSPs)",
-        "description": "Enable this option if your system has variable speed pump control on its circuits and if you want them visible in HomeKit.",
-        "type": "boolean",
-        "required": true,
-        "default": false
-      },
       "airTemp": {
         "title": "Show the outside Air Temperature",
         "description": "Display the outside air temperature as a sensor in HomeKit.",
         "type": "boolean",
         "required": true,
         "default": true
+      },
+      "supportIntelliBrite": {
+        "title": "Show IntelliBrite Lights (Experimental)",
+        "description": "Enable IntelliBrite light and color control accessories. This feature is experimental and may cause issues with some configurations.",
+        "type": "boolean",
+        "required": true,
+        "default": false
       },
       "includeAllCircuits": {
         "title": "Include All Circuits (Advanced)",
