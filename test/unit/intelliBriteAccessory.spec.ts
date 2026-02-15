@@ -3,7 +3,7 @@ import { IntelliBriteAccessory } from '../../src/intelliBriteAccessory';
 import { PentairPlatform } from '../../src/platform';
 import { Circuit, CircuitStatus, CircuitType, Module, Panel, ObjectType } from '../../src/types';
 import { MANUFACTURER } from '../../src/settings';
-import { INTELLIBRITE_OPTIONS, ACT_KEY, STATUS_KEY } from '../../src/constants';
+import { INTELLIBRITE_OPTIONS, STATUS_KEY, USE_KEY, ACT_KEY } from '../../src/constants';
 
 // Create mock services for each color switch
 const createMockSwitchService = () => ({
@@ -236,7 +236,7 @@ describe('IntelliBriteAccessory', () => {
           objectList: expect.arrayContaining([
             expect.objectContaining({
               objnam: mockIntelliBriteCircuit.id,
-              params: { [STATUS_KEY]: CircuitStatus.On, [ACT_KEY]: 'WHITER' },
+              params: { [USE_KEY]: 'WHITER' },
             }),
           ]),
         }),
@@ -264,61 +264,28 @@ describe('IntelliBriteAccessory', () => {
           objectList: expect.arrayContaining([
             expect.objectContaining({
               objnam: mockLightShowGroupCircuit.id,
-              params: { [STATUS_KEY]: CircuitStatus.On, [ACT_KEY]: 'WHITER' },
+              params: { [ACT_KEY]: 'WHITER' },
             }),
           ]),
         }),
       );
     });
 
-    it('should not send command when turning off non-active switch', async () => {
+    it('should not send command when turning switch off', async () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'REDR', // Red is active, not White
+        circuit: mockIntelliBriteCircuit,
       };
 
       new IntelliBriteAccessory(mockPlatform, mockAccessory);
 
-      // Try to turn off White (which is not active)
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onSetCallback = whiteService.getCharacteristic().onSet.mock.calls[0]?.[0];
+      const firstService = createdServices.get('intellibrite_WHITER');
+      const onSetCallback = firstService.getCharacteristic().onSet.mock.calls[0]?.[0];
 
       await onSetCallback(false);
 
-      // Should not send command since White is not the active color
       expect(mockPlatform.sendCommandNoWait).not.toHaveBeenCalled();
-    });
-
-    it('should turn off light when turning off the active switch', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
-        activeColor: 'WHITER',
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      // Turn off White (which is active)
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onSetCallback = whiteService.getCharacteristic().onSet.mock.calls[0]?.[0];
-
-      await onSetCallback(false);
-
-      // Should send turn off command
-      expect(mockPlatform.sendCommandNoWait).toHaveBeenCalledWith(
-        expect.objectContaining({
-          command: 'SetParamList',
-          objectList: expect.arrayContaining([
-            expect.objectContaining({
-              objnam: mockIntelliBriteCircuit.id,
-              params: { [STATUS_KEY]: CircuitStatus.Off },
-            }),
-          ]),
-        }),
-      );
     });
 
     it('should optimistically update activeColor on set', async () => {
@@ -344,7 +311,7 @@ describe('IntelliBriteAccessory', () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
+        circuit: mockIntelliBriteCircuit,
         activeColor: 'BLUER',
       };
 
@@ -393,24 +360,6 @@ describe('IntelliBriteAccessory', () => {
 
       expect(result).toBe(false);
     });
-
-    it('should return false when circuit is OFF even with activeColor set', async () => {
-      mockAccessory.context = {
-        panel: mockPanel,
-        module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.Off },
-        activeColor: 'WHITER',
-      };
-
-      new IntelliBriteAccessory(mockPlatform, mockAccessory);
-
-      const whiteService = createdServices.get('intellibrite_WHITER');
-      const onGetCallback = whiteService.getCharacteristic().onGet.mock.calls[0]?.[0];
-
-      const result = await onGetCallback();
-
-      expect(result).toBe(false);
-    });
   });
 
   describe('Update Methods', () => {
@@ -418,7 +367,7 @@ describe('IntelliBriteAccessory', () => {
       mockAccessory.context = {
         panel: mockPanel,
         module: mockModule,
-        circuit: { ...mockIntelliBriteCircuit, status: CircuitStatus.On },
+        circuit: mockIntelliBriteCircuit,
         activeColor: 'PARTY',
       };
 
@@ -427,7 +376,7 @@ describe('IntelliBriteAccessory', () => {
       // Call updateActiveColor
       accessory.updateActiveColor();
 
-      // Check that only PARTY switch is ON (circuit is ON)
+      // Check that only PARTY switch is ON
       const partyService = createdServices.get('intellibrite_PARTY');
       expect(partyService.updateCharacteristic).toHaveBeenCalledWith('On', true);
 

@@ -73,7 +73,6 @@ export class PentairPlatform implements DynamicPlatformPlugin {
   public readonly accessoryMap: Map<string, PlatformAccessory> = new Map();
   public readonly heaters: Map<string, PlatformAccessory> = new Map();
   public readonly heaterInstances: Map<string, HeaterAccessory> = new Map();
-  public readonly intelliBriteInstances: Map<string, IntelliBriteAccessory> = new Map();
 
   private connection!: Telnet;
   private maxBufferSize!: number;
@@ -831,11 +830,9 @@ export class PentairPlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    // USE stores the selected color. ACT=65535 means "fixed color mode" (color is in USE)
-    // ACT contains color name only for light shows. Check USE first, fall back to ACT if it's not 65535
-    const useColor = params[USE_KEY] as string | undefined;
-    const actColor = params[ACT_KEY] as string | undefined;
-    const newColor = useColor ?? (actColor !== '65535' ? actColor : undefined);
+    // Individual lights use USE, groups use ACT
+    const colorKey = circuitType === CircuitType.LightShowGroup ? ACT_KEY : USE_KEY;
+    const newColor = params[colorKey] as string | undefined;
 
     if (newColor !== undefined) {
       this.log.debug(`[IntelliBrite] ${circuit.name} color update: ${newColor}`);
@@ -865,20 +862,7 @@ export class PentairPlatform implements DynamicPlatformPlugin {
     const isIntelliBrite = circuitType === CircuitType.IntelliBrite || circuitType === CircuitType.LightShowGroup;
 
     if (isIntelliBrite) {
-      const circuitId = circuit?.id;
-      if (circuitId) {
-        // Check if we already have an instance for this circuit
-        const existingInstance = this.intelliBriteInstances.get(circuitId);
-        if (existingInstance) {
-          // Update existing instance instead of recreating
-          existingInstance.updateStatus();
-          existingInstance.updateActiveColor();
-        } else {
-          // Create new instance and track it
-          const instance = new IntelliBriteAccessory(this, accessory);
-          this.intelliBriteInstances.set(circuitId, instance);
-        }
-      }
+      new IntelliBriteAccessory(this, accessory);
     } else {
       new CircuitAccessory(this, accessory);
     }
