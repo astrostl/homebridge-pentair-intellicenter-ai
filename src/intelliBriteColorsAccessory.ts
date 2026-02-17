@@ -10,7 +10,7 @@ const MODEL = 'IntelliBrite Colors';
 
 /**
  * IntelliBrite Colors Accessory
- * Exposes IntelliBrite color/show options as Switch services.
+ * Exposes IntelliBrite color/show options as Lightbulb services.
  * This is a separate accessory from the main IntelliBrite light,
  * allowing the main light tile to show ON/OFF state while this
  * accessory provides color selection.
@@ -49,14 +49,14 @@ export class IntelliBriteColorsAccessory {
   }
 
   private setupColorSwitches(): void {
-    // Create a switch for each color/show option
+    // Create a lightbulb for each color/show option
     for (const option of INTELLIBRITE_OPTIONS) {
       const subtype = `intellibrite_${option.code}`;
-      let service = this.accessory.getServiceById(this.platform.Service.Switch, subtype);
+      let service = this.accessory.getServiceById(this.platform.Service.Lightbulb, subtype);
 
       if (!service) {
-        service = this.accessory.addService(this.platform.Service.Switch, option.name, subtype);
-        this.platform.log.debug(`Added IntelliBrite color switch: ${option.name} (${option.code}) to ${this.circuit.name}`);
+        service = this.accessory.addService(this.platform.Service.Lightbulb, option.name, subtype);
+        this.platform.log.debug(`Added IntelliBrite color lightbulb: ${option.name} (${option.code}) to ${this.circuit.name}`);
       }
 
       // Set both displayName and characteristics for proper HomeKit display
@@ -82,8 +82,17 @@ export class IntelliBriteColorsAccessory {
     const servicesToRemove: Service[] = [];
 
     for (const service of this.accessory.services) {
+      const subtype = service.subtype;
+
+      // Remove any leftover Switch services with intellibrite_ subtypes (migrated to Lightbulb)
       if (service.UUID === this.platform.Service.Switch.UUID) {
-        const subtype = service.subtype;
+        if (subtype && subtype.startsWith('intellibrite_')) {
+          servicesToRemove.push(service);
+        }
+      }
+
+      // Remove obsolete Lightbulb services with intellibrite_ subtypes no longer in INTELLIBRITE_OPTIONS
+      if (service.UUID === this.platform.Service.Lightbulb.UUID) {
         if (subtype && subtype.startsWith('intellibrite_') && !validSubtypes.has(subtype)) {
           servicesToRemove.push(service);
         }
@@ -91,7 +100,7 @@ export class IntelliBriteColorsAccessory {
     }
 
     for (const service of servicesToRemove) {
-      this.platform.log.info(`Removing obsolete IntelliBrite color switch: ${service.subtype}`);
+      this.platform.log.info(`Removing obsolete IntelliBrite color service: ${service.subtype}`);
       this.accessory.removeService(service);
     }
   }
