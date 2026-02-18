@@ -77,6 +77,19 @@
         "type": "boolean",
         "required": true,
         "default": false
+      },
+      "heatModeOverride": {
+        "title": "Heat Mode Override (Advanced)",
+        "description": "Leave as 'Auto-detect' for automatic heater detection. For multi-mode heaters, you can override the heating mode sent when turning heat ON.",
+        "type": "integer",
+        "oneOf": [
+          { "title": "Auto-detect (default)", "enum": [0] },
+          { "title": "UltraTemp ETi Hybrid - Gas Only (7)", "enum": [7] },
+          { "title": "UltraTemp ETi Hybrid - Heat Pump Only (8)", "enum": [8] },
+          { "title": "UltraTemp ETi Hybrid - Hybrid (9)", "enum": [9] },
+          { "title": "UltraTemp ETi Hybrid - Dual (10)", "enum": [10] }
+        ],
+        "default": 0
       }
     }
   }

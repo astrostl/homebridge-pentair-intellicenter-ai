@@ -107,6 +107,7 @@ export enum CircuitType {
   IntelliBrite = 'INTELLI',
   LightShowGroup = 'LITSHO',
   Generic = 'GENERIC',
+  HCombo = 'HCOMBO',
 }
 
 export enum TemperatureSensorType {
