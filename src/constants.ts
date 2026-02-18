@@ -29,7 +29,9 @@ export const GPM_KEY = 'GPM';
 export const WATTS_KEY = 'WATTS';
 export const RPM_KEY = 'RPM';
 
-// Heat mode values for multi-mode heaters (e.g., Pentair UltraTemp ETi Hybrid)
+// MODE parameter values for multi-mode heaters (e.g., Pentair UltraTemp ETi Hybrid).
+// These are values for the outgoing MODE command, NOT the incoming HTMODE response parameter.
+// HTMODE is a separate IntelliCenter parameter with different value semantics (0=off, 1+=heating, 9=cooling).
 export const HEAT_MODE_OFF = 1;
 export const HEAT_MODE_GAS_ONLY = 7;
 export const HEAT_MODE_HEAT_PUMP_ONLY = 8;
