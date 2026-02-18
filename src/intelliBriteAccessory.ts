@@ -2,9 +2,10 @@ import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PentairPlatform } from './platform';
-import { Circuit, CircuitStatus, CircuitStatusMessage, IntelliCenterRequest, IntelliCenterRequestCommand, Module, Panel } from './types';
+import { Circuit, CircuitStatus, CircuitStatusMessage, Color, IntelliCenterRequest, IntelliCenterRequestCommand, Module, Panel } from './types';
 import { MANUFACTURER } from './settings';
-import { STATUS_KEY } from './constants';
+import { ACT_KEY, DEFAULT_BRIGHTNESS, DEFAULT_COLOR_TEMPERATURE, STATUS_KEY } from './constants';
+import { getIntelliBriteColor } from './util';
 
 const MODEL = 'IntelliBrite';
 
@@ -31,6 +32,7 @@ export class IntelliBriteAccessory {
     this.setupLightbulbService();
     this.cleanupLegacyServices();
     this.updateStatus();
+    this.syncColorFromActiveColor();
   }
 
   private initializeContext(): void {
@@ -62,12 +64,27 @@ export class IntelliBriteAccessory {
       .onSet(this.handleSet.bind(this))
       .onGet(this.handleGet.bind(this));
 
-    // IntelliBrite doesn't support variable brightness - fix at 100% when on
-    if (this.lightbulbService.testCharacteristic(this.platform.Characteristic.Brightness)) {
-      this.lightbulbService.getCharacteristic(this.platform.Characteristic.Brightness).onGet(() => {
-        return this.circuit.status === CircuitStatus.On ? 100 : 0;
-      });
-    }
+    // Color wheel (snaps to nearest IntelliBrite preset)
+    this.lightbulbService
+      .getCharacteristic(this.platform.Characteristic.Hue)
+      .onSet(this.setColorHue.bind(this))
+      .onGet(this.getColorHue.bind(this));
+
+    this.lightbulbService
+      .getCharacteristic(this.platform.Characteristic.Saturation)
+      .onSet(this.setColorSaturation.bind(this))
+      .onGet(this.getColorSaturation.bind(this));
+
+    this.lightbulbService
+      .getCharacteristic(this.platform.Characteristic.ColorTemperature)
+      .onSet(this.setColorTemperature.bind(this))
+      .onGet(this.getColorTemperature.bind(this));
+
+    // IntelliBrite doesn't support variable brightness - fix at 100%
+    this.lightbulbService
+      .getCharacteristic(this.platform.Characteristic.Brightness)
+      .onSet(this.setBrightness.bind(this))
+      .onGet(this.getBrightness.bind(this));
 
     this.platform.log.debug(`[${this.circuit.name}] Lightbulb service configured`);
   }
@@ -95,6 +112,78 @@ export class IntelliBriteAccessory {
         this.accessory.removeService(service);
       }
     }
+  }
+
+  private async setColorHue(value: CharacteristicValue): Promise<void> {
+    // Wait for saturation first. 10ms chosen arbitrarily.
+    await this.platform.delay(10);
+    const saturation = this.accessory.context.saturation;
+    this.platform.log.info(`Setting ${this.circuit.name} hue to ${value}. Saturation is ${saturation}`);
+    this.accessory.context.color = getIntelliBriteColor(value as number, saturation);
+    const command = {
+      command: IntelliCenterRequestCommand.SetParamList,
+      messageID: uuidv4(),
+      objectList: [
+        {
+          objnam: this.circuit.id,
+          params: { [ACT_KEY]: this.accessory.context.color.intellicenterCode } as never,
+        } as CircuitStatusMessage,
+      ],
+    } as IntelliCenterRequest;
+    this.platform.sendCommandNoWait(command);
+    this.accessory.context.saturation = this.accessory.context.color.saturation;
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Hue, this.accessory.context.color.hue);
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Saturation, this.accessory.context.color.saturation);
+  }
+
+  private async setColorSaturation(value: CharacteristicValue): Promise<void> {
+    this.platform.log.info(`Setting ${this.circuit.name} saturation to ${value}`);
+    this.accessory.context.saturation = value as number;
+  }
+
+  private async setColorTemperature(value: CharacteristicValue): Promise<void> {
+    this.platform.log.warn(`Ignoring color temperature on ${this.circuit.name} to ${value}`);
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.ColorTemperature, DEFAULT_COLOR_TEMPERATURE);
+  }
+
+  private async setBrightness(value: CharacteristicValue): Promise<void> {
+    this.platform.log.warn(`Ignoring brightness value on ${this.circuit.name} to ${value}`);
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Brightness, DEFAULT_BRIGHTNESS);
+  }
+
+  private async getColorHue(): Promise<CharacteristicValue> {
+    return this.accessory.context.color?.hue ?? Color.White.hue;
+  }
+
+  private async getColorSaturation(): Promise<CharacteristicValue> {
+    return this.accessory.context.color?.saturation ?? Color.White.saturation;
+  }
+
+  private async getColorTemperature(): Promise<CharacteristicValue> {
+    return DEFAULT_COLOR_TEMPERATURE;
+  }
+
+  private async getBrightness(): Promise<CharacteristicValue> {
+    return DEFAULT_BRIGHTNESS;
+  }
+
+  private syncColorFromActiveColor(): void {
+    const activeColor = this.accessory.context.activeColor as string | undefined;
+    if (!activeColor) {
+      return;
+    }
+
+    const allColors = [Color.White, Color.Red, Color.Green, Color.Blue, Color.Magenta];
+    const matched = allColors.find(c => c.intellicenterCode === activeColor);
+    if (!matched) {
+      return;
+    }
+
+    this.accessory.context.color = matched;
+    this.accessory.context.saturation = matched.saturation;
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Hue, matched.hue);
+    this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Saturation, matched.saturation);
+    this.platform.log.debug(`Synced ${this.circuit.name} color wheel to ${activeColor} (hue=${matched.hue}, sat=${matched.saturation})`);
   }
 
   private async handleSet(value: CharacteristicValue): Promise<void> {
@@ -133,12 +222,10 @@ export class IntelliBriteAccessory {
   }
 
   /**
-   * Called when active color changes - not used in light-only accessory
-   * but kept for API compatibility with platform updates.
+   * Called when active color changes from IntelliCenter or the colors accessory.
    */
   public updateActiveColor(): void {
-    // Color is handled by the separate colors accessory
-    // Just update status in case it changed
     this.updateStatus();
+    this.syncColorFromActiveColor();
   }
 }
