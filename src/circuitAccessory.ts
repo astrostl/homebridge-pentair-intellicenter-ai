@@ -42,6 +42,10 @@ export class CircuitAccessory {
     this.setupService();
     this.configureServiceCharacteristics();
     this.configureFanService();
+
+    if (CircuitType.IntelliBrite === this.circuit.type) {
+      this.syncColorFromActiveColor();
+    }
   }
 
   private initializeContext(): void {
@@ -111,6 +115,25 @@ export class CircuitAccessory {
     }
   }
 
+  private syncColorFromActiveColor(): void {
+    const activeColor = this.accessory.context.activeColor as string | undefined;
+    if (!activeColor) {
+      return;
+    }
+
+    const allColors = [Color.White, Color.Red, Color.Green, Color.Blue, Color.Magenta];
+    const matched = allColors.find(c => c.intellicenterCode === activeColor);
+    if (!matched) {
+      return;
+    }
+
+    this.accessory.context.color = matched;
+    this.accessory.context.saturation = matched.saturation;
+    this.service.updateCharacteristic(this.platform.Characteristic.Hue, matched.hue);
+    this.service.updateCharacteristic(this.platform.Characteristic.Saturation, matched.saturation);
+    this.platform.log.debug(`Synced ${this.circuit.name} color wheel to ${activeColor} (hue=${matched.hue}, sat=${matched.saturation})`);
+  }
+
   /**
    * Handle "SET" requests from HomeKit
    * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
@@ -168,7 +191,7 @@ export class CircuitAccessory {
   }
 
   async getColorHue(): Promise<CharacteristicValue> {
-    return this.accessory.context.color?.hue ?? Color.White.saturation;
+    return this.accessory.context.color?.hue ?? Color.White.hue;
   }
 
   async getColorSaturation(): Promise<CharacteristicValue> {
