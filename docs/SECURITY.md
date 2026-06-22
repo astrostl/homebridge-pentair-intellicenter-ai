@@ -1,59 +1,28 @@
 # Security Policy
 
-## Supported Versions
+This is a hobby project, **not a supported product**. It is provided **"AS IS",
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND** — see the [Apache 2.0
+LICENSE](../LICENSE). There is no guarantee of fitness, availability, response,
+or fix for any issue, security or otherwise. Use at your own risk.
 
-Security updates are provided for the latest published version of this Homebridge plugin. Given the home automation use case and typically low-privilege runtime environment, the security impact is generally limited to local network access.
+## Reporting a vulnerability
 
-| Version | Supported          |
-| ------- | ------------------ |
-| Latest  | :white_check_mark: |
-| < Latest| :x:                |
+Open a public [GitHub issue](https://github.com/astrostl/homebridge-pentair-intellicenter-ai/issues),
+or — if you'd rather not disclose publicly — a private
+[security advisory](https://github.com/astrostl/homebridge-pentair-intellicenter-ai/security/advisories/new).
 
-## Reporting a Vulnerability
+We will make **best-effort** attempts to fix security issues. That is the
+entire commitment: no timelines, no guarantees.
 
-If you discover a security vulnerability, please follow these steps:
+## What it actually is
 
-### 🔒 For Sensitive Security Issues
+- **No dependencies**: a single plain-JavaScript Homebridge plugin with no npm
+  runtime or dev dependencies — no JS tree to audit or get CVEs against.
+- **Self-contained Go sidecar**: the engine is a statically compiled
+  ([pentameter](https://github.com/astrostl/pentameter)) binary (`CGO_ENABLED=0`).
+- **No credentials**: talks to IntelliCenter over an unauthenticated local
+  WebSocket; never requests or stores credentials.
+- **Local-only**: communicates solely with the IntelliCenter on your LAN; opens
+  no outbound internet connections.
 
-For vulnerabilities affecting local network security or device control:
-- **Contact**: Create a GitHub issue marked as "security"
-- **Response time**: Best effort response
-- **Process**: We'll work with you to verify, fix, and coordinate disclosure
-
-### 🐛 For General Security Concerns
-
-For less critical security improvements:
-- **GitHub Issues**: Open a public issue with the "security" label
-- **Pull Requests**: Security improvements are welcome via PR
-
-## Security Posture
-
-This plugin is deliberately built to minimize attack and supply-chain surface:
-
-- **Near-zero dependency footprint**: the Homebridge plugin is a single
-  plain-JavaScript file with **no npm runtime or dev dependencies** — there is no
-  JS dependency tree to scan, audit, or get CVEs against. (Removing that toolchain
-  surface is a primary goal of the rework.)
-- **Self-contained Go sidecar**: the engine ships as a statically compiled
-  ([pentameter](https://github.com/astrostl/pentameter)) binary built with
-  `CGO_ENABLED=0`; its Go dependencies are vetted in that repository with Go's
-  tooling (`go vet`, `golangci-lint`) and `go test`.
-- **No credentials**: the plugin talks to IntelliCenter over an unauthenticated
-  local WebSocket — it neither requests nor stores pool-system credentials.
-- **Local-only**: all communication is to the IntelliCenter on your LAN; the
-  plugin opens no outbound internet connections.
-
-## Disclosure Policy
-
-- **Verified vulnerabilities** will be fixed promptly
-- **Security releases** will be published as patch versions
-- **CVE assignment** will be requested for significant vulnerabilities
-- **Public disclosure** will be coordinated with reporter
-
-## Home Automation Context
-
-Remember that this is a **home automation plugin** with limited blast radius:
-- Runs on local networks (typically Raspberry Pi or NAS)
-- Manages pool equipment (not critical infrastructure)
-- Standard home network practices apply (keep the IntelliCenter and Homebridge on a
-  trusted, isolated network segment)
+Keep your IntelliCenter and Homebridge host on a trusted network segment.
