@@ -66,5 +66,6 @@ contributions will be to pentameter, not to this repo.
 
 ## Recognition
 
-Contributors will be recognized in release notes and project documentation. We
-appreciate all forms of contribution, from bug reports to code improvements!
+All forms of contribution are appreciated, from bug reports to code
+improvements. Contributions are recorded in the project's git history and
+GitHub's contributors graph; beyond that, no specific recognition is promised.
