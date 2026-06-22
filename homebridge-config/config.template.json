@@ -8,7 +8,7 @@
   "accessories": [],
   "platforms": [
     {
-      "platform": "PentairIntelliCenterAI",
+      "platform": "PentairIntelliCenter",
       "name": "Pentair IntelliCenter",
       "ipAddress": "",
       "port": 6680,
