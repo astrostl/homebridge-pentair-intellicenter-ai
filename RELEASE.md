@@ -1,51 +1,56 @@
 # Release Process
 
-This is the **definitive source of truth** for all release procedures. CLAUDE.md points here.
+This is the **definitive source of truth** for all release procedures. CLAUDE.md
+points here.
+
+## What ships
+
+This package is a thin JS shim plus **prebuilt Go sidecar binaries** (pentameter,
+one per platform). The npm `files` allowlist bundles `shim/`, `config.schema.json`,
+and `pentameter/<os>-<arch>`. The binaries are gitignored — they are **built fresh
+at release time** by `make build` and bundled into the tarball; they are never
+committed.
 
 ## Prerequisites
 
-- You have push access to the repository
-- You are logged into npm (`npm whoami`)
-- You are logged into GitHub CLI (`gh auth status`)
+- You have push access to the repository.
+- You are logged into npm (`npm whoami`).
+- You are logged into GitHub CLI (`gh auth status`).
+- A local pentameter checkout is available (default `../pentameter`). The bundled
+  binaries are compiled from it, so **check out the pentameter version you intend to
+  ship** (a tagged release is strongly preferred for traceability).
 
 ## Branch and Version Conventions
 
-- **Beta branches**: `beta/vX.Y.Z` for version `X.Y.Z-beta.N` releases
-  - Example: `beta/v2.8.0` branch for `2.8.0-beta.1`, `2.8.0-beta.2`, etc.
-- **Stable releases**: Work on `master` branch for stable `X.Y.Z` releases
-- **Never mix**: Don't work on `beta/v2.7.0` branch while releasing `2.8.0-beta.x` versions
-- **Never commit beta features directly to master**
+- **Alpha branches**: `alpha/vX.Y.Z` for `X.Y.Z-alpha.N` releases (the 3.x rework
+  lives here for now).
+- **Beta branches**: `beta/vX.Y.Z` for `X.Y.Z-beta.N` releases.
+- **Stable releases**: `master`, for `X.Y.Z`.
+- **Never mix**: don't work on one version's branch while releasing another.
 
-**Before any release work**:
-1. Check current branch: `git branch`
-2. Verify branch name matches target version
-3. Create correct branch if needed: `git checkout -b beta/vX.Y.Z`
+The three npm dist-tags are independent lanes:
+
+| dist-tag | who gets it |
+| --- | --- |
+| `latest` | default `npm install` (stable) |
+| `beta` | `@beta` opt-in |
+| `alpha` | `@alpha` opt-in (the rework) |
+
+Prerelease versions are never auto-installed; only an explicit `@alpha` / `@beta` /
+exact-version request serves them.
 
 ## npm Authentication
 
-This repository uses **passkey authentication** for npm publishing. Sessions expire frequently.
+This repository uses **passkey authentication** for npm publishing. Sessions expire
+frequently. If `npm publish` fails with "Access token expired or revoked", run
+`npm login` first.
 
-**If npm publish fails** with "Access token expired or revoked", run `npm login` first.
-
-**Automated publishing with expect (recommended for AI assistants)**:
+**Automated publishing with expect** (useful for AI assistants):
 
 ```bash
-# For beta releases:
 expect -c '
 set timeout 300
-spawn npm publish --tag beta
-expect {
-    -re "Press ENTER" { send "\r"; exp_continue }
-    -re "one-time password" { puts "OTP mode - web auth not available"; exit 1 }
-    eof
-}
-wait
-'
-
-# For stable releases:
-expect -c '
-set timeout 300
-spawn npm publish
+spawn npm publish --tag alpha
 expect {
     -re "Press ENTER" { send "\r"; exp_continue }
     -re "one-time password" { puts "OTP mode - web auth not available"; exit 1 }
@@ -55,241 +60,145 @@ wait
 '
 ```
 
-How it works:
-1. Spawns `npm publish` with a pseudo-TTY (required for web auth mode)
-2. If auth cached: publish completes directly without prompting
-3. If auth needed: waits for "Press ENTER" prompt, sends ENTER, opens browser
-4. User completes passkey auth in browser (if prompted)
-5. Publish completes automatically
-
-**Manual publishing**: Run `npm publish --tag beta` (or `npm publish`) directly and press ENTER when prompted.
-
-## Tagging Rules
-
-**CRITICAL**: Always tag AFTER npm publish, using the commit npm actually published from. Never create tags before publishing — if anything goes wrong, you'll have a tag pointing to unpublished code.
-
-**Never let `gh release create` auto-create tags** — it may tag the wrong commit (e.g., if you switched branches). Always use `--verify-tag`.
-
-```bash
-# After any npm publish, tag like this:
-PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@VERSION gitHead)
-echo "npm published from: $PUBLISHED_SHA"
-echo "current HEAD: $(git rev-parse HEAD)"
-# These MUST match. If they don't, investigate before proceeding.
-git tag vVERSION $PUBLISHED_SHA
-git push origin vVERSION
-
-# Verify
-git rev-parse vVERSION  # must equal $PUBLISHED_SHA
-```
-
-**If a tag is wrong**, fix it:
-```bash
-git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z
-PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead)
-git tag vX.Y.Z $PUBLISHED_SHA && git push origin vX.Y.Z
-```
+(Swap `--tag alpha` for `--tag beta`, or drop the flag entirely for a stable
+`latest` publish.) `publishConfig.tag` in `package.json` defaults the tag to `alpha`,
+so a bare `npm publish` will NOT clobber `latest` while the rework is alpha — but pass
+`--tag` explicitly anyway to be sure.
 
 ## Quality Gates
 
-Before any release, all quality checks must pass:
+There is no JS build/test pipeline in this repo (that's the point — the toolchain
+lives in Go). Before any release:
+
+1. **Engine tests pass** — in the pentameter checkout: `make test` (or `go test ./...`).
+2. **`make build`** completes and produces all expected `pentameter/<os>-<arch>`
+   binaries.
+3. **`npm pack --dry-run`** shows the expected tarball: `shim/index.js`,
+   `config.schema.json`, and every `pentameter/<os>-<arch>` binary — and nothing
+   stray (no dev config, no `.DS_Store`).
+
+## Tagging Rules
+
+**CRITICAL**: Always tag AFTER `npm publish`, using the commit npm actually published
+from. Never create tags before publishing — if anything goes wrong you'll have a tag
+pointing at unpublished code.
+
+**Never let `gh release create` auto-create tags** — always use `--verify-tag`.
 
 ```bash
-npm run prepublishOnly
+PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@VERSION gitHead)
+echo "npm published from: $PUBLISHED_SHA"
+echo "current HEAD: $(git rev-parse HEAD)"   # these MUST match
+git tag vVERSION "$PUBLISHED_SHA"
+git push origin vVERSION
+git rev-parse vVERSION   # must equal $PUBLISHED_SHA
 ```
 
-This runs: lint → format check → security check → outdated check → build → test (with coverage).
+## Alpha Release Process
 
-**All must pass before proceeding.** No test quality compromises for release deadlines.
-
-## Stable Release Process
-
-### 1. Verify Current State
+### 1. Switch to the alpha branch
 
 ```bash
-git checkout master && git pull origin master
-git status
-git log --oneline $(git describe --tags --abbrev=0)..HEAD
+git checkout alpha/vX.Y.Z   # or: git checkout -b alpha/vX.Y.Z origin/master
 ```
 
-### 2. Update Version
+### 2. Bump version
 
-Edit `package.json`:
-```json
-"version": "X.Y.Z",
-```
+Edit `package.json` to `X.Y.Z-alpha.N`.
 
-Follow [Semantic Versioning](https://semver.org/):
-- **MAJOR (X)**: Breaking changes
-- **MINOR (Y)**: New features, backward compatible
-- **PATCH (Z)**: Bug fixes, backward compatible
-
-### 3. Run Quality Checks
+### 3. Build the bundled sidecar
 
 ```bash
-npm run prepublishOnly
+# ensure ../pentameter is on the intended (tagged) version first
+make build
 ```
 
-### 4. Commit and Push
+Record the pentameter version/commit the binaries came from — put it in the GitHub
+release notes for traceability.
+
+### 4. Quality gates
+
+Run the three checks under **Quality Gates** above.
+
+### 5. Commit and push
 
 ```bash
 git add -A
-git commit -m "$(cat <<'EOF'
-chore(release): release vX.Y.Z
-
-- Summary of main changes
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-EOF
-)"
-
-# Push commit (NO tag yet)
-git push origin master
+git commit -m "chore(release): bump version to X.Y.Z-alpha.N"
+git push origin alpha/vX.Y.Z      # push commit, NO tag yet
 ```
 
-### 5. Publish to npm
+### 6. Publish to npm (alpha tag)
 
 ```bash
-npm publish
+npm publish --tag alpha
 ```
 
-### 6. Tag the Published Commit
+### 7. Tag the published commit
+
+Follow **Tagging Rules** above with `vX.Y.Z-alpha.N`.
+
+### 8. Create a GitHub pre-release
 
 ```bash
-PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead)
-echo "npm published from: $PUBLISHED_SHA"
-echo "current HEAD: $(git rev-parse HEAD)"
-git tag vX.Y.Z $PUBLISHED_SHA
-git push origin vX.Y.Z
-# Verify
-git rev-parse vX.Y.Z  # must equal $PUBLISHED_SHA
+gh release create vX.Y.Z-alpha.N --prerelease --title "vX.Y.Z-alpha.N" \
+  --verify-tag --notes "...(include the pentameter version bundled)..."
 ```
 
-### 7. Create GitHub Release
-
-```bash
-gh release create vX.Y.Z --title "vX.Y.Z - Short Description" --verify-tag --notes "$(cat <<'EOF'
-## What's New
-
-- Feature/fix descriptions
-
-**Full Changelog**: https://github.com/astrostl/homebridge-pentair-intellicenter-ai/compare/vPREVIOUS...vX.Y.Z
-EOF
-)"
-```
-
-### 8. Verify
-
-- [ ] `npm view homebridge-pentair-intellicenter-ai dist-tags` shows correct `latest`
-- [ ] GitHub release visible at correct tag
-- [ ] `git rev-parse vX.Y.Z` matches `npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead`
-
-## Beta Release Process
-
-### 1. Create or Switch to Beta Branch
-
-```bash
-git checkout -b beta/vX.Y.Z   # new branch from master
-# or
-git checkout beta/vX.Y.Z      # existing branch
-git push -u origin beta/vX.Y.Z
-```
-
-### 2. Make Changes, Bump Version
-
-Edit `package.json` to `X.Y.Z-beta.N`.
-
-### 3. Run Quality Checks
-
-```bash
-npm run prepublishOnly
-```
-
-### 4. Commit and Push
-
-```bash
-git add -A && git commit -m "chore(release): bump version to X.Y.Z-beta.N"
-git push origin beta/vX.Y.Z
-```
-
-### 5. Publish to npm with Beta Tag
-
-```bash
-npm publish --tag beta
-```
-
-**Important**: The `--tag beta` flag ensures beta versions are only installed when users explicitly request `@beta`.
-
-### 6. Tag the Published Commit
-
-```bash
-PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z-beta.N gitHead)
-echo "npm published from: $PUBLISHED_SHA"
-echo "current HEAD: $(git rev-parse HEAD)"
-git tag vX.Y.Z-beta.N $PUBLISHED_SHA
-git push origin vX.Y.Z-beta.N
-# Verify
-git rev-parse vX.Y.Z-beta.N  # must equal $PUBLISHED_SHA
-```
-
-### 7. Create GitHub Pre-release
-
-```bash
-gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N" --verify-tag --notes "..."
-```
-
-### 8. Verify
+### 9. Verify
 
 ```bash
 npm view homebridge-pentair-intellicenter-ai dist-tags
-# beta should point to new version, latest should be unchanged
+# alpha -> new version; latest and beta unchanged
 ```
 
-### Promote Beta to Stable
+## Beta / Stable
+
+Same flow, with the tag and branch swapped:
+
+- **Beta**: branch `beta/vX.Y.Z`, version `X.Y.Z-beta.N`, `npm publish --tag beta`,
+  GitHub pre-release.
+- **Stable**: branch `master`, version `X.Y.Z`, `npm publish` (tag `latest`),
+  full GitHub release. Update `publishConfig.tag` (or pass `--tag latest`) so the
+  stable publish actually moves `latest`.
+
+### Promoting the rework
+
+When the 3.x rework is ready to graduate, move it up the lanes with dist-tags rather
+than re-publishing:
 
 ```bash
-git checkout master
-git merge beta/vX.Y.Z
-# Update version in package.json (remove -beta.N suffix)
-# Follow Stable Release Process from step 3
+# point a higher lane at an already-published version
+npm dist-tag add homebridge-pentair-intellicenter-ai@3.0.0-beta.0 beta
+npm dist-tag add homebridge-pentair-intellicenter-ai@3.0.0 latest
 ```
 
 ## Troubleshooting
 
 ### npm publish fails with 404 or auth error
-- Run `npm login` to refresh authentication
-- Check `npm whoami` to verify login
+- Run `npm login` to refresh authentication; check `npm whoami`.
+
+### A binary is missing from the tarball
+- Re-run `make build`; confirm with `npm pack --dry-run`. Remember `pentameter/` is
+  gitignored, so the binaries must exist locally at publish time.
 
 ### GitHub release fails
-- Check `gh auth status`
-- Verify tag was pushed: `git ls-remote --tags origin`
-
-### Tests fail during prepublishOnly
-- Fix failing tests before release
-- Never skip tests for releases
+- Check `gh auth status`; verify the tag was pushed (`git ls-remote --tags origin`).
 
 ## Quick Reference
 
 ```bash
-# Full stable release
-git checkout master && git pull
-npm run prepublishOnly
-# Edit package.json version
-git add -A && git commit -m "chore(release): release vX.Y.Z"
-git push origin master
-npm publish
-PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z gitHead)
-git tag vX.Y.Z $PUBLISHED_SHA && git push origin vX.Y.Z
-gh release create vX.Y.Z --title "vX.Y.Z - Description" --verify-tag --notes "..."
-
-# Full beta release
-git checkout beta/vX.Y.Z
-npm run prepublishOnly
-# Edit package.json version
-git add -A && git commit -m "chore(release): bump version to X.Y.Z-beta.N"
-git push origin beta/vX.Y.Z
-npm publish --tag beta
-PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z-beta.N gitHead)
-git tag vX.Y.Z-beta.N $PUBLISHED_SHA && git push origin vX.Y.Z-beta.N
-gh release create vX.Y.Z-beta.N --prerelease --title "vX.Y.Z-beta.N" --verify-tag --notes "..."
+# Full alpha release
+git checkout alpha/vX.Y.Z
+# (ensure ../pentameter is on the intended version)
+make build
+make -C ../pentameter test
+npm pack --dry-run                       # verify tarball contents
+# edit package.json version -> X.Y.Z-alpha.N
+git add -A && git commit -m "chore(release): bump version to X.Y.Z-alpha.N"
+git push origin alpha/vX.Y.Z
+npm publish --tag alpha
+PUBLISHED_SHA=$(npm view homebridge-pentair-intellicenter-ai@X.Y.Z-alpha.N gitHead)
+git tag vX.Y.Z-alpha.N "$PUBLISHED_SHA" && git push origin vX.Y.Z-alpha.N
+gh release create vX.Y.Z-alpha.N --prerelease --title "vX.Y.Z-alpha.N" --verify-tag --notes "..."
 ```

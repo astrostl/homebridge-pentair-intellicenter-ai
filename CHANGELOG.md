@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-alpha.0] - 2026-06-21
+
+Ground-up rework. Published to the **`alpha`** npm dist-tag only; does not affect
+the stable `2.x` line on `latest` or the `2.x` `beta` line.
+
+### Changed
+- **🏗️ New architecture**: the plugin is now a thin, zero-dependency JavaScript
+  shim over a bundled Go sidecar ([pentameter](https://github.com/astrostl/pentameter)
+  in `homebridge` mode). All IntelliCenter protocol, state, polling, control, and
+  resilience logic moved to Go to escape the JavaScript dependency toolchain.
+- **🔌 WebSocket transport** (`ws://<ip>:6680`) replaces telnet. No authentication.
+- **📡 mDNS auto-discovery**: leave `ipAddress` blank to find the controller
+  automatically; set it manually only if discovery can't reach it.
+
+### Added
+- **📊 Prometheus `/metrics`** endpoint (default port `8080`) served alongside
+  HomeKit for Grafana — no second process required.
+- **Occupancy sensors** for Pump Running, Freeze Protection, and Pool Controller
+  Online (connection health).
+- **Light sensors** (lux-encoded) for pump RPM / Watts / GPM read-outs.
+
+### Breaking
+- **New config platform `PentairIntelliCenterAI`**: the `2.x` configuration block
+  is intentionally not carried over. Reconfigure on a clean slate.
+- Prebuilt binaries ship for Linux arm64/amd64/arm and macOS arm64 only.
+
+### Removed
+- The legacy TypeScript implementation and its JS toolchain (TypeScript, ESLint,
+  Jest, Prettier, nodemon, Husky), plus Dependabot and CodeQL config.
+
 ## [2.12.0] - 2025-12-10
 
 ### Changed
