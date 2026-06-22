@@ -116,6 +116,17 @@ make build
 Record the pentameter version/commit the binaries came from — put it in the GitHub
 release notes for traceability.
 
+> **Known gap — bundled binary reports `dev`.** `make build` compiles with
+> `-ldflags="-s -w"` only; it does **not** inject `-X main.version`, so the
+> bundled sidecar prints `pentameter dev` at runtime. Version traceability is
+> therefore docs-only (this step + the CLAUDE.md "bundles vX.Y.Z" line + the
+> GitHub release notes). **TODO (future alpha): inject the pentameter version**
+> into the plugin's `build` target so `pentameter --version` is authoritative —
+> e.g. pass `-X main.version=$(git -C $(PENTAMETER_DIR) describe --tags)` and
+> require `../pentameter` to be on a clean tag at build time. Until then, the
+> only guarantee that the binaries are the intended version is that they were
+> built from the checked-out tag.
+
 ### 4. Quality gates
 
 Run the three checks under **Quality Gates** above.
