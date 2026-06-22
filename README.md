@@ -101,4 +101,3 @@ on firmware 3.004+.
 ## Roadmap
 
 - **IntelliBrite color lights** → Lightbulb (+ color control).
-- **Richer feature-visibility filtering** beyond the current feature-flag rule.
