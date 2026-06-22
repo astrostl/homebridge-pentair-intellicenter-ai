@@ -294,9 +294,7 @@ removed rather than relying on a fresh accessory.
   transport is gone. `-homebridge` and metrics mode both serve Prometheus
   `/metrics` and advertise over mDNS (one sidecar feeds both HomeKit and Grafana);
   `-listen` does neither.
-- **Next:** IntelliBrite lights (Lightbulb + colors); richer feature-visibility
-  filtering via `GetConfiguration`/`SHOMNU` (the current FEATR filter is the
-  simpler interim approach).
+- **Next:** IntelliBrite lights (Lightbulb + colors).
 - **Distribution:** bundle prebuilt pentameter binaries in the npm tarball
   (`files` includes `pentameter/`) or download-on-postinstall; publish to the `alpha`
   channel first and dogfood before promoting to `latest`.
