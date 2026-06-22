@@ -233,6 +233,11 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
+    // If this circuit was previously exposed as a Lightbulb (kind changed), drop
+    // the stale service so the accessory is cleanly a Switch.
+    const staleLight = accessory.getService(this.Service.Lightbulb);
+    if (staleLight) accessory.removeService(staleLight);
+
     const service =
       accessory.getService(this.Service.Switch) ||
       accessory.addService(this.Service.Switch, item.name);
@@ -280,6 +285,12 @@ class PentairIntelliCenterAI {
     }
     accessory.context.id = item.id;
     accessory.displayName = item.name;
+
+    // If this circuit was previously exposed as a Switch (kind changed, e.g. the
+    // 3.x light classification landed on upgrade), drop the stale Switch service
+    // so the accessory becomes cleanly a Lightbulb.
+    const staleSwitch = accessory.getService(this.Service.Switch);
+    if (staleSwitch) accessory.removeService(staleSwitch);
 
     const service =
       accessory.getService(this.Service.Lightbulb) ||
