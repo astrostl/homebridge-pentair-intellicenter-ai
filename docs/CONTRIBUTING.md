@@ -67,5 +67,8 @@ contributions will be to pentameter, not to this repo.
 ## Recognition
 
 All forms of contribution are appreciated, from bug reports to code
-improvements. No specific recognition is promised — contributions may be
-squash-merged or otherwise folded in without individual attribution.
+improvements. We try to preserve authorship where we reasonably can — keeping
+your commits and attribution intact when merging rather than flattening them.
+That said, it's not guaranteed: changes may sometimes be squash-merged or
+folded in without individual attribution, and no specific recognition is
+promised. The thanks, though, are genuine.
