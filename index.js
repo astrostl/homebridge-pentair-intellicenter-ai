@@ -24,7 +24,7 @@ const readline = require('readline');
 const { spawn } = require('child_process');
 
 const PLUGIN_NAME = 'homebridge-pentair-intellicenter-ai';
-const PLATFORM_NAME = 'PentairIntelliCenterAI';
+const PLATFORM_NAME = 'PentairIntelliCenter';
 const RESPAWN_DELAY_MS = 3000;
 // Shared with the sidecar (homebridge.go hbConnID): the connection-health sensor.
 // When the sidecar process dies, Go can't report, so the shim marks it offline.

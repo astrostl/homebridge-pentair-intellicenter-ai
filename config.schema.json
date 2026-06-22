@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "PentairIntelliCenterAI",
+  "pluginAlias": "PentairIntelliCenter",
   "pluginType": "platform",
   "singular": true,
   "headerDisplay": "Next-gen Pentair IntelliCenter plugin. A thin shim over a Go sidecar that talks to IntelliCenter over WebSocket.",

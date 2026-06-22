@@ -152,7 +152,8 @@ index.js               The Homebridge plugin (plain JS, zero npm deps). Spawns
 pentameter/            Cross-compiled pentameter sidecar binaries, one per
                        platform as `<os>-<arch>` (gitignored, `make build`;
                        bundled into the npm tarball for releases).
-config.schema.json     Homebridge Config UI schema (pluginAlias PentairIntelliCenterAI).
+config.schema.json     Homebridge Config UI schema (pluginAlias PentairIntelliCenter,
+                       kept from 2.x so existing configs upgrade without edits).
 homebridge-config/     Local Docker storage; only config.template.json is committed.
 docker-compose.yml     homebridge/homebridge image, bind-mounts this repo as a plugin.
 Makefile               Dev loop (see below). Builds the sidecar from PENTAMETER_DIR.
@@ -324,12 +325,20 @@ Target the same HomeKit surface so existing users see no regression:
   to surface read-only metrics. We additionally surface pump Running, Freeze
   Protection, and controller-online as `OccupancySensor`s.
 - **Our** config surface (this repo's `config.schema.json`, alias
-  `PentairIntelliCenterAI`): `name`, `ipAddress` (blank = mDNS), `port` (6680),
+  `PentairIntelliCenter`): `name`, `ipAddress` (blank = mDNS), `port` (6680),
   `temperatureUnits` (F/C), `pollIntervalSeconds` (30), `metricsPort` (8080).
-  This is a deliberately smaller surface than the legacy plugin's — the
-  new alias forces a clean config so dead legacy options
+  This is a deliberately smaller surface than the legacy plugin's, but it
+  **keeps the legacy `PentairIntelliCenter` platform alias** so existing 2.x
+  installs upgrade seamlessly (no config edit, no crash). We briefly used a
+  distinct `PentairIntelliCenterAI` alias to force a clean config, but that made
+  Homebridge reject every existing config block (`No plugin was found for the
+  platform "PentairIntelliCenter"`) and crash-loop the child bridge on upgrade —
+  unacceptable for shipped users. Dead legacy options
   (`minimumTemperature`/`maximumTemperature`/`airTemp`/`supportIntelliBrite`/
-  `includeAllCircuits`/`heatModeOverride`) are not carried over.
+  `includeAllCircuits`/`heatModeOverride`) are simply ignored by the shim, not
+  carried into behavior. The shim only reads `ipAddress`/`temperatureUnits`/
+  `name` (shared with legacy) plus the new `port`/`pollIntervalSeconds`/
+  `metricsPort` (which default when absent).
 - Legacy reference code: `src/homebridge-pentair-intellicenter-ai/src/`
   (platform.ts is the core; `*Accessory.ts` per device type;
   `config.schema.json`) — read it for behavior, not as our config.
