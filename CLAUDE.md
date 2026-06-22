@@ -145,7 +145,7 @@ runtime deps:
 ## Repo layout (this repo is now thin — the engine lives in pentameter)
 
 ```
-shim/index.js          The Homebridge plugin (plain JS, zero npm deps). Spawns
+index.js               The Homebridge plugin (plain JS, zero npm deps). Spawns
                        `pentameter -homebridge`, maps each kind the sidecar emits
                        to a HomeKit accessory (switch/thermostat/lightsensor/
                        occupancy/tempsensor).
@@ -225,7 +225,7 @@ Gotchas learned the hard way (don't regress):
 
 ## IPC contract (shim ⇆ sidecar, newline-delimited JSON)
 
-Defined in `src/pentameter/homebridge.go` and consumed in `shim/index.js`. Keep
+Defined in `src/pentameter/homebridge.go` and consumed in `index.js`. Keep
 both in sync.
 
 Accessory **kinds** (the `kind` field of an `accessories` item):
@@ -249,7 +249,7 @@ sensor), `tempsensor` (read-only Celsius — e.g. air temp).
 - sidecar → shim (**stderr**): human log lines (shim forwards to Homebridge log).
 
 When extending to new device types: add a `kind`, emit it in
-`src/pentameter/homebridge.go`, and handle that `kind` in `shim/index.js`'s
+`src/pentameter/homebridge.go`, and handle that `kind` in `index.js`'s
 `syncAccessories`. The shim stays dumb; logic stays in Go. The `intellicenter`
 package exposes Bodies/Pumps/Heaters/Sensors + heat-status interpretation +
 writes for these increments.

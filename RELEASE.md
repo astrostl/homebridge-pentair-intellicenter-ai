@@ -6,7 +6,7 @@ points here.
 ## What ships
 
 This package is a thin JS shim plus **prebuilt Go sidecar binaries** (pentameter,
-one per platform). The npm `files` allowlist bundles `shim/`, `config.schema.json`,
+one per platform). The npm `files` allowlist bundles `index.js`, `config.schema.json`,
 and `pentameter/<os>-<arch>`. The binaries are gitignored — they are **built fresh
 at release time** by `make build` and bundled into the tarball; they are never
 committed.
@@ -73,7 +73,7 @@ lives in Go). Before any release:
 1. **Engine tests pass** — in the pentameter checkout: `make test` (or `go test ./...`).
 2. **`make build`** completes and produces all expected `pentameter/<os>-<arch>`
    binaries.
-3. **`npm pack --dry-run`** shows the expected tarball: `shim/index.js`,
+3. **`npm pack --dry-run`** shows the expected tarball: `index.js`,
    `config.schema.json`, and every `pentameter/<os>-<arch>` binary — and nothing
    stray (no dev config, no `.DS_Store`).
 

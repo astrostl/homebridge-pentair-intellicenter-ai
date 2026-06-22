@@ -95,7 +95,7 @@ class PentairIntelliCenterAI {
     const goOS = osMap[process.platform] || 'linux';
     const goArch = archMap[process.arch] || 'amd64';
     const ext = goOS === 'windows' ? '.exe' : '';
-    const candidate = path.join(__dirname, '..', 'pentameter', `${goOS}-${goArch}${ext}`);
+    const candidate = path.join(__dirname, 'pentameter', `${goOS}-${goArch}${ext}`);
     return fs.existsSync(candidate) ? candidate : null;
   }
 

@@ -5,7 +5,7 @@ from the community.
 
 ## Architecture, in one paragraph
 
-This plugin is a **thin JavaScript shim** (`shim/index.js`, zero npm dependencies)
+This plugin is a **thin JavaScript shim** (`index.js`, zero npm dependencies)
 over a **Go sidecar** — the [pentameter](https://github.com/astrostl/pentameter)
 engine running in `homebridge` mode, spawned as a child process and bundled as a
 prebuilt binary. The shim only does the JavaScript-mandatory glue: register HomeKit

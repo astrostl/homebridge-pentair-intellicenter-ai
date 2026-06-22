@@ -16,13 +16,13 @@
     "homebridge": "^1.8.0 || ^2.0.0-beta.0",
     "node": "^20.15.1 || ^22 || ^24"
   },
-  "main": "shim/index.js",
+  "main": "index.js",
   "type": "commonjs",
   "publishConfig": {
     "tag": "alpha"
   },
   "files": [
-    "shim",
+    "index.js",
     "pentameter",
     "config.schema.json"
   ],
