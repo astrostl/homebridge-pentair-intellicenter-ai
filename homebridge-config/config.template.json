@@ -1,17 +1,26 @@
 {
   "bridge": {
-    "name": "Homebridge Test",
-    "username": "CC:22:3D:E3:CE:30",
+    "name": "Homebridge Dev",
+    "username": "0E:11:22:33:44:55",
     "port": 51826,
     "pin": "031-45-154"
   },
   "accessories": [],
   "platforms": [
     {
-      "platform": "PentairIntelliCenter",
+      "platform": "PentairIntelliCenterAI",
       "name": "Pentair IntelliCenter",
-      "ipAddress": "YOUR_INTELLICENTER_IP",
-      "temperatureUnits": "F"
+      "ipAddress": "",
+      "port": 6680,
+      "temperatureUnits": "F",
+      "pollIntervalSeconds": 30,
+      "debug": true
+    },
+    {
+      "name": "Config",
+      "port": 8581,
+      "platform": "config",
+      "auth": "none"
     }
   ]
 }

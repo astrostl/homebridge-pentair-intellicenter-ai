@@ -1,88 +1,42 @@
 {
   "displayName": "Homebridge Pentair IntelliCenter AI",
   "name": "homebridge-pentair-intellicenter-ai",
-  "version": "2.12.0",
-  "description": "Homebridge plugin for the Pentair IntelliCenter pool control system (maintained with AI assistance)",
+  "version": "3.0.0-alpha.0",
+  "description": "Next-gen Homebridge plugin for Pentair IntelliCenter pool control. Thin JS shim over a Go sidecar.",
   "license": "Apache-2.0",
+  "author": {
+    "name": "astrostl",
+    "url": "https://github.com/astrostl"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai.git"
-  },
-  "bugs": {
-    "url": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai/issues"
   },
   "engines": {
     "homebridge": "^1.8.0 || ^2.0.0-beta.0",
     "node": "^20.15.1 || ^22 || ^24"
   },
-  "main": "dist/index.js",
+  "main": "shim/index.js",
   "type": "commonjs",
+  "publishConfig": {
+    "tag": "alpha"
+  },
   "files": [
-    "dist",
+    "shim",
+    "pentameter",
     "config.schema.json"
   ],
-  "scripts": {
-    "lint": "eslint src/**.ts --max-warnings=0",
-    "fix": "eslint src/**.ts --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
-    "security-audit": "npm audit --audit-level moderate",
-    "audit-ci": "audit-ci --moderate",
-    "security-check": "npm run security-audit && npm run audit-ci",
-    "outdated-check": "npm outdated --depth=0 | grep -v 'homebridge.*1.6.1' || true",
-    "watch": "npm run build && npm link && nodemon",
-    "build": "rimraf ./dist && tsc",
-    "prepublishOnly": "npm run lint && npm run format:check && npm run security-check && npm run outdated-check && npm run build && npm run test",
-    "test": "jest"
-  },
   "keywords": [
     "homebridge-plugin",
     "homebridge pentair intellicenter",
     "homebridge pentair",
     "homebridge intellicenter",
-    "homekit pentair intelli center",
-    "homekit intelli center",
-    "ai-enhanced",
+    "homekit pentair",
     "pentair pool automation"
   ],
-  "author": {
-    "name": "astrostl",
-    "url": "https://github.com/astrostl"
-  },
-  "dependencies": {
-    "telnet-client": "^2.2.13",
-    "uuid": "^14.0.0"
-  },
-  "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/node": "^24.13.2",
-    "@typescript-eslint/eslint-plugin": "^8.60.1",
-    "@typescript-eslint/parser": "^8.61.1",
-    "audit-ci": "^7.1.0",
-    "eslint": "^10.4.1",
-    "eslint-plugin-security": "^4.0.0",
-    "homebridge": "^2.1.0",
-    "jest": "^30.4.2",
-    "nodemon": "^3.1.14",
-    "prettier": "^3.8.3",
-    "rimraf": "^6.1.3",
-    "ts-jest": "^29.4.11",
-    "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
-  },
-  "homepage": "https://github.com/astrostl/homebridge-pentair-intellicenter-ai#readme",
-  "funding": [
-    {
-      "type": "github",
-      "url": "https://github.com/sponsors/astrostl"
-    },
-    {
-      "type": "paypal",
-      "url": "https://paypal.me/astrostl"
-    }
-  ],
-  "sponsor": {
-    "url": "https://github.com/sponsors/astrostl"
-  },
-  "donate": "https://paypal.me/astrostl"
+  "dependencies": {},
+  "devDependencies": {},
+  "scripts": {
+    "_comment": "No JS toolchain by design. The sidecar is pentameter (homebridge mode); build it with `make build`. Engine logic and tests live in the pentameter repo."
+  }
 }

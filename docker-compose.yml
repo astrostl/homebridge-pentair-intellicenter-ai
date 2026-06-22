@@ -3,14 +3,30 @@ services:
     image: homebridge/homebridge:latest
     pull_policy: always
     restart: unless-stopped
-    network_mode: host
+
+    # macOS/Windows (Docker runs in a VM): use bridge networking + port maps.
+    # Linux: comment the `ports:` block and uncomment `network_mode: host` for
+    # the most reliable HomeKit/mDNS behavior.
+    # network_mode: host
+    ports:
+      - "8581:8581"     # Homebridge Config UI
+      - "51826:51826"   # HAP (HomeKit pairing)
+      - "5353:5353/udp" # mDNS / Bonjour discovery
+      - "8080:8080"     # Prometheus /metrics (metricsPort in config; for Grafana)
+
     volumes:
-      # Mount Homebridge config directory
+      # Homebridge storage (config.json, persisted pairing, logs, node_modules).
       - ./homebridge-config:/homebridge
+      # Mount this repo at a SEPARATE path (not under node_modules — hb-service
+      # prunes/renames anything in node_modules that isn't a registered package,
+      # which breaks on a bind mount). `make up` runs `npm install /plugin-src`
+      # once, which registers it and symlinks it into node_modules. Because npm
+      # symlinks local file: deps, rebuilding pentameter/ on the host is reflected live.
+      - .:/plugin-src:ro
+
     environment:
       - PGID=1000
       - PUID=1000
       - HOMEBRIDGE_CONFIG_UI=1
       - HOMEBRIDGE_CONFIG_UI_PORT=8581
-      # Enable debug logging to see your temperature range updates
       - HOMEBRIDGE_DEBUG=1

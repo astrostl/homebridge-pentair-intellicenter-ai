@@ -1,21 +1,8 @@
 {
-  "pluginAlias": "PentairIntelliCenter",
+  "pluginAlias": "PentairIntelliCenterAI",
   "pluginType": "platform",
   "singular": true,
-  "name": "PentairIntelliCenter",
-  "headerDisplay": "For help and support visit: [GitHub Repository](https://github.com/astrostl/homebridge-pentair-intellicenter-ai)",
-  "footerDisplay": "💖 Support this plugin: [GitHub Sponsors](https://github.com/sponsors/astrostl) | [PayPal](https://paypal.me/astrostl)",
-  "donate": "https://paypal.me/astrostl",
-  "funding": [
-    {
-      "type": "github",
-      "url": "https://github.com/sponsors/astrostl"
-    },
-    {
-      "type": "paypal", 
-      "url": "https://paypal.me/astrostl"
-    }
-  ],
+  "headerDisplay": "Next-gen Pentair IntelliCenter plugin. A thin shim over a Go sidecar that talks to IntelliCenter over WebSocket.",
   "schema": {
     "type": "object",
     "properties": {
@@ -23,60 +10,47 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "PentairIntelliCenter"
+        "default": "Pentair IntelliCenter"
       },
       "ipAddress": {
-        "title": "IP Address",
+        "title": "IntelliCenter IP Address (optional)",
         "type": "string",
-        "required": true,
-        "default": "192.168.1.XXX",
-        "description": "IP Address of Pentair Intellicenter. Should be static or DHCP-reserved"
+        "required": false,
+        "placeholder": "auto-discover via mDNS",
+        "description": "Leave blank to auto-discover your IntelliCenter via mDNS (recommended). Set an IP only if discovery doesn't work on your network (e.g. running in Docker with bridge networking)."
+      },
+      "port": {
+        "title": "WebSocket Port",
+        "type": "integer",
+        "required": false,
+        "default": 6680,
+        "description": "IntelliCenter WebSocket port. Default 6680."
       },
       "temperatureUnits": {
         "title": "Temperature Units",
-        "description": "Celsius or Fahrenheit as configured in IntelliCenter",
         "type": "string",
         "required": true,
         "default": "F",
         "oneOf": [
-          { "title": "F", "enum": ["F"] },
-          { "title": "C", "enum": ["C"] }
+          { "title": "Fahrenheit", "enum": ["F"] },
+          { "title": "Celsius", "enum": ["C"] }
         ]
       },
-      "minimumTemperature": {
-        "title": "Minimum Temperature",
-        "description": "Minimum temperature to be used by HomeKit slider. Use same units as configured above.",
-        "type": "number",
-        "required": true,
-        "default": "50"
+      "pollIntervalSeconds": {
+        "title": "Poll Interval (seconds)",
+        "type": "integer",
+        "required": false,
+        "default": 30,
+        "minimum": 5,
+        "description": "How often the sidecar polls IntelliCenter for state (pump RPM/watts are poll-only)."
       },
-      "maximumTemperature": {
-        "title": "Maximum Temperature",
-        "description": "Maximum temperature to be used by HomeKit slider. Use same units as configured above.",
-        "type": "number",
-        "required": true,
-        "default": "104"
-      },
-      "supportVSP": {
-        "title": "Show Variable Speed Pumps (VSPs)",
-        "description": "Enable this option if your system has variable speed pump control on its circuits and if you want them visible in HomeKit.",
-        "type": "boolean",
-        "required": true,
-        "default": false
-      },
-      "airTemp": {
-        "title": "Show the outside Air Temperature",
-        "description": "Display the outside air temperature as a sensor in HomeKit.",
-        "type": "boolean",
-        "required": true,
-        "default": true
-      },
-      "includeAllCircuits": {
-        "title": "Include All Circuits (Advanced)",
-        "description": "Include circuits that are not marked as 'Features' in IntelliCenter. Warning: This may expose internal system circuits that shouldn't be controlled directly.",
-        "type": "boolean",
-        "required": true,
-        "default": false
+      "metricsPort": {
+        "title": "Prometheus Metrics Port",
+        "type": "integer",
+        "required": false,
+        "default": 8080,
+        "minimum": 1,
+        "description": "The sidecar serves Prometheus metrics at http://<host>:<port>/metrics for Grafana, alongside HomeKit. Change the port if 8080 conflicts; you must also expose this port from the container/host to scrape it."
       }
     }
   }

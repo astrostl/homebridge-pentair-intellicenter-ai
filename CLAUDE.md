@@ -1,446 +1,343 @@
-# Developer Guide
+# CLAUDE.md
 
-This file provides comprehensive guidance for Claude Code (claude.ai/code) and human developers when working with this repository.
+Guidance for Claude Code when working in this repository.
 
-**IMPORTANT**: This document serves as the definitive source of truth for development workflows, processes, and standards. When making changes to development workflows, CI/CD processes, testing approaches, or any other development practices, **always update this document** to reflect the changes. This ensures consistency across all development work and maintains accurate guidance for both AI assistants and human developers.
+## Hard rules (never violate)
 
-## Table of Contents
+- **NEVER store memories.** Do not write to the memory directory, MEMORY.md, or
+  any persistent memory store. Ever.
+- **NEVER write personally-identifying info to any file** (name, address, email,
+  IP addresses, MAC addresses, etc.) — including committed files, docs, and
+  notes. If a fact involves PII, record the *method* to obtain it, not the value.
+- **NEVER tell the maintainer to test in Apple Home, the Home app, or to pair
+  with HomeKit.** The maintainer tests in the **Homebridge UI**. Do not suggest
+  it, do not ask them to "eyeball it in Home," do not append testing caveats
+  referencing Apple Home. If verification matters, point at the Homebridge UI or
+  the sidecar logs.
+- **Keep this CLAUDE.md current as we go.** It is the project's source of truth;
+  treat it as a living document. When a decision changes, a feature lands, an env
+  var/flag/IPC message is added or renamed, or the pentameter engine moves —
+  update the relevant section in the same change, don't let it drift. Verify
+  claims against `src/pentameter` rather than trusting prose.
 
-- [Common Commands](#common-commands)
-- [Release Process](#release-process)
-- [Architecture Overview](#architecture-overview)
-- [Testing](#testing)
-- [Dependency Management Strategy](#dependency-management-strategy)
-- [Development Notes](#development-notes)
-- [Maintaining This Document](#maintaining-this-document)
+## Debugging tools
 
-## Common Commands
+- Prefer **CLI tools** for ad-hoc debugging where reasonably possible — `curl`
+  (HTTP / `/metrics`), `websocat` (the IntelliCenter WebSocket), `jq`, etc. They
+  leave no project residue and are the fastest way to probe.
+- If a CLI tool can't reasonably do it, use **Python — and ALWAYS inside a
+  venv**. Never `pip install` into the system/global interpreter. Create and use
+  a throwaway venv (e.g. `python3 -m venv .venv && .venv/bin/pip install …`),
+  even for quick scripts.
 
-- **Build**: `npm run build` - Compiles TypeScript to JavaScript in `dist/`
-- **Lint**: `npm run lint` - Runs ESLint with zero warnings policy
-- **Fix linting**: `npm run fix` - Auto-fixes ESLint issues
-- **Format**: `npm run format` - Auto-formats code with Prettier
-- **Format check**: `npm run format:check` - Verifies code formatting without changes
-- **Security audit**: `npm run security-audit` - Runs npm audit for moderate+ vulnerabilities
-- **Security CI**: `npm run audit-ci` - Enforces security audit with detailed reporting
-- **Security check**: `npm run security-check` - Runs both security audit and audit-ci
-- **Outdated check**: `npm run outdated-check` - Checks for outdated dependencies
-- **Test**: `npm run test` - Runs Jest test suite with coverage reporting
-- **Development**: `npm run watch` - Builds, links, and watches for changes with nodemon
-- **Prepare for publish**: `npm run prepublishOnly` - Runs lint, format check, security check, outdated check, build, and test in sequence
+## What this project is
 
-## Release Process
+`homebridge-pentair-intellicenter-ai` — the Homebridge plugin for Pentair
+IntelliCenter pool controllers. The maintainer develops this with AI assistance.
 
-**See [RELEASE.md](RELEASE.md)** for all release procedures — it is the definitive source of truth for stable releases, beta releases, npm authentication, tagging, and troubleshooting.
+This is a from-scratch rework of the plugin's older codebase — a working but
+buggy, messy TypeScript/Node implementation. The rework ships as prerelease
+(beta) versions of the same npm package, so existing stable users on `latest`
+are untouched until it's promoted. It exists to: clean up the codebase, reduce
+bugs, and **move as much logic as possible into Go** to escape the daily
+npm/Dependabot churn of the JS toolchain.
 
-## Architecture Overview
+## Architecture (DECIDED)
 
-This is a **Homebridge plugin** that connects to Pentair IntelliCenter pool control systems via Telnet (port 6681). The plugin exposes pool circuits, heaters, pumps, and temperature sensors as HomeKit accessories.
+**Hybrid: a thin JavaScript shim + a Go sidecar — and the sidecar IS pentameter.**
 
-### IntelliCenter API Reference
-
-For detailed information about the IntelliCenter API protocol, commands, and data structures, refer to the comprehensive API documentation:
-
-**📖 [IntelliCenter API Documentation](https://github.com/astrostl/pentameter/blob/master/API.md)**
-
-This documentation provides:
-- Complete command reference and syntax
-- Data structure definitions and object types
-- Parameter keys and value formats
-- Protocol examples and response formats
-- Hardware discovery and real-time update patterns
-
-When working with IntelliCenter protocol changes, new command implementations, or debugging communication issues, always reference this API documentation for accurate protocol details.
-
-### Design Philosophy
-
-**IMPORTANT**: This project should be held to **Homebridge plugin standards**, not enterprise software standards. Key principles:
-
-- **Simplicity over complexity**: Home automation users want things that just work
-- **Local-first**: Runs on local networks (Pi, NAS, local server) for 1-2 users
-- **Binary operation**: Either works or doesn't - no complex monitoring needed
-- **Clear logging**: Helpful logs for troubleshooting, not metrics dashboards
-- **Reliability**: Stable connections and graceful failures, not performance optimization
-- **Homebridge ecosystem fit**: Follows Homebridge patterns and conventions
-
-**Avoid over-engineering**: Don't apply enterprise patterns (metrics collection, complex monitoring, distributed system tools) that don't fit the home automation use case. Focus on reliability, clear error messages, and ease of setup.
-
-### Core Components
-
-- **Platform** (`src/platform.ts`): Main plugin entry point that manages Telnet connection to IntelliCenter, handles device discovery, and processes real-time updates
-- **Accessories**: Individual HomeKit accessory implementations:
-  - `circuitAccessory.ts` - Pool circuits (lights, pumps, features) as switches/fans
-  - `heaterAccessory.ts` - Pool/spa heaters as thermostats
-  - `temperatureAccessory.ts` - Temperature sensors
-- **Types** (`src/types.ts`): TypeScript definitions for IntelliCenter protocol and device structures
-- **Utilities** (`src/util.ts`): Data transformation and response merging logic
-
-### Key Architecture Patterns
-
-- **Discovery Process**: Sends multiple `GetHardwareDefinition` commands to IntelliCenter, merges responses, then transforms raw data into structured device hierarchy (Panels → Modules → Circuits/Bodies/Features)
-- **Real-time Updates**: Subscribes to parameter updates via `RequestParamList` commands, processes `NotifyList` responses to update accessory states
-- **Connection Management**: Robust Telnet connection with automatic reconnection, heartbeat monitoring, and buffer management for partial message handling
-- **Pump Integration**: Maps pump circuits to regular circuits for variable speed control via HomeKit fan accessories with highly accurate power consumption and flow rate calculations using fourth-degree polynomial formulas calibrated from real IntelliCenter data
-- **Temperature Sensors**: Conditional registration based on heater presence and configuration (skips water temp sensors when heaters exist)
-
-### Configuration
-
-Plugin requires IntelliCenter IP address, username, and password. Supports temperature unit selection, VSP pump control toggle, and air temperature sensor enable/disable.
-
-### Testing
-
-This repository maintains comprehensive test coverage with world-class testing standards:
-
-**Current Test Suite:**
-
-- Comprehensive test suite with extensive coverage
-- ~99%+ line coverage with realistic testing scenarios
-- Zero test failures as a mandatory requirement
-- Clean Jest execution without timer leaks or open handles
-
-**Test Quality Standards:**
-
-- ✅ All tests verify real functionality with proper assertions
-- ✅ Edge cases and error conditions comprehensively tested
-- ✅ Complex async operations and timing scenarios properly tested
-- ✅ Configuration validation covers all validation paths
-- ✅ Integration tests use realistic scenarios with proper mocking
-- ✅ Error handling includes circuit breakers, retry logic, and health monitoring
-- ✅ Proper test cleanup prevents resource leaks
-- ❌ No artificial coverage boosters or dummy tests
-- ❌ No forced test passes or skipped assertions
-- ❌ No shortcuts that compromise test integrity
-
-**Test Types:**
-
-- **Unit tests**: `test/unit/` - Individual component testing
-- **Integration tests**: `test/integration/` - Cross-component functionality
-- **Utility tests**: `test/` - Helper function validation
-- **Comprehensive tests**: Real-world scenario validation
-
-**Coverage Verification:**
-
-- Use `npm test` to run full test suite with coverage reporting
-- Coverage reports generated in `coverage/lcov-report/index.html`
-- Jest configuration enforces coverage thresholds
-- All platform instances properly cleaned up to prevent timer leaks
-
-**Before any code changes:**
-
-1. Run `npm test` to establish baseline (all tests must pass)
-2. Ensure changes maintain high test coverage and quality
-3. Add meaningful tests for new functionality
-4. Verify proper test cleanup (no open handles or timer leaks)
-5. Never compromise test quality for convenience
-
-**Release Quality Gates:**
-
-- `npm run prepublishOnly` must pass completely (lint + format + security + build + test)
-- All tests must pass without any skipped or modified tests
-- High test coverage must be maintained across all files
-- Code formatting must pass Prettier validation
-- Security audit must pass moderate+ vulnerability checks
-- Jest must exit cleanly without force exit or timer leaks
-- No test quality compromises are acceptable for release deadlines
-
-**Manual Release Pipeline:**
-
-All releases use the manual process with quality gates:
-
-1. **Code formatting check** - Prettier validation via `npm run format:check`
-2. **Linting** - ESLint with zero warnings policy via `npm run lint`
-3. **Security audit** - npm audit + audit-ci for vulnerability scanning via `npm run security-check`
-4. **Testing** - Full Jest test suite with coverage reporting via `npm run test`
-5. **Building** - TypeScript compilation to JavaScript via `npm run build`
-6. **Release** - Manual npm publish and GitHub release creation
-
-**IMPORTANT**: Ensure both npm and GitHub releases are completed successfully. If either fails, investigate and resolve before considering the release complete.
-
-## Dependency Management Strategy
-
-When updating dependencies, follow this version strategy:
-
-### **🌍 Engines (User-Controlled) - Conservative**
-
-- **homebridge**: Support from 1.8.0+ (users control this)
-- **node**: Support LTS versions 20+, 22+, 24+ (users control this)
-
-### **🔧 Dependencies (Bundled) - Latest Stable**
-- **telnet-client**: Use latest stable (bundled with package)
-- **uuid**: Use latest stable (bundled with package)
-
-### **⚡ DevDependencies (Development) - Exact Versions We Test With**
-- Set minimum versions to exactly what we're using/testing with
-- For tools we completely control (ESLint, TypeScript, etc.), pin to tested versions
-- Examples: `^8.34.0` not `^8.0.0`, `^5.8.3` not `^5.0.0`
-
-**Rationale**: 
-- USER ENVIRONMENT: Broad compatibility prevents installation issues
-- BUNDLED DEPS: Latest versions for security and performance
-- DEV DEPS: Predictable builds with tested tool versions
-
-Always run `npm run prepublishOnly` after dependency updates to ensure compatibility.
-
-## Development Notes
-
-### Jest Test Cleanup (Fixed in v2.5.2+)
-
-- **Issue resolved**: Platform instances were leaving timer handles open during tests
-- **Solution implemented**: Proper cleanup in integration test `afterEach` blocks
-- **Result**: Jest now exits cleanly without `forceExit: true` workaround
-- **Best practice**: All platform instances must be tracked and cleaned up in tests
-
-### Code Quality Achievements
-
-- **Prettier formatting**: Integrated with build pipeline for consistent code style
-- **Jest cleanup**: Eliminated all timer leaks and open handles in test suite
-- **Coverage excellence**: Maintains ~99%+ line coverage with meaningful tests
-- **Zero warnings**: ESLint configuration enforces zero-warning policy
-- **Cyclomatic complexity**: ESLint enforces maximum complexity of 15 per function
-- **ESLint configuration**: Modern flat config format in `eslint.config.js` with TypeScript support
-- **Security scanning**: Integrated audit-ci and eslint-plugin-security for vulnerability detection
-- **Protocol-specific security**: Balanced security rules that account for legitimate dynamic property access
-- **Manual release process**: Reliable manual workflow with comprehensive quality gates
-- **Supply chain security**: npm audit and dependency vulnerability scanning
-
-### TypeScript/JavaScript Type Safety
-
-**CRITICAL**: Always be vigilant about number vs string type conversions when working with IntelliCenter data, as this is a common source of bugs in this codebase.
-
-**Common Issues and Solutions**:
-
-- **Parameter Mapping**: IntelliCenter sends all values as strings (e.g., `"HTMODE": "0"`), but TypeScript may expect numbers
-- **Type Conversion**: Always use explicit conversion with `Number()` when needed: `const heatModeNum = Number(heatMode)`
-- **Constant Mapping**: Ensure parameter mapping uses correct constant keys (e.g., `HTMODE_KEY` not `'HTMODE'` directly)
-- **Validation**: Check for both `undefined` and `null` before type conversion: `if (heatMode !== undefined && heatMode !== null)`
-
-**Example Bug Pattern (Fixed in v2.10.0+)**:
-```typescript
-// WRONG - caused HTMODE mismatch
-['heatMode', 'HTMODE'], // direct string instead of constant
-
-// CORRECT - uses proper constant
-['heatMode', HTMODE_KEY], // resolves to actual parameter name
+```
+HomeKit <--HAP--> Homebridge (Node) <--> [tiny JS shim] <--stdio--> [ pentameter homebridge ]
+                                                                     <--WebSocket--> IntelliCenter
 ```
 
-**When debugging data issues**:
-1. Check raw IntelliCenter data in logs (e.g., `"HTMODE": "0"`)
-2. Verify parameter mapping uses correct constants from `src/constants.ts`
-3. Confirm type conversion happens at the right point in data flow
-4. Test with both string and number representations of the same value
-5. Add debug logging to show both raw and processed values during development
+- It **must remain a real Homebridge plugin** — keeping the existing user base,
+  the Homebridge Config UI, config schema, and `install via Homebridge` is a
+  hard requirement. (This is the maintainer's explicit call.)
+- A Homebridge plugin's entry point is unavoidably JavaScript — Homebridge is a
+  Node process that `require()`s the plugin's `main`. So the JS shim is the
+  minimum-possible Node surface.
+- **The JS shim does as little as possible:** register accessories with the
+  Homebridge API and forward every get/set/state change to the sidecar. All real
+  work (IntelliCenter protocol, state model, polling, control, resilience) lives
+  in Go.
+- **Litmus test for where code goes** (decides every feature): *if
+  IntelliCenter or the device model changes, does this code change?* → it's
+  **pentameter (Go)**. *If HomeKit/Homebridge's API changes, does it change?* →
+  it's the **shim**. So **anything that makes a decision** (what to expose, how to
+  filter, how to map a device, unit conversion, write logic) is Go; the shim only
+  does the JS-mandatory glue (HAP registration, IPC↔characteristic translation,
+  spawn/respawn/logging). Concretely: the Feature-only circuit filter (`FEATR`)
+  lives in Go because it's about IntelliCenter's data model — and it's `go test`-
+  covered as a result, with the shim untouched. Every bit of logic in Go is logic
+  *not* in the npm toolchain (the whole anti-Dependabot point).
+- IPC: plain stdio (newline-delimited JSON) so neither side needs IPC deps. The
+  binary is spawned as a child process of the plugin.
 
-**Key Files for Type Safety**:
-- `src/util.ts` - Parameter mapping and data transformation
-- `src/constants.ts` - Parameter key definitions
-- `src/types.ts` - TypeScript type definitions
+### pentameter is the shared IntelliCenter engine (DECIDED)
 
-### Release System Evolution (v2.5.2+)
+Rather than maintain a second IntelliCenter implementation here, **the sidecar is
+pentameter** running in a `homebridge` mode. pentameter already owns the
+WebSocket protocol, mDNS discovery, reconnect/backoff, and a `listen`
+troubleshooting mode; reusing it means one protocol implementation, autodiscovery
+for free, and `listen` mode doubles as a plugin debugging tool. The engine work
+is merged to `master` in `src/pentameter` (shipped as v0.5.0).
 
-- **Manual release workflow**: Structured manual process with quality gates
-- **Version management**: Manual version bumping with clear beta/stable distinction
-- **Quality assurance**: Comprehensive prepublishOnly script ensures release readiness
-- **Branch strategy**: Separate handling for stable (master) and pre-release (beta) branches
-- **Security first**: Integrated security scanning in release pipeline
-- **Reliable releases**: Manual verification ensures both npm and GitHub releases succeed
+- pentameter gained **control/writes** (`SetParamList`) — it was 100% read-only;
+  this is confined to homebridge mode (a monitoring tool that became a control
+  tool; treat writes carefully).
+- The reusable **`intellicenter` package** (transport + protocol + query builders
+  + interpret helpers + discovery + writes) is extracted and now backs **all
+  three modes** (metrics / listen / homebridge) — one implementation, no
+  duplicated `PoolMonitor` transport. metrics is the default mode; `-homebridge`
+  and `-listen` are the alternates.
+- `src/pentameter/API.md` is the protocol source of truth — use it, don't
+  re-derive.
+- This repo's `go/` sidecar is **retired** (replaced by pentameter). It served
+  its purpose: it proved the IPC protocol + the full Docker→shim→sidecar→HomeKit
+  pipeline, and that IPC design carries into pentameter's homebridge mode.
 
-### Pump Performance Curve Calculations
+### Killing Dependabot (the real motivation)
 
-**Mathematical Implementation**: The plugin implements highly accurate pump performance calculations using fourth-degree polynomial formulas calibrated from real IntelliCenter data:
+The legacy plugin's *runtime* deps are tiny (`telnet-client`, `uuid`). The daily
+Dependabot noise comes from the **devDependencies** — a ~14-package JS toolchain
+(typescript, eslint, jest, prettier, ts-jest, ts-node, nodemon, `@types/*`…).
+So the rewrite must also **minimize/eliminate the JS toolchain**, not just shrink
+runtime deps:
 
-**Power Consumption (WATTS)**:
-- **Formula**: `W = a*r⁴ + b*r³ + c*r² + d*r` where `r = RPM/MAX_RPM`
-- **Calibration**: Coefficients derived from multiple real-world data points from actual IntelliCenter systems
-- **Accuracy**: Zero deviation accuracy between calibration points with smooth interpolation
-- **Implementation**: Located in `src/constants.ts` within `PUMP_PERFORMANCE_CURVES` object
+- Write the shim in **plain JS** (no TypeScript) if practical.
+- Avoid jest/eslint/prettier/ts-node etc. where possible; lean on Go's tooling
+  (`go test`, `go vet`, `gofmt`) for the part that matters.
+- Keep JS runtime dependencies at or near **zero** (HomeKit/HAP comes from
+  Homebridge as a peer; the shim shouldn't pull its own tree).
 
-**Flow Rate (GPM)**:
-- **VSF/VF Pumps**: Fourth-degree polynomial formulas for precise flow rate calculations
-- **VS Pumps**: Linear approximation formulas based on manufacturer specifications
-- **Range Validation**: All calculations include proper RPM range checking and boundary conditions
+## Goals
 
-**Key Features**:
-- **Real-world calibration**: Formulas derived from actual pump performance data, not theoretical specifications
-- **Efficiency modeling**: Different pump types (VS, VF, VSF) have distinct efficiency characteristics
-- **Mathematical precision**: Fourth-degree polynomials provide smooth, accurate curves between data points
-- **Performance optimization**: Calculations are mathematically optimized for speed while maintaining accuracy
+1. Stay a Homebridge plugin (keep users + Config UI).
+2. Maximize Go, minimize JS/TS/Node.
+3. Rapid local dev: run the plugin **in Docker** and verify via the **Homebridge
+   UI** (and the sidecar logs).
 
-**When updating pump curves**:
-1. Use real IntelliCenter data points for calibration whenever possible
-2. Implement fourth-degree polynomial formulas for maximum accuracy
-3. Validate calculations across full RPM range (typically 450-3450 RPM)
-4. Update both power (WATTS) and flow rate (GPM) calculations simultaneously
-5. Test accuracy against known data points to ensure zero deviation
+## Approach & rollout (maintainer's plan)
 
-### Development Standards Context
+- Build something **minimal and resilient** in Go, using **pentameter as the
+  reference** for the IntelliCenter client.
+- Develop and test **locally in Docker**, verifying in the **Homebridge UI**,
+  throughout.
+- Ship to the **npm `beta` channel** and dogfood it there for a **long time**
+  before promoting to stable/`latest`.
+- Bias toward small, robust increments over a big-bang rewrite. Started with a
+  walking skeleton (sidecar connects + one accessory shows in the Homebridge UI),
+  then grew coverage of device types.
 
-**Remember**: When evaluating improvements or suggestions for this project, always consider the **Homebridge plugin context**:
+## Related projects by the same maintainer (symlinked under `src/`)
 
-**✅ Appropriate for Homebridge plugins:**
+- **`src/homebridge-pentair-intellicenter-ai`** — the legacy/predecessor plugin
+  (TypeScript). Reference for behavior, config schema, and the existing dev
+  workflow (Docker Compose + Makefile + nodemon). Talks to IntelliCenter over
+  **telnet** (`telnet-client`).
+- **`src/pentameter`** — the IntelliCenter **engine**. A Go monitoring tool that
+  speaks the protocol over WebSocket; also the homebridge sidecar via its
+  `intellicenter` package + `homebridge` mode (on `master`). `make build` here
+  compiles it into `pentameter/`.
+- **`src/homebridge`** — Homebridge core, for reference.
 
-- Comprehensive testing and code quality
-- Clear documentation and setup instructions
-- Reliable connection handling and error recovery
-- Security best practices for credential handling
-- Proper HomeKit integration patterns
-- Manual release processes for maintainability and control
+## Repo layout (this repo is now thin — the engine lives in pentameter)
 
-**❌ Inappropriate over-engineering:**
-
-- Performance metrics collection and dashboards
-- Complex monitoring and observability systems
-- Enterprise-grade distributed system patterns
-- Scalability optimizations for thousands of users
-- Heavy telemetry and analytics systems
-- Complex automated deployment systems
-
-**Focus areas for improvements:**
-
-- User setup experience (configuration UI, clear error messages)
-- Developer experience (easier contribution, better debugging)
-- Reliability (connection stability, graceful failures)
-- Security (credential protection, dependency scanning)
-- Maintainability (comprehensive testing, structured release processes)
-
-### Claude Code Behavioral Guidelines
-
-**Log Monitoring Practices:**
-
-- **NEVER use `-f` or `--follow` flags** - Streaming logs will always timeout and fail
-- **NEVER stream logs indefinitely** - Always use bounded log commands with `--tail` or similar limits
-- **Use targeted searches** - When looking for specific events, use `grep` or similar filtering to avoid overwhelming output
-- **Check logs once, then wait** - After checking logs, wait for user feedback rather than continuously monitoring
-- **Respect user interruption** - If user interrupts log monitoring, immediately stop and acknowledge the interruption
-- **Use static log commands only** - Examples: `--tail 50`, `--since 1m`, but never `-f`, `--follow`, or similar streaming flags
-
-### Local Development with Docker
-
-For testing changes in a realistic Homebridge environment, this repository includes Docker Compose configuration for local development:
-
-**CRITICAL**: When doing local Docker development, ALWAYS add timestamped debug statements to confirm code deployment:
-```typescript
-// BUILD TIMESTAMP: YYYY-MM-DD-HH:MM:SS - Description of change
-this.platform.log.debug(`[${this.heater.name}] BUILD: YYYY-MM-DD-HH:MM:SS - function called`);
 ```
-Then search logs for your timestamp to confirm the right code is running: `docker compose logs homebridge | grep "BUILD: YYYY-MM-DD-HH:MM:SS"`
+shim/index.js          The Homebridge plugin (plain JS, zero npm deps). Spawns
+                       `pentameter -homebridge`, maps each kind the sidecar emits
+                       to a HomeKit accessory (switch/thermostat/lightsensor/
+                       occupancy/tempsensor).
+pentameter/            Cross-compiled pentameter sidecar binaries, one per
+                       platform as `<os>-<arch>` (gitignored, `make build`;
+                       bundled into the npm tarball for releases).
+config.schema.json     Homebridge Config UI schema (pluginAlias PentairIntelliCenterAI).
+homebridge-config/     Local Docker storage; only config.template.json is committed.
+docker-compose.yml     homebridge/homebridge image, bind-mounts this repo as a plugin.
+Makefile               Dev loop (see below). Builds the sidecar from PENTAMETER_DIR.
+```
 
-**Setup:**
-```bash
-# Copy template config and add your credentials
+The Go engine (`intellicenter` package + `homebridge` mode) lives in
+`src/pentameter`, NOT here. This repo is the JS shim + Docker dev glue + bundled
+binaries.
+
+## Dev workflow (built — this is the loop)
+
+```
 cp homebridge-config/config.template.json homebridge-config/config.json
-# Edit config.json with your IntelliCenter IP, username, password
-
-# Build and start Homebridge (works with Docker or nerdctl)
-./start-dev.sh
-
-# If auth.json has stale credentials, delete it:
-docker compose exec homebridge rm /homebridge/auth.json && docker compose restart homebridge
+# optionally set ipAddress; blank = mDNS auto-discovery (the default)
+make up        # build pentameter sidecar (from ../pentameter) + start Homebridge in Docker
+make logs      # watch discovery / sidecar logs
+# verify accessories in the Homebridge UI (http://localhost:8581), toggle circuits
+make deploy    # after editing pentameter: rebuild sidecar + restart container
+make down      # stop
+make test      # pentameter Go tests (mock IntelliCenter, no hardware needed)
 ```
 
-**Network Configuration:**
-The Docker Compose config uses `network_mode: host` which is required for mDNS/Bonjour discovery (HomeKit pairing). Note that on macOS, host networking doesn't fully work due to Docker running in a VM - use the Homebridge UI at http://localhost:8581 to test accessories instead of pairing with Apple Home.
+- `make build` cross-compiles pentameter from `PENTAMETER_DIR` (default
+  `../pentameter`) into `pentameter/<os>-<arch>`; the shim picks the match. The
+  shim passes config via `PENTAMETER_IC_IP` / `PENTAMETER_IC_PORT` /
+  `PENTAMETER_INTERVAL` / `PENTAMETER_HTTP_PORT`; a blank IP makes pentameter
+  auto-discover.
+- Note: mDNS auto-discovery generally does NOT work from inside Docker with
+  bridge networking (macOS/Windows) — set an explicit `ipAddress` for Docker dev,
+  or use `network_mode: host` on Linux.
+- Don't ask the maintainer for the IntelliCenter's IP — discover it from the
+  host with `./pentameter -discover` (mDNS for `pentair.local`), then set that as
+  `ipAddress` in `homebridge-config/config.json` for Docker dev.
 
-**Development Workflow:**
-```bash
-# Initial setup: Install plugin via Homebridge UI first
-# Then test local changes without publishing:
-./test-local.sh && docker compose restart homebridge
+Key mechanic (verified working): `docker-compose.yml` bind-mounts the repo at a
+**separate** path `/plugin-src` (read-only), NOT under `node_modules`. `make up`
+then runs `_link_plugin`, which:
+  1. `npm pkg set dependencies.<plugin>="file:/plugin-src"` in `/homebridge`,
+     and
+  2. `ln -sfn /plugin-src /homebridge/node_modules/<plugin>`.
+Both are required. The official `homebridge/homebridge` image runs a boot-time
+"Installing Homebridge and user plugins" step that **prunes anything in
+`node_modules` not listed in `package.json`**, so an unregistered symlink is
+deleted on the next restart — hence the `npm pkg set`. We deliberately do NOT
+use `npm install` to link it: that reconciles the whole dependency tree and
+intermittently fails on homebridge's bundled `@matter` deps over Docker's
+filesystem (`ENOTEMPTY`). Because the symlink points at the live repo,
+rebuilding `pentameter/` on the host is reflected on the next restart; `make deploy` =
+rebuild + re-link + restart.
 
-# View logs (bounded, not streaming)
-docker compose logs --tail 50 homebridge
+Gotchas learned the hard way (don't regress):
+- Do NOT bind-mount the repo directly into `/homebridge/node_modules/<plugin>` —
+  the prune step tries to `rename` it and fails with `EBUSY` on the mount point,
+  aborting the entire startup install (homebridge core never installs).
+- `/var/lib/homebridge` is a symlink to `/homebridge` in this image; the
+  homebridge process runs with `-P /var/lib/homebridge/node_modules
+  --strict-plugin-resolution`, so the plugin must live in that (same) dir.
 
-# Search for specific logs
-docker compose logs --tail 200 homebridge | grep "temperature range"
-```
+- Container is **linux/arm64** here; `make build` cross-compiles a trimmed
+  matrix — linux/{arm64,amd64,arm} + darwin/arm64 — and the shim picks the match
+  by `process.platform`/`process.arch` (node `x64` → go `amd64`). windows-amd64
+  and darwin-amd64 are deliberately dropped (see the Makefile `build` comment);
+  add a target back there if a user needs it.
+- The shim passes config to the sidecar via env (config field → env var):
+  `ipAddress`→`PENTAMETER_IC_IP`, `port`→`PENTAMETER_IC_PORT`,
+  `pollIntervalSeconds`→`PENTAMETER_INTERVAL`, `metricsPort`→`PENTAMETER_HTTP_PORT`.
+- Homebridge on macOS Docker uses bridge networking + mapped ports (8581 UI /
+  51826 HAP / 5353 mDNS / 8080 Prometheus metrics). mDNS across the Docker VM can
+  be finicky — on Linux prefer `network_mode: host` (commented in compose).
 
-**Local Testing Process:**
-The `test-local.sh` script builds and copies code to the container:
-1. **Builds** your local plugin (`npm run build`)
-2. **Finds** the installed plugin (searches `/homebridge/node_modules/` and `/var/lib/homebridge/node_modules/`)
-3. **Copies** your `dist/` files directly into the container
+## IPC contract (shim ⇆ sidecar, newline-delimited JSON)
 
-**IMPORTANT**: Always run `docker compose restart homebridge` after `test-local.sh` to load changes. The script's internal restart may fail silently.
+Defined in `src/pentameter/homebridge.go` and consumed in `shim/index.js`. Keep
+both in sync.
 
-This mimics the SFTP approach of copying built files directly to the plugin directory.
+Accessory **kinds** (the `kind` field of an `accessories` item):
+`switch` (circuit/feature), `thermostat` (body+heater), `lightsensor` (a
+read-only metric encoded as lux — pump RPM/Watts/GPM), `occupancy` (a read-only
+boolean — pump Running, Freeze Protection, and the `_conn` controller-online
+sensor), `tempsensor` (read-only Celsius — e.g. air temp).
 
-**Key Benefits:**
-- **Realistic testing environment**: Full Homebridge with UI at http://localhost:8581
-- **Credential security**: Your `config.json` is gitignored, only template is committed
-- **Fast iteration**: Direct file mounting means changes are immediate after rebuild
-- **Integration testing**: Test real IntelliCenter connections and HomeKit behavior
+- sidecar → shim (**stdout**):
+  - `{"t":"ready"}`
+  - `{"t":"accessories","items":[{id,name,kind,...}]}` — item carries the
+    fields its kind needs: `on` (switch/occupancy), `curC/heatC/coolC/state`
+    (thermostat), `lux` (lightsensor), `curC` (tempsensor).
+  - `{"t":"state","id,"on"}` — switch/occupancy on/off
+  - `{"t":"tstate","id","curC","heatC","coolC","state"}` — thermostat update
+  - `{"t":"lstate","id","lux"}` — lightsensor (lux) update
+  - `{"t":"sstate","id","c"}` — temperature-sensor (Celsius) update
+- shim → sidecar (**stdin**):
+  - `{"t":"set","id","on"}` — toggle a circuit
+  - `{"t":"tset","id",...}` — thermostat write (heat/cool setpoint, mode)
+- sidecar → shim (**stderr**): human log lines (shim forwards to Homebridge log).
 
-**When to use Docker testing:**
-- Testing new features with actual IntelliCenter hardware
-- Debugging connection or authentication issues
-- Validating HomeKit accessory behavior
-- Testing configuration changes
-- Reproducing user-reported issues
+When extending to new device types: add a `kind`, emit it in
+`src/pentameter/homebridge.go`, and handle that `kind` in `shim/index.js`'s
+`syncAccessories`. The shim stays dumb; logic stays in Go. The `intellicenter`
+package exposes Bodies/Pumps/Heaters/Sensors + heat-status interpretation +
+writes for these increments.
 
-**Important**: Docker testing complements but doesn't replace the comprehensive Jest test suite. Use both for complete validation.
+## Status / roadmap
 
-## Maintaining This Document
+- **Done (engine + device coverage):** `intellicenter` package extracted
+  (transport, queries, interpret, control/writes, mock tests); `pentameter
+  -homebridge` mode with resilient connect/reconnect + autodiscovery; the plugin
+  wired to build + spawn pentameter; Docker dev loop verified. Device coverage
+  shipped: circuits/features → Switch (FEATR filter); bodies+heaters →
+  Thermostat; air temp → TemperatureSensor; pump RPM/Watts/GPM → LightSensor
+  (lux); pump Running + Freeze Protection + controller-online (`_conn`) →
+  OccupancySensor. Real-time **push** handling is live (push lane ~1s for
+  circuits/temps/heat/freeze; poll lane ~30s for pump RPM/Watts/GPM, which are
+  never pushed).
+- **Done (one engine, three modes):** metrics (default) / `-homebridge` /
+  `-listen` all run the same `intellicenter` engine — the duplicated `PoolMonitor`
+  transport is gone. `-homebridge` and metrics mode both serve Prometheus
+  `/metrics` and advertise over mDNS (one sidecar feeds both HomeKit and Grafana);
+  `-listen` does neither.
+- **Next:** IntelliBrite lights (Lightbulb + colors); richer feature-visibility
+  filtering via `GetConfiguration`/`SHOMNU` (the current FEATR filter is the
+  simpler interim approach).
+- **Distribution:** bundle prebuilt pentameter binaries in the npm tarball
+  (`files` includes `pentameter/`) or download-on-postinstall; publish to the `beta`
+  channel first and dogfood before promoting to `latest`.
 
-This CLAUDE.md file is a living document that must be kept up-to-date as the project evolves. **Always update this document when making changes to:**
+## IntelliCenter protocol reference (from pentameter + legacy plugin)
 
-### Development Workflows
+- **Transport: WebSocket** `ws://<ip>:6680` (pentameter, Go, proven). The legacy
+  plugin used **telnet on 6681** — we are deliberately switching to WebSocket
+  because it's what works cleanly in Go. **No authentication** required.
+- **Message shape** (JSON):
+  - Request: `{messageID, command, condition?, objectList:[{objnam, keys:[]}]}`
+  - Response: `{command, messageID, response, objectList:[{objnam, params:{}}]}`
+  - All param values arrive as **strings** (parse floats/ints defensively).
+- **Commands**: `GetParamList` (poll), `GetQuery` (config, e.g.
+  `queryName:GetConfiguration` / `GetHardwareDefinition`), `SetParamList`
+  (write), `RequestParamList` (subscribe). IntelliCenter pushes unsolicited
+  `WriteParamList`/`NotifyList` messages on change — must tolerate/route these.
+- **Discovery** by `condition: "OBJTYP=<TYPE>"`: `BODY`, `CIRCUIT`, `PUMP`,
+  `HEATER`, `CIRCGRP`. Object naming: bodies `B####`, circuits `C####`/features
+  `FTR##`, heaters `H####`, pumps `PMP##`, air sensor `_A135`.
+- **Key params**: BODY → `SNAME,STATUS,TEMP,HTMODE,HTSRC,LOTMP,HITMP`;
+  CIRCUIT → `SNAME,STATUS,OBJTYP,SUBTYP,FREEZE`; PUMP → `RPM,MAX,PWR,GPM,MAXF`
+  (power is under **`PWR`**, not `WATTS` — `WATTS` is a garbage echo; pump
+  `STATUS` is a **numeric code**, not `ON`, so derive on-state from `RPM>0`; GPM
+  is only meaningful when `MAXF>0`). See API.md for the full param tables.
+- **Resilience** (pentameter): handshake timeout 10s; ping keepalive every 30s
+  (5s timeout); exponential reconnect backoff 1s→30s; optional mDNS rediscovery
+  of `pentair.local.` after repeated failures.
+- **Push vs poll**: body temps / circuit on-off / heater / freeze changes are
+  pushed (push lane, ~1s); pump RPM/Watts/GPM are **not** pushed — they're polled
+  on the poll lane (shim default 30s; pentameter's standalone default is 60s).
+- Detailed code: `src/pentameter/intellicenter/client.go` (transport, connect,
+  read loop) and `intellicenter/parse.go` / `types.go` (param parsing);
+  `src/pentameter/API.md` is the full protocol reference.
 
-- **Adding new npm scripts**: Update the [Common Commands](#common-commands) section
-- **Changing build processes**: Update build-related commands and descriptions
-- **Modifying development tools**: Update tool configurations and usage instructions
+## HomeKit accessory model to reproduce (from legacy plugin)
 
-### Release and Quality Processes
+Target the same HomeKit surface so existing users see no regression:
 
-- **Release workflow changes**: Update the [Release Process](#release-process) section
-- **Quality pipeline modifications**: Update manual pipeline descriptions
-- **New quality gates**: Add to the Release Quality Gates section
-- **Security scanning changes**: Update security-related processes and tools
+- **Circuits/features** → `Switch` (On/Off via `STATUS`). IntelliBrite lights →
+  `Lightbulb` (+ a separate colors accessory). VSP circuits optionally add a
+  `Fan` (RotationSpeed ↔ pump speed).
+- **Body + heater** → `Thermostat` (CurrentTemperature read; TargetTemperature →
+  `LOTMP`; heat-pump dual setpoints → `LOTMP`/`HITMP`). Internally Celsius;
+  config picks display F/C; 0.5°C step.
+- **Temperature sensors** (air `_A135`, pool) → `TemperatureSensor`.
+- **Pump RPM/GPM/WATTS** → `LightSensor` (value encoded as lux) — a quirk used
+  to surface read-only metrics. We additionally surface pump Running, Freeze
+  Protection, and controller-online as `OccupancySensor`s.
+- **Our** config surface (this repo's `config.schema.json`, alias
+  `PentairIntelliCenterAI`): `name`, `ipAddress` (blank = mDNS), `port` (6680),
+  `temperatureUnits` (F/C), `pollIntervalSeconds` (30), `metricsPort` (8080).
+  This is a deliberately smaller surface than the legacy plugin's — the
+  new alias forces a clean config so dead legacy options
+  (`minimumTemperature`/`maximumTemperature`/`airTemp`/`supportIntelliBrite`/
+  `includeAllCircuits`/`heatModeOverride`) are not carried over.
+- Legacy reference code: `src/homebridge-pentair-intellicenter-ai/src/`
+  (platform.ts is the core; `*Accessory.ts` per device type;
+  `config.schema.json`) — read it for behavior, not as our config.
 
-### Testing Approaches
+## Distribution note (to solve later)
 
-- **New testing frameworks**: Update the [Testing](#testing) section
-- **Coverage threshold changes**: Update coverage requirements and standards
-- **Test organization changes**: Update test structure and organization guidance
-
-### Architecture Changes
-
-- **New components**: Update the [Architecture Overview](#architecture-overview) section
-- **Protocol changes**: Update IntelliCenter integration details
-- **New accessory types**: Update accessory descriptions and patterns
-
-### Dependency Management
-
-- **New dependency strategies**: Update the [Dependency Management Strategy](#dependency-management-strategy) section
-- **Version policy changes**: Update versioning approaches and rationale
-
-### Development Standards
-
-- **Code quality tools**: Update linting, formatting, and analysis tool configurations
-- **New best practices**: Add to the [Development Notes](#development-notes) section
-- **Security practices**: Update security-related guidance and tools
-
-### When to Update
-
-**Required Updates:**
-
-- ✅ Before committing changes that modify workflows or processes
-- ✅ When adding new development tools or scripts
-- ✅ When changing quality pipelines or release gates
-- ✅ When modifying testing approaches or coverage requirements
-- ✅ When updating dependency management strategies
-
-**Best Practices:**
-
-- Update the document as part of the same PR/commit that implements the changes
-- Include a brief changelog entry noting the documentation update
-- Review the entire document periodically to ensure accuracy
-- Use conventional commit format: `docs(claude): update development workflow guidance`
-
-**Commit Message Examples:**
-
-```
-docs(claude): update manual release workflow documentation
-docs(claude): update testing standards and coverage requirements
-docs(claude): add security scanning process to quality pipeline
-```
-
-This approach ensures that the documentation remains accurate, comprehensive, and useful for both AI assistants and human developers working with the codebase.
+Because the plugin ships a compiled Go binary, the npm package must deliver the
+right binary per platform/arch (Homebridge runs on linux x64/arm64, macOS,
+etc.). Standard options: bundle prebuilt binaries in the npm tarball, or a
+postinstall that downloads from GitHub Releases. Prefer the approach that adds
+the least supply-chain/Dependabot surface.
