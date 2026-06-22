@@ -37,8 +37,11 @@ IntelliCenter pool controllers. The maintainer develops this with AI assistance.
 
 This is a from-scratch rework of the plugin's older codebase — a working but
 buggy, messy TypeScript/Node implementation. The rework ships as prerelease
-(beta) versions of the same npm package, so existing stable users on `latest`
-are untouched until it's promoted. It exists to: clean up the codebase, reduce
+versions on the npm **`alpha`** dist-tag (currently `3.0.0-alpha.8`), so existing
+stable users on `latest` are untouched until it's promoted. (Note: the `beta`
+dist-tag is occupied by an unrelated older line — `2.14.0-beta.2` from the v2.x
+IntelliBrite work — so the rework deliberately uses `alpha`, not `beta`.) It
+exists to: clean up the codebase, reduce
 bugs, and **move as much logic as possible into Go** to escape the daily
 npm/Dependabot churn of the JS toolchain.
 
@@ -128,7 +131,7 @@ runtime deps:
   reference** for the IntelliCenter client.
 - Develop and test **locally in Docker**, verifying in the **Homebridge UI**,
   throughout.
-- Ship to the **npm `beta` channel** and dogfood it there for a **long time**
+- Ship to the **npm `alpha` channel** and dogfood it there for a **long time**
   before promoting to stable/`latest`.
 - Bias toward small, robust increments over a big-bang rewrite. Started with a
   walking skeleton (sidecar connects + one accessory shows in the Homebridge UI),
@@ -295,7 +298,7 @@ removed rather than relying on a fresh accessory.
   filtering via `GetConfiguration`/`SHOMNU` (the current FEATR filter is the
   simpler interim approach).
 - **Distribution:** bundle prebuilt pentameter binaries in the npm tarball
-  (`files` includes `pentameter/`) or download-on-postinstall; publish to the `beta`
+  (`files` includes `pentameter/`) or download-on-postinstall; publish to the `alpha`
   channel first and dogfood before promoting to `latest`.
 
 ## IntelliCenter protocol reference (from pentameter + legacy plugin)
