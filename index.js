@@ -46,6 +46,8 @@ class PentairIntelliCenterAI {
     this.cached = new Map();
     // Live switch records, keyed by circuit id: { accessory, on }.
     this.switches = new Map();
+    // Live lightbulb records (light circuits), keyed by circuit id: { accessory, on }.
+    this.lights = new Map();
     // Live thermostat records, keyed by body id: { accessory, canCool, ... }.
     this.thermostats = new Map();
     // Live light-sensor records (pump metrics as lux), keyed by sensor id: { accessory, lux }.
@@ -180,6 +182,9 @@ class PentairIntelliCenterAI {
       if (item.kind === 'switch') {
         seen.add(item.id);
         this.ensureSwitch(item);
+      } else if (item.kind === 'lightbulb') {
+        seen.add(item.id);
+        this.ensureLightbulb(item);
       } else if (item.kind === 'thermostat') {
         seen.add(item.id);
         this.ensureThermostat(item);
@@ -207,6 +212,7 @@ class PentairIntelliCenterAI {
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         this.cached.delete(uuid);
         this.switches.delete(id);
+        this.lights.delete(id);
         this.thermostats.delete(id);
         this.lightSensors.delete(id);
         this.occupancy.delete(id);
@@ -259,14 +265,69 @@ class PentairIntelliCenterAI {
     }
   }
 
+  // A light circuit (SUBTYP=LIGHT/etc.) becomes a HomeKit Lightbulb instead of a
+  // Switch: correct icon, and it avoids Apple Home's "Display As" prompt that
+  // every generic Switch triggers. On/off only for now (color is future work);
+  // the on/off path is identical to a switch (sidecar 'set' toggles the circuit).
+  ensureLightbulb(item) {
+    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
+    let accessory = this.cached.get(uuid);
+    let isNew = false;
+
+    if (!accessory) {
+      accessory = new this.api.platformAccessory(item.name, uuid);
+      isNew = true;
+    }
+    accessory.context.id = item.id;
+    accessory.displayName = item.name;
+
+    const service =
+      accessory.getService(this.Service.Lightbulb) ||
+      accessory.addService(this.Service.Lightbulb, item.name);
+
+    const record = { accessory, on: !!item.on };
+    this.lights.set(item.id, record);
+
+    const onChar = service.getCharacteristic(this.Characteristic.On);
+    onChar.removeAllListeners('get');
+    onChar.removeAllListeners('set');
+    onChar
+      .onGet(() => {
+        const r = this.lights.get(item.id);
+        return r ? r.on : false;
+      })
+      .onSet((value) => {
+        const on = !!value;
+        const r = this.lights.get(item.id);
+        if (r) r.on = on; // optimistic; sidecar re-poll confirms
+        this.sendSet(item.id, on);
+      });
+
+    onChar.updateValue(record.on);
+
+    if (isNew) {
+      this.log.info(`Registering light: ${item.name} (${item.id})`);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.cached.set(uuid, accessory);
+    }
+  }
+
   applyState(id, on) {
-    // A 'state' message may target a Switch (circuit/feature) or an Occupancy
-    // sensor (e.g. freeze, whose id is the freeze circuit's objnam). Route by id.
+    // A 'state' message may target a Switch (circuit/feature), a Lightbulb (light
+    // circuit), or an Occupancy sensor (e.g. freeze, whose id is the freeze
+    // circuit's objnam). Route by id.
     const sw = this.switches.get(id);
     if (sw) {
       sw.on = !!on;
       const service = sw.accessory.getService(this.Service.Switch);
       if (service) service.getCharacteristic(this.Characteristic.On).updateValue(sw.on);
+      return;
+    }
+    const light = this.lights.get(id);
+    if (light) {
+      light.on = !!on;
+      const service = light.accessory.getService(this.Service.Lightbulb);
+      if (service) service.getCharacteristic(this.Characteristic.On).updateValue(light.on);
       return;
     }
     const occ = this.occupancy.get(id);

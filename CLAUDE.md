@@ -230,10 +230,14 @@ Defined in `src/pentameter/homebridge.go` and consumed in `index.js`. Keep
 both in sync.
 
 Accessory **kinds** (the `kind` field of an `accessories` item):
-`switch` (circuit/feature), `thermostat` (body+heater), `lightsensor` (a
-read-only metric encoded as lux — pump RPM/Watts/GPM), `occupancy` (a read-only
-boolean — pump Running, Freeze Protection, and the `_conn` controller-online
-sensor), `tempsensor` (read-only Celsius — e.g. air temp).
+`switch` (circuit/feature), `lightbulb` (a light circuit — `SUBTYP` in the light
+set per `isLightSubType`; on/off only, color TBD — uses the same `set`/`state`
+on/off path as `switch`, just a Lightbulb service so it gets the right icon and
+skips Apple Home's per-Switch "Display As" prompt), `thermostat` (body+heater),
+`lightsensor` (a read-only metric encoded as lux — pump RPM/Watts/GPM),
+`occupancy` (a read-only boolean — pump Running, Freeze Protection, and the
+`_conn` controller-online sensor), `tempsensor` (read-only Celsius — e.g. air
+temp).
 
 - sidecar → shim (**stdout**):
   - `{"t":"ready"}`
