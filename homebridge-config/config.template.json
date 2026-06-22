@@ -14,7 +14,7 @@
       "port": 6680,
       "temperatureUnits": "F",
       "pollIntervalSeconds": 30,
-      "debug": true
+      "metricsPort": 8080
     },
     {
       "name": "Config",

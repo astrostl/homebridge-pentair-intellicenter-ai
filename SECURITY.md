@@ -15,7 +15,7 @@ If you discover a security vulnerability, please follow these steps:
 
 ### 🔒 For Sensitive Security Issues
 
-For vulnerabilities that could affect user credentials or network security:
+For vulnerabilities affecting local network security or device control:
 - **Contact**: Create a GitHub issue marked as "security"
 - **Response time**: Best effort response
 - **Process**: We'll work with you to verify, fix, and coordinate disclosure
@@ -26,14 +26,22 @@ For less critical security improvements:
 - **GitHub Issues**: Open a public issue with the "security" label
 - **Pull Requests**: Security improvements are welcome via PR
 
-## Security Measures
+## Security Posture
 
-This project includes:
-- **Automated dependency scanning** via Dependabot
-- **Security audit pipeline** with npm audit and audit-ci
-- **Code analysis** with ESLint security plugin  
-- **Credential protection** in Docker development environment
-- **Supply chain security** monitoring
+This plugin is deliberately built to minimize attack and supply-chain surface:
+
+- **Near-zero dependency footprint**: the Homebridge plugin is a single
+  plain-JavaScript file with **no npm runtime or dev dependencies** — there is no
+  JS dependency tree to scan, audit, or get CVEs against. (Removing that toolchain
+  surface is a primary goal of the rework.)
+- **Self-contained Go sidecar**: the engine ships as a statically compiled
+  ([pentameter](https://github.com/astrostl/pentameter)) binary built with
+  `CGO_ENABLED=0`; its Go dependencies are vetted in that repository with Go's
+  tooling (`go vet`, `golangci-lint`) and `go test`.
+- **No credentials**: the plugin talks to IntelliCenter over an unauthenticated
+  local WebSocket — it neither requests nor stores pool-system credentials.
+- **Local-only**: all communication is to the IntelliCenter on your LAN; the
+  plugin opens no outbound internet connections.
 
 ## Disclosure Policy
 
@@ -47,4 +55,5 @@ This project includes:
 Remember that this is a **home automation plugin** with limited blast radius:
 - Runs on local networks (typically Raspberry Pi or NAS)
 - Manages pool equipment (not critical infrastructure)
-- Standard home security practices apply (network isolation, secure credentials)
+- Standard home network practices apply (keep the IntelliCenter and Homebridge on a
+  trusted, isolated network segment)
