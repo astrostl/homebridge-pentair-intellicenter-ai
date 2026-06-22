@@ -259,6 +259,17 @@ When extending to new device types: add a `kind`, emit it in
 package exposes Bodies/Pumps/Heaters/Sensors + heat-status interpretation +
 writes for these increments.
 
+**Standard for service type:** every `ensureX` in the shim must acquire its HAP
+service via `useService(accessory, type, name)`, never `getService||addService`
+directly. `useService` strips any *other* primary service the accessory carried
+under a previous kind, so when a circuit is reclassified across versions (e.g.
+the same objnam went `switch` → `lightbulb` when light detection landed),
+HomeKit re-renders it cleanly instead of keeping both services and showing the
+old type. Add any new primary service type to `primaryServiceTypes()` so it
+participates in this swap. The accessory UUID is seeded from `PLATFORM_NAME:id`
+and stays stable across a kind change — that's *why* the stale service must be
+removed rather than relying on a fresh accessory.
+
 ## Status / roadmap
 
 - **Done (engine + device coverage):** `intellicenter` package extracted

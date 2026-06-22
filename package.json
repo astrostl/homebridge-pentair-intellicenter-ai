@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Pentair IntelliCenter AI",
   "name": "homebridge-pentair-intellicenter-ai",
-  "version": "3.0.0-alpha.5",
+  "version": "3.0.0-alpha.6",
   "description": "Next-gen Homebridge plugin for Pentair IntelliCenter pool control. Thin JS shim over a Go sidecar.",
   "license": "Apache-2.0",
   "author": {

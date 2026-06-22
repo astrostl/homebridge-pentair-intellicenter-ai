@@ -221,6 +221,28 @@ class PentairIntelliCenterAI {
     }
   }
 
+  // The HAP service types this plugin assigns as an accessory's single primary
+  // control. Every accessory carries exactly one of these.
+  primaryServiceTypes() {
+    const S = this.Service;
+    return [S.Switch, S.Lightbulb, S.Thermostat, S.LightSensor, S.OccupancySensor, S.TemperatureSensor];
+  }
+
+  // useService returns the accessory's service of the given type (creating it if
+  // absent) and strips any OTHER primary service left over from a previous kind.
+  // This is the standard for every ensureX: the sidecar's `kind` is authoritative,
+  // so when a circuit is reclassified across versions (e.g. switch -> lightbulb on
+  // upgrade), the accessory is re-rendered cleanly instead of carrying both.
+  useService(accessory, type, name) {
+    for (const t of this.primaryServiceTypes()) {
+      if (t !== type) {
+        const stale = accessory.getService(t);
+        if (stale) accessory.removeService(stale);
+      }
+    }
+    return accessory.getService(type) || accessory.addService(type, name);
+  }
+
   ensureSwitch(item) {
     const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
     let accessory = this.cached.get(uuid);
@@ -233,14 +255,7 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
-    // If this circuit was previously exposed as a Lightbulb (kind changed), drop
-    // the stale service so the accessory is cleanly a Switch.
-    const staleLight = accessory.getService(this.Service.Lightbulb);
-    if (staleLight) accessory.removeService(staleLight);
-
-    const service =
-      accessory.getService(this.Service.Switch) ||
-      accessory.addService(this.Service.Switch, item.name);
+    const service = this.useService(accessory, this.Service.Switch, item.name);
 
     const record = { accessory, on: !!item.on };
     this.switches.set(item.id, record);
@@ -286,15 +301,7 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
-    // If this circuit was previously exposed as a Switch (kind changed, e.g. the
-    // 3.x light classification landed on upgrade), drop the stale Switch service
-    // so the accessory becomes cleanly a Lightbulb.
-    const staleSwitch = accessory.getService(this.Service.Switch);
-    if (staleSwitch) accessory.removeService(staleSwitch);
-
-    const service =
-      accessory.getService(this.Service.Lightbulb) ||
-      accessory.addService(this.Service.Lightbulb, item.name);
+    const service = this.useService(accessory, this.Service.Lightbulb, item.name);
 
     const record = { accessory, on: !!item.on };
     this.lights.set(item.id, record);
@@ -370,9 +377,7 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
-    const service =
-      accessory.getService(this.Service.LightSensor) ||
-      accessory.addService(this.Service.LightSensor, item.name);
+    const service = this.useService(accessory, this.Service.LightSensor, item.name);
 
     const rec = { accessory, lux: typeof item.lux === 'number' ? item.lux : 0 };
     this.lightSensors.set(item.id, rec);
@@ -411,9 +416,7 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
-    const service =
-      accessory.getService(this.Service.OccupancySensor) ||
-      accessory.addService(this.Service.OccupancySensor, item.name);
+    const service = this.useService(accessory, this.Service.OccupancySensor, item.name);
 
     const rec = { accessory, on: !!item.on };
     this.occupancy.set(item.id, rec);
@@ -444,9 +447,7 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
-    const service =
-      accessory.getService(this.Service.TemperatureSensor) ||
-      accessory.addService(this.Service.TemperatureSensor, item.name);
+    const service = this.useService(accessory, this.Service.TemperatureSensor, item.name);
 
     const rec = { accessory, c: typeof item.curC === 'number' ? item.curC : 20 };
     this.tempSensors.set(item.id, rec);
@@ -487,9 +488,7 @@ class PentairIntelliCenterAI {
     accessory.context.id = item.id;
     accessory.displayName = item.name;
 
-    const service =
-      accessory.getService(this.Service.Thermostat) ||
-      accessory.addService(this.Service.Thermostat, item.name);
+    const service = this.useService(accessory, this.Service.Thermostat, item.name);
 
     const rec = {
       accessory,
