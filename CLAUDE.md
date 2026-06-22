@@ -81,9 +81,11 @@ pentameter** running in a `homebridge` mode. pentameter already owns the
 WebSocket protocol, mDNS discovery, reconnect/backoff, and a `listen`
 troubleshooting mode; reusing it means one protocol implementation, autodiscovery
 for free, and `listen` mode doubles as a plugin debugging tool. The engine work
-is merged to `master` in `src/pentameter` (first shipped as v0.5.0; the alpha.7
-plugin bundles **v0.5.1**, which adds homebridge Lightbulb classification,
-non-fatal metrics bind, and change-only logging).
+is merged to `master` in `src/pentameter` (first shipped as v0.5.0; v0.5.1 added
+homebridge Lightbulb classification, non-fatal metrics bind, and change-only
+logging; the alpha.8 plugin bundles **v0.5.2**, which clarifies `--help`, quiets
+skipped-feature logging to `--listen` mode only, and binds the metrics server
+before announcing it).
 
 - pentameter gained **control/writes** (`SetParamList`) — it was 100% read-only;
   this is confined to homebridge mode (a monitoring tool that became a control
