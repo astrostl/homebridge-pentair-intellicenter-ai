@@ -76,6 +76,8 @@ lives in Go). Before any release:
 3. **`npm pack --dry-run`** shows the expected tarball: `index.js`,
    `config.schema.json`, and every `pentameter/<os>-<arch>` binary — and nothing
    stray (no dev config, no `.DS_Store`).
+4. **`CHANGELOG.md` has an entry for the version being released** (see step 2).
+   No version ships undocumented.
 
 ## Tagging Rules
 
@@ -102,9 +104,22 @@ git rev-parse vVERSION   # must equal $PUBLISHED_SHA
 git checkout alpha/vX.Y.Z   # or: git checkout -b alpha/vX.Y.Z origin/master
 ```
 
-### 2. Bump version
+### 2. Bump version and update the changelog
 
 Edit `package.json` to `X.Y.Z-alpha.N`.
+
+Then update `CHANGELOG.md` — **every published version must have an entry, no
+exceptions.** Promote the accumulated `## [Unreleased]` notes into a new
+`## [X.Y.Z-alpha.N] - YYYY-MM-DD` section and leave a fresh empty
+`## [Unreleased]` on top. If `[Unreleased]` is empty, write the entry from the
+commits since the previous tag:
+
+```bash
+git log --oneline vX.Y.Z-alpha.$((N-1))..HEAD
+```
+
+Note the bundled pentameter version in the entry (see the traceability gap in
+step 3).
 
 ### 3. Build the bundled sidecar
 
