@@ -195,10 +195,14 @@ class PentairIntelliCenterAI {
       }
     }
 
-    // Remove accessories that are cached/live but no longer discovered.
+    // Remove accessories that are cached/live but no longer discovered. The
+    // sidecar always sends the full discovered set (hbAllItems), so anything not
+    // in `seen` is stale — including orphans from the legacy 2.x plugin, which
+    // lack our context.id. Pruning by not-seen cleans those up automatically so
+    // upgraders never have to flush the cache by hand.
     for (const [uuid, accessory] of this.cached) {
       const id = accessory.context && accessory.context.id;
-      if (id && !seen.has(id)) {
+      if (!seen.has(id)) {
         this.log.info(`Removing stale accessory: ${accessory.displayName}`);
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         this.cached.delete(uuid);
