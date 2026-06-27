@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-alpha.9] - 2026-06-26
+
+Bundles pentameter **v0.6.0** (alpha.8 bundled v0.5.2).
+
+### Added
+- **Periodic static-config refresh** (via pentameter v0.6.0): the engine re-pulls
+  IntelliCenter's static configuration — feature visibility and the circuit⇄pump
+  graph — every 60 polls, so a controller reconfiguration is picked up without
+  restarting the plugin or reconnecting.
+
+### Changed
+- **Bundled sidecar pentameter v0.5.2 → v0.6.0.** v0.6.0 also gates the
+  Prometheus `circuit_status` / `feature_status` metrics on physical pump delivery
+  (a circuit commanded on but driving a stopped pump now reads `0`). This is
+  **metrics-only** — HomeKit accessories are unaffected and continue to reflect
+  the controller's commanded state plus the per-pump "Running" occupancy sensors.
+
 ## [3.0.0-alpha.0] - 2026-06-21
 
 Ground-up rework. Published to the **`alpha`** npm dist-tag only; does not affect

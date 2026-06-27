@@ -86,9 +86,13 @@ troubleshooting mode; reusing it means one protocol implementation, autodiscover
 for free, and `listen` mode doubles as a plugin debugging tool. The engine work
 is merged to `master` in `src/pentameter` (first shipped as v0.5.0; v0.5.1 added
 homebridge Lightbulb classification, non-fatal metrics bind, and change-only
-logging; the alpha.8 plugin bundles **v0.5.2**, which clarifies `--help`, quiets
-skipped-feature logging to `--listen` mode only, and binds the metrics server
-before announcing it).
+logging; v0.5.2 clarified `--help`, quieted skipped-feature logging to `--listen`
+mode only, and bound the metrics server before announcing it; the alpha.9 plugin
+bundles **v0.6.0**, which gates `circuit_status`/`feature_status` on physical pump
+delivery — **metrics-only; HomeKit accessories are unaffected** — and adds a
+periodic static-config refresh that re-pulls feature visibility and the
+circuit⇄pump graph every 60 polls, so a reconfiguration is picked up without a
+restart).
 
 - pentameter gained **control/writes** (`SetParamList`) — it was 100% read-only;
   this is confined to homebridge mode (a monitoring tool that became a control

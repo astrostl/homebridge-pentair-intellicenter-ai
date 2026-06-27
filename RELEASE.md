@@ -78,6 +78,18 @@ lives in Go). Before any release:
    stray (no dev config, no `.DS_Store`).
 4. **`CHANGELOG.md` has an entry for the version being released** (see step 2).
    No version ships undocumented.
+5. **Reconcile against npm — never trust local git tags.** Versions can be
+   unpublished, so the local tag list is not authoritative for what's live. Run:
+
+   ```bash
+   npm view homebridge-pentair-intellicenter-ai dist-tags versions
+   ```
+
+   Confirm both: (a) the version you are about to release is **not** in `versions`
+   — npm permanently blocks reusing a version number, even one that was later
+   unpublished; and (b) the dist-tag you'll move (`alpha`/`beta`/`latest`) points
+   where you expect before you move it. Cross-check the live tag's commit with
+   `npm view <pkg>@<version> gitHead`.
 
 ## Tagging Rules
 
