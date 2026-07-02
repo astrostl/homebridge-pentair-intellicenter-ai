@@ -10,5 +10,9 @@ npm-debug.log*
 homebridge-config/*
 !homebridge-config/config.template.json
 
+# Local, machine-specific troubleshooting notes (prod IPs, bridge layout, etc.).
+# Never commit — it documents the maintainer's private setup.
+/LOCAL.md
+
 # OS
 .DS_Store

@@ -6,9 +6,12 @@ Guidance for Claude Code when working in this repository.
 
 - **NEVER store memories.** Do not write to the memory directory, MEMORY.md, or
   any persistent memory store. Ever.
-- **NEVER write personally-identifying info to any file** (name, address, email,
-  IP addresses, MAC addresses, etc.) — including committed files, docs, and
-  notes. If a fact involves PII, record the *method* to obtain it, not the value.
+- **NEVER write personally-identifying info to any file that is committed or
+  committable** (name, address, email, IP addresses, MAC addresses, etc.) —
+  including committed files, docs, and notes. If a fact involves PII, record the
+  *method* to obtain it, not the value. **Exception: gitignored files** (e.g.
+  `LOCAL.md`, which `.gitignore` excludes) may hold literal values, since they
+  never leave this machine. The rule applies to anything that is not gitignored.
 - **NEVER tell the maintainer to test in Apple Home, the Home app, or to pair
   with HomeKit.** The maintainer tests in the **Homebridge UI**. Do not suggest
   it, do not ask them to "eyeball it in Home," do not append testing caveats
@@ -22,6 +25,12 @@ Guidance for Claude Code when working in this repository.
 
 ## Debugging tools
 
+- **`LOCAL.md` (if present) documents the maintainer's local/prod setup** — the
+  live Homebridge instance, that plugins run in child-bridge mode, how to connect
+  to the UI API and pentameter `/metrics`, and a diagnostic playbook. It is
+  **gitignored** (machine-specific, may hold private specifics). When
+  troubleshooting against real hardware, **read `LOCAL.md` first** if it exists;
+  keep it current as the setup or the probing workflow changes.
 - Prefer **CLI tools** for ad-hoc debugging where reasonably possible — `curl`
   (HTTP / `/metrics`), `websocat` (the IntelliCenter WebSocket), `jq`, etc. They
   leave no project residue and are the fastest way to probe.
@@ -280,6 +289,19 @@ old type. Add any new primary service type to `primaryServiceTypes()` so it
 participates in this swap. The accessory UUID is seeded from `PLATFORM_NAME:id`
 and stays stable across a kind change — that's *why* the stale service must be
 removed rather than relying on a fresh accessory.
+
+**Known caveat (verified in the field):** because the UUID stays stable, the
+Homebridge/HAP side re-renders cleanly, but a **HomeKit resident hub can stay
+latched to the old service type** for that accessory and show "No Response" — it
+keeps matching the same accessory identity to its cached (old-type) record. A
+plugin/child-bridge *restart* does not fix this (it re-publishes the same cached
+accessory). The remedy is to force a real remove+re-add: delete that accessory
+from the live child-bridge cache, then restart the child bridge so the plugin
+re-registers it fresh (bumps the config number → hub re-enumerates);
+power-cycling the resident hub (rebooting the Apple TV / HomePod) also works and
+did in the field. See `LOCAL.md` for the exact commands. The durable code
+fix — not yet implemented — is to register under a **new** UUID whenever a
+circuit's service type changes, so the hub treats it as a brand-new accessory.
 
 ## Status / roadmap
 
