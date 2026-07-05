@@ -30,7 +30,7 @@ help:
 	@echo "  restart    - restart the container (reload plugin)"
 	@echo "  logs       - follow Homebridge logs"
 	@echo "  pair-info  - print the HomeKit pairing PIN / UI URL"
-	@echo "  test       - run pentameter Go tests"
+	@echo "  test       - run pentameter Go tests + shim mock-HAP tests (shim_test.js)"
 	@echo "  fmt        - gofmt + vet pentameter"
 	@echo ""
 	@echo "  PENTAMETER_DIR=$(PENTAMETER_DIR) (override to point at your pentameter checkout)"
@@ -119,6 +119,7 @@ pair-info:
 
 test:
 	@cd $(PENTAMETER_DIR) && go test ./...
+	@node shim_test.js
 
 fmt:
 	@cd $(PENTAMETER_DIR) && gofmt -w . && go vet ./...

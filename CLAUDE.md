@@ -169,6 +169,9 @@ index.js               The Homebridge plugin (plain JS, zero npm deps). Spawns
                        `pentameter -homebridge`, maps each kind the sidecar emits
                        to a HomeKit accessory (switch/thermostat/lightsensor/
                        occupancy/tempsensor).
+shim_test.js           Mock-HAP tests for the shim's accessory-identity logic
+                       (plain Node, zero deps; run via `make test`). Not shipped
+                       in the npm tarball.
 pentameter/            Cross-compiled pentameter sidecar binaries, one per
                        platform as `<os>-<arch>` (gitignored, `make build`;
                        bundled into the npm tarball for releases).
@@ -193,7 +196,7 @@ make logs      # watch discovery / sidecar logs
 # verify accessories in the Homebridge UI (http://localhost:8581), toggle circuits
 make deploy    # after editing pentameter: rebuild sidecar + restart container
 make down      # stop
-make test      # pentameter Go tests (mock IntelliCenter, no hardware needed)
+make test      # pentameter Go tests (mock IntelliCenter) + shim mock-HAP tests (shim_test.js)
 ```
 
 - `make build` cross-compiles pentameter from `PENTAMETER_DIR` (default
@@ -279,29 +282,37 @@ When extending to new device types: add a `kind`, emit it in
 package exposes Bodies/Pumps/Heaters/Sensors + heat-status interpretation +
 writes for these increments.
 
-**Standard for service type:** every `ensureX` in the shim must acquire its HAP
-service via `useService(accessory, type, name)`, never `getService||addService`
-directly. `useService` strips any *other* primary service the accessory carried
-under a previous kind, so when a circuit is reclassified across versions (e.g.
-the same objnam went `switch` → `lightbulb` when light detection landed),
-HomeKit re-renders it cleanly instead of keeping both services and showing the
-old type. Add any new primary service type to `primaryServiceTypes()` so it
-participates in this swap. The accessory UUID is seeded from `PLATFORM_NAME:id`
-and stays stable across a kind change — that's *why* the stale service must be
-removed rather than relying on a fresh accessory.
+**Standard for accessory identity + service type:** every `ensureX` in the shim
+must resolve its accessory via `acquireAccessory(item, type)` and its HAP service
+via `useService(accessory, type, name)` — never raw UUID lookups or
+`getService||addService`. `acquireAccessory` implements the durable
+reclassification fix (shipped after the field episodes below): **new accessories
+are seeded `PLATFORM_NAME:id:kind`**, while accessories from older versions stay
+under the legacy `PLATFORM_NAME:id` seed as long as their kind is unchanged (so
+upgrades cause zero churn). If a cached accessory carries a *different* primary
+service type than its kind calls for (a reclassification, e.g. `switch` →
+`lightbulb` when light detection landed), swapping the service in place is NOT
+enough — a HomeKit resident hub stays latched to the old service type for the
+same accessory identity and shows **"No Response"** (verified in the field,
+twice; a plugin/child-bridge restart does not fix it because it re-publishes the
+same cached accessory). So `acquireAccessory` unregisters the old accessory and
+re-registers under the **new kind-scoped UUID** — HomeKit sees a brand-new
+accessory and re-enumerates cleanly. It also removes any superseded same-id
+accessory left under another UUID and clears the id from every kind's record map
+(otherwise `applyState`, which routes by id, updates the dead record and returns
+early). `useService` still strips foreign primary services as a safety net. Add
+any new primary service type to `primaryServiceTypes()` so it participates.
+`shim_test.js` (plain Node, zero deps, run by `make test`) covers the scenarios
+with a mock HAP api: fresh install, no-churn upgrade, reclassify, double-flip,
+prune, all-kinds smoke.
 
-**Known caveat (verified in the field):** because the UUID stays stable, the
-Homebridge/HAP side re-renders cleanly, but a **HomeKit resident hub can stay
-latched to the old service type** for that accessory and show "No Response" — it
-keeps matching the same accessory identity to its cached (old-type) record. A
-plugin/child-bridge *restart* does not fix this (it re-publishes the same cached
-accessory). The remedy is to force a real remove+re-add: delete that accessory
-from the live child-bridge cache, then restart the child bridge so the plugin
-re-registers it fresh (bumps the config number → hub re-enumerates);
-power-cycling the resident hub (rebooting the Apple TV / HomePod) also works and
-did in the field. See `LOCAL.md` for the exact commands. The durable code
-fix — not yet implemented — is to register under a **new** UUID whenever a
-circuit's service type changes, so the hub treats it as a brand-new accessory.
+**Manual remedy for an already-latched hub** (pre-fix installs, or if it ever
+recurs): delete that accessory from the live child-bridge cache, then restart the
+child bridge so the plugin re-registers it fresh (bumps the config number → hub
+re-enumerates); power-cycling the resident hub (Apple TV / HomePod) also works.
+See `LOCAL.md` for the exact commands. Field history: Spa Light fixed durably by
+delete+restart; Pool Light (which only got a hub power-cycle the first time)
+relapsed and needed the same delete+restart treatment.
 
 ## Status / roadmap
 

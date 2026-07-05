@@ -230,9 +230,9 @@ class PentairIntelliCenterAI {
 
   // useService returns the accessory's service of the given type (creating it if
   // absent) and strips any OTHER primary service left over from a previous kind.
-  // This is the standard for every ensureX: the sidecar's `kind` is authoritative,
-  // so when a circuit is reclassified across versions (e.g. switch -> lightbulb on
-  // upgrade), the accessory is re-rendered cleanly instead of carrying both.
+  // This is the standard for every ensureX: the sidecar's `kind` is authoritative.
+  // With acquireAccessory a reclassified circuit gets a fresh accessory, so the
+  // strip here is just a safety net.
   useService(accessory, type, name) {
     for (const t of this.primaryServiceTypes()) {
       if (t !== type) {
@@ -243,18 +243,68 @@ class PentairIntelliCenterAI {
     return accessory.getService(type) || accessory.addService(type, name);
   }
 
-  ensureSwitch(item) {
-    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
-    let accessory = this.cached.get(uuid);
-    let isNew = false;
+  hasOtherPrimaryService(accessory, type) {
+    return this.primaryServiceTypes().some((t) => t !== type && accessory.getService(t));
+  }
 
+  // acquireAccessory resolves the platform accessory for a sidecar item, giving a
+  // reclassified circuit a brand-new HomeKit identity. New accessories are seeded
+  // with the kind (`PLATFORM:id:kind`); accessories from older versions live under
+  // the legacy id-only seed and stay there while their kind is unchanged, so an
+  // upgrade causes no churn. But if a cached accessory carries a different primary
+  // service type than its kind calls for (the circuit was reclassified, e.g.
+  // switch -> lightbulb when light detection landed), swapping the service in
+  // place is NOT enough: the accessory keeps its HomeKit identity, and a resident
+  // hub stays latched to the old service type and shows "No Response" until the
+  // accessory is manually removed and re-added. So a reclassified accessory is
+  // unregistered and recreated under its new kind-scoped UUID — HomeKit sees a
+  // genuinely new accessory and re-enumerates it cleanly.
+  acquireAccessory(item, type) {
+    const uuidKind = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}:${item.kind}`);
+    const uuidLegacy = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
+    let accessory = this.cached.get(uuidKind) || this.cached.get(uuidLegacy);
+
+    if (accessory && this.hasOtherPrimaryService(accessory, type)) {
+      this.log.info(`Service type changed for ${item.name} (${item.id}); re-registering under a new UUID`);
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.cached.delete(accessory.UUID);
+      accessory = null;
+    }
+
+    // Drop any OTHER cached accessory for the same circuit (an old kind-scoped
+    // UUID from a previous reclassification) so it can't linger as a duplicate —
+    // the end-of-sync prune won't catch it because its context.id is still seen.
+    for (const [uuid, other] of this.cached) {
+      if (other !== accessory && other.context && other.context.id === item.id) {
+        this.log.info(`Removing superseded accessory for ${item.id}: ${other.displayName}`);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [other]);
+        this.cached.delete(uuid);
+      }
+    }
+
+    // Clear this id from every kind's record map; the caller re-adds it to the
+    // right one. Without this, a kind change leaves a stale record in the old
+    // kind's map, and applyState (which routes by id) updates the dead accessory
+    // and returns before reaching the live one.
+    this.switches.delete(item.id);
+    this.lights.delete(item.id);
+    this.thermostats.delete(item.id);
+    this.lightSensors.delete(item.id);
+    this.occupancy.delete(item.id);
+    this.tempSensors.delete(item.id);
+
+    let isNew = false;
     if (!accessory) {
-      accessory = new this.api.platformAccessory(item.name, uuid);
+      accessory = new this.api.platformAccessory(item.name, uuidKind);
       isNew = true;
     }
     accessory.context.id = item.id;
     accessory.displayName = item.name;
+    return { accessory, isNew };
+  }
 
+  ensureSwitch(item) {
+    const { accessory, isNew } = this.acquireAccessory(item, this.Service.Switch);
     const service = this.useService(accessory, this.Service.Switch, item.name);
 
     const record = { accessory, on: !!item.on };
@@ -281,7 +331,7 @@ class PentairIntelliCenterAI {
     if (isNew) {
       this.log.info(`Registering switch: ${item.name} (${item.id})`);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      this.cached.set(uuid, accessory);
+      this.cached.set(accessory.UUID, accessory);
     }
   }
 
@@ -290,17 +340,7 @@ class PentairIntelliCenterAI {
   // every generic Switch triggers. On/off only for now (color is future work);
   // the on/off path is identical to a switch (sidecar 'set' toggles the circuit).
   ensureLightbulb(item) {
-    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
-    let accessory = this.cached.get(uuid);
-    let isNew = false;
-
-    if (!accessory) {
-      accessory = new this.api.platformAccessory(item.name, uuid);
-      isNew = true;
-    }
-    accessory.context.id = item.id;
-    accessory.displayName = item.name;
-
+    const { accessory, isNew } = this.acquireAccessory(item, this.Service.Lightbulb);
     const service = this.useService(accessory, this.Service.Lightbulb, item.name);
 
     const record = { accessory, on: !!item.on };
@@ -326,7 +366,7 @@ class PentairIntelliCenterAI {
     if (isNew) {
       this.log.info(`Registering light: ${item.name} (${item.id})`);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      this.cached.set(uuid, accessory);
+      this.cached.set(accessory.UUID, accessory);
     }
   }
 
@@ -367,16 +407,7 @@ class PentairIntelliCenterAI {
   // "Light" status group, but it shows the true number with no control surface.
   ensureLightSensor(item) {
     const C = this.Characteristic;
-    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
-    let accessory = this.cached.get(uuid);
-    let isNew = false;
-    if (!accessory) {
-      accessory = new this.api.platformAccessory(item.name, uuid);
-      isNew = true;
-    }
-    accessory.context.id = item.id;
-    accessory.displayName = item.name;
-
+    const { accessory, isNew } = this.acquireAccessory(item, this.Service.LightSensor);
     const service = this.useService(accessory, this.Service.LightSensor, item.name);
 
     const rec = { accessory, lux: typeof item.lux === 'number' ? item.lux : 0 };
@@ -390,7 +421,7 @@ class PentairIntelliCenterAI {
     if (isNew) {
       this.log.info(`Registering metric (read-only light sensor): ${item.name} (${item.id})`);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      this.cached.set(uuid, accessory);
+      this.cached.set(accessory.UUID, accessory);
     }
   }
 
@@ -406,16 +437,7 @@ class PentairIntelliCenterAI {
   // OccupancySensor — chosen because a sensor can drive HomeKit notifications/
   // automations, which is the point ("alert me when freeze is active").
   ensureOccupancy(item) {
-    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
-    let accessory = this.cached.get(uuid);
-    let isNew = false;
-    if (!accessory) {
-      accessory = new this.api.platformAccessory(item.name, uuid);
-      isNew = true;
-    }
-    accessory.context.id = item.id;
-    accessory.displayName = item.name;
-
+    const { accessory, isNew } = this.acquireAccessory(item, this.Service.OccupancySensor);
     const service = this.useService(accessory, this.Service.OccupancySensor, item.name);
 
     const rec = { accessory, on: !!item.on };
@@ -429,7 +451,7 @@ class PentairIntelliCenterAI {
     if (isNew) {
       this.log.info(`Registering state (read-only occupancy sensor): ${item.name} (${item.id})`);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      this.cached.set(uuid, accessory);
+      this.cached.set(accessory.UUID, accessory);
     }
   }
 
@@ -437,16 +459,7 @@ class PentairIntelliCenterAI {
   // CurrentTemperature is always Celsius on the wire; the Home app renders it in
   // the user's locale unit.
   ensureTempSensor(item) {
-    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
-    let accessory = this.cached.get(uuid);
-    let isNew = false;
-    if (!accessory) {
-      accessory = new this.api.platformAccessory(item.name, uuid);
-      isNew = true;
-    }
-    accessory.context.id = item.id;
-    accessory.displayName = item.name;
-
+    const { accessory, isNew } = this.acquireAccessory(item, this.Service.TemperatureSensor);
     const service = this.useService(accessory, this.Service.TemperatureSensor, item.name);
 
     const rec = { accessory, c: typeof item.curC === 'number' ? item.curC : 20 };
@@ -460,7 +473,7 @@ class PentairIntelliCenterAI {
     if (isNew) {
       this.log.info(`Registering temperature sensor: ${item.name} (${item.id})`);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      this.cached.set(uuid, accessory);
+      this.cached.set(accessory.UUID, accessory);
     }
   }
 
@@ -478,16 +491,7 @@ class PentairIntelliCenterAI {
   // sidecar (LOTMP/HITMP setpoints, HTSRC heat source); the next push confirms.
   ensureThermostat(item) {
     const C = this.Characteristic;
-    const uuid = this.api.hap.uuid.generate(`${PLATFORM_NAME}:${item.id}`);
-    let accessory = this.cached.get(uuid);
-    let isNew = false;
-    if (!accessory) {
-      accessory = new this.api.platformAccessory(item.name, uuid);
-      isNew = true;
-    }
-    accessory.context.id = item.id;
-    accessory.displayName = item.name;
-
+    const { accessory, isNew } = this.acquireAccessory(item, this.Service.Thermostat);
     const service = this.useService(accessory, this.Service.Thermostat, item.name);
 
     const rec = {
@@ -525,7 +529,7 @@ class PentairIntelliCenterAI {
     if (isNew) {
       this.log.info(`Registering thermostat: ${item.name} (${item.id})`);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      this.cached.set(uuid, accessory);
+      this.cached.set(accessory.UUID, accessory);
     }
   }
 
