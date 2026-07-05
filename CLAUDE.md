@@ -46,7 +46,7 @@ IntelliCenter pool controllers. The maintainer develops this with AI assistance.
 
 This is a from-scratch rework of the plugin's older codebase — a working but
 buggy, messy TypeScript/Node implementation. The rework ships as prerelease
-versions on the npm **`alpha`** dist-tag (currently `3.0.0-alpha.8`), so existing
+versions on the npm **`alpha`** dist-tag (currently `3.0.0-alpha.10`), so existing
 stable users on `latest` are untouched until it's promoted. (Note: the `beta`
 dist-tag is occupied by an unrelated older line — `2.14.0-beta.2` from the v2.x
 IntelliBrite work — so the rework deliberately uses `alpha`, not `beta`.) It
@@ -96,12 +96,12 @@ for free, and `listen` mode doubles as a plugin debugging tool. The engine work
 is merged to `master` in `src/pentameter` (first shipped as v0.5.0; v0.5.1 added
 homebridge Lightbulb classification, non-fatal metrics bind, and change-only
 logging; v0.5.2 clarified `--help`, quieted skipped-feature logging to `--listen`
-mode only, and bound the metrics server before announcing it; the alpha.9 plugin
-bundles **v0.6.0**, which gates `circuit_status`/`feature_status` on physical pump
-delivery — **metrics-only; HomeKit accessories are unaffected** — and adds a
-periodic static-config refresh that re-pulls feature visibility and the
+mode only, and bound the metrics server before announcing it; the alpha.9 and
+alpha.10 plugins bundle **v0.6.0**, which gates `circuit_status`/`feature_status`
+on physical pump delivery — **metrics-only; HomeKit accessories are unaffected** —
+and adds a periodic static-config refresh that re-pulls feature visibility and the
 circuit⇄pump graph every 60 polls, so a reconfiguration is picked up without a
-restart).
+restart; alpha.10 itself is shim-only: the reclassification-UUID fix).
 
 - pentameter gained **control/writes** (`SetParamList`) — it was 100% read-only;
   this is confined to homebridge mode (a monitoring tool that became a control
