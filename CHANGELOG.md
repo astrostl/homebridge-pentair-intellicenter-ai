@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-alpha.10] - 2026-07-04
+
+Bundles pentameter **v0.6.0** (unchanged from alpha.9); this release is shim-only.
+
+### Fixed
+- **Reclassified accessories re-register under a new UUID.** When a circuit's
+  HomeKit kind changes (e.g. `switch` → `lightbulb` when light detection landed),
+  the shim used to swap the HAP service in place under the same accessory UUID.
+  Homebridge rendered that cleanly, but a HomeKit resident hub could stay latched
+  to the old service type and show the accessory as **"No Response"** (hit twice
+  in the field). The shim now unregisters the accessory and re-registers it under
+  a kind-scoped UUID — a real remove+add, so hubs re-enumerate it as a brand-new
+  accessory. Accessories whose kind is unchanged keep their existing UUID; a
+  normal upgrade causes no churn.
+- **Push updates after an in-place kind change could be silently dropped**: the
+  old kind's state record lingered and intercepted updates meant for the new
+  service. Kind changes now clear the stale record.
+
+### Added
+- **`shim_test.js`** — zero-dependency mock-HAP tests for the shim's accessory
+  identity logic (fresh install, no-churn upgrade, reclassification, double
+  reclassification, pruning). Runs as part of `make test`; not shipped in the
+  npm tarball.
+
 ## [3.0.0-alpha.9] - 2026-06-26
 
 Bundles pentameter **v0.6.0** (alpha.8 bundled v0.5.2).
