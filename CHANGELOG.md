@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-alpha.11] - 2026-07-11
+
+Bundles pentameter **v0.6.1** (alpha.10 bundled v0.6.0); this release is
+sidecar-only, no shim changes.
+
+### Fixed
+- **A stuck poll connection could freeze HomeKit state for an extended period**
+  (via pentameter v0.6.1): the sidecar holds two independent sockets to
+  IntelliCenter — one for polling/control, one for unsolicited push updates. If
+  the poll socket alone stopped answering while the push socket stayed up,
+  nothing forced a reconnect; seen in the field as an extended stretch of frozen
+  temperature/heater readings in the Home app, recovered only once the panel
+  itself was power-cycled. The sidecar now forces a reconnect after 3
+  consecutive poll failures instead of waiting indefinitely on the panel.
+- **A related deadlock in the sidecar's connection teardown**, surfaced while
+  fixing the above: tearing down a session while the push socket was idly (but
+  healthily) connected could hang the sidecar's reconnect loop forever. Fixed in
+  pentameter v0.6.1 — see its CHANGELOG for detail.
+
 ## [3.0.0-alpha.10] - 2026-07-04
 
 Bundles pentameter **v0.6.0** (unchanged from alpha.9); this release is shim-only.
