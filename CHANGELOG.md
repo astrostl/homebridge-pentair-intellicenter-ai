@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.1] - 2026-09-12
+
+### Changed
+- Promote **3.0.0-alpha.11** to the npm **beta** channel; no runtime changes.
+- Bundle the same pentameter **v0.6.1** (`b78c3cac10df0d2fa02739f2a11d621acc41f377`).
+- The beta channel now carries the 3.x rework, replacing 2.14.0-beta.2.
+  The stable `latest` and `alpha` channels are unchanged.
+
 ## [3.0.0-alpha.11] - 2026-07-11
 
 Bundles pentameter **v0.6.1** (alpha.10 bundled v0.6.0); this release is

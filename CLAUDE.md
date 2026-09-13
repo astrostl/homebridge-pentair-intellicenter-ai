@@ -46,10 +46,10 @@ IntelliCenter pool controllers. The maintainer develops this with AI assistance.
 
 This is a from-scratch rework of the plugin's older codebase — a working but
 buggy, messy TypeScript/Node implementation. The rework ships as prerelease
-versions on the npm **`alpha`** dist-tag (currently `3.0.0-alpha.11`), so existing
-stable users on `latest` are untouched until it's promoted. (Note: the `beta`
-dist-tag is occupied by an unrelated older line — `2.14.0-beta.2` from the v2.x
-IntelliBrite work — so the rework deliberately uses `alpha`, not `beta`.) It
+versions on the npm **`beta`** dist-tag (currently `3.0.0-beta.1`), promoted
+from `3.0.0-alpha.11` with no runtime changes and the same pentameter **v0.6.1**.
+Stable users on `latest` are untouched. The beta channel now replaces the older
+`2.14.0-beta.2` line; `alpha` remains on `3.0.0-alpha.11`. It
 exists to: clean up the codebase, reduce
 bugs, and **move as much logic as possible into Go** to escape the daily
 npm/Dependabot churn of the JS toolchain.
@@ -150,8 +150,8 @@ runtime deps:
   reference** for the IntelliCenter client.
 - Develop and test **locally in Docker**, verifying in the **Homebridge UI**,
   throughout.
-- Ship to the **npm `alpha` channel** and dogfood it there for a **long time**
-  before promoting to stable/`latest`.
+- The rework graduated from **npm `alpha`** to **`beta`** at `3.0.0-beta.1`;
+  continue testing there before promoting to stable/`latest`.
 - Bias toward small, robust increments over a big-bang rewrite. Started with a
   walking skeleton (sidecar connects + one accessory shows in the Homebridge UI),
   then grew coverage of device types.

@@ -61,9 +61,9 @@ wait
 ```
 
 (Swap `--tag alpha` for `--tag beta`, or drop the flag entirely for a stable
-`latest` publish.) `publishConfig.tag` in `package.json` defaults the tag to `alpha`,
-so a bare `npm publish` will NOT clobber `latest` while the rework is alpha — but pass
-`--tag` explicitly anyway to be sure.
+`latest` publish.) `publishConfig.tag` in `package.json` defaults the tag to `beta` on the beta
+branch, so a bare `npm publish` will not move `latest`. Pass `--tag` explicitly
+for the intended release lane.
 
 ## Quality Gates
 

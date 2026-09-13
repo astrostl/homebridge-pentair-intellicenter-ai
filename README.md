@@ -7,15 +7,14 @@
 
 This is a plugin to integrate your [Pentair IntelliCenter](https://www.pentair.com/en-us/products/residential/pool-spa-equipment/pool-automation/intellicenter-control-system.html) ([1.064+](https://www.pentair.com/en-us/education-support/residential/product-support/pentair-pool-and-spa-software-downloads/intellicenter-download.html)) setup with [Homebridge](https://homebridge.io) (so it shows up in [Apple Home](https://www.apple.com/home-app/) and [Siri](https://www.apple.com/siri/)).
 
-> ## ⚠️ 3.x is an alpha rework
+> ## ⚠️ 3.x is in beta
 >
-> The `3.0.0-alpha.x` line is a **ground-up rework** and is published only to the
-> npm **`alpha`** dist-tag. It will not install unless you explicitly ask for it
-> (`@alpha`), and it does **not** affect the stable `2.x` line on `latest`.
+> The `3.0.0-beta.x` line is a **ground-up rework** and is published only to the
+> npm **`beta`** dist-tag. It will not install unless you explicitly ask for it
+> (`@beta`), and it does **not** affect the stable `2.x` line on `latest`.
 >
-> It uses a **new config platform** (`PentairIntelliCenterAI`), so it starts from
-> a clean configuration — your existing `2.x` config block is intentionally not
-> carried over. Treat it as early and rough.
+> It uses the existing config platform (`PentairIntelliCenter`). The beta
+> promotes alpha.11 with the same pentameter v0.6.1 engine.
 
 ## What changed in 3.x
 
@@ -61,13 +60,13 @@ HomeKit.
 
 ## Install
 
-This is alpha-tagged, so install it explicitly:
+This is beta-tagged, so install it explicitly:
 
 ```bash
-npm install homebridge-pentair-intellicenter-ai@alpha
+npm install homebridge-pentair-intellicenter-ai@beta
 ```
 
-…or, in the Homebridge UI, install the plugin and select an `alpha` version.
+…or, in the Homebridge UI, install the plugin and select a `beta` version.
 
 ## Configuration
 
