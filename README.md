@@ -14,7 +14,7 @@ This is a plugin to integrate your [Pentair IntelliCenter](https://www.pentair.c
 > (`@beta`), and it does **not** affect the stable `2.x` line on `latest`.
 >
 > It uses the existing config platform (`PentairIntelliCenter`). The beta
-> promotes alpha.11 with the same pentameter v0.6.1 engine.
+> currently bundles the pentameter v0.6.3 engine.
 
 ## What changed in 3.x
 

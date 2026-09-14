@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.2] - 2026-09-13
+
 ### Changed
 - Remove the WebSocket port configuration option. The plugin always uses port
   6680; existing `port` configuration values are ignored.
+- Bundle pentameter **v0.6.3** (`761ee957968945a8bc86cac268071ec71e6cb7b2`),
+  including operational-data-only heater status and clean mDNS teardown when
+  the metrics server exits.
 
 ## [3.0.0-beta.1] - 2026-09-12
 

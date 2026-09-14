@@ -46,8 +46,8 @@ IntelliCenter pool controllers. The maintainer develops this with AI assistance.
 
 This is a from-scratch rework of the plugin's older codebase — a working but
 buggy, messy TypeScript/Node implementation. The rework ships as prerelease
-versions on the npm **`beta`** dist-tag (currently `3.0.0-beta.1`), promoted
-from `3.0.0-alpha.11` with no runtime changes and the same pentameter **v0.6.1**.
+versions on the npm **`beta`** dist-tag (currently `3.0.0-beta.2`), with
+pentameter **v0.6.3** bundled.
 Stable users on `latest` are untouched. The beta channel now replaces the older
 `2.14.0-beta.2` line. The npm `alpha` dist-tag was removed on 2026-09-13;
 only `latest` and `beta` channels remain. It
