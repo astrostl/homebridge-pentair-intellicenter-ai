@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Remove the WebSocket port configuration option. The plugin always uses port
+  6680; existing `port` configuration values are ignored.
+
 ## [3.0.0-beta.1] - 2026-09-12
 
 ### Changed

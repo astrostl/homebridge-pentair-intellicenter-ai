@@ -74,7 +74,6 @@ npm install homebridge-pentair-intellicenter-ai@beta
 | --- | --- | --- |
 | `name` | Pentair IntelliCenter | Accessory/platform name. |
 | `ipAddress` | *(blank)* | Leave blank to auto-discover via mDNS. Set an IP if discovery can't reach the controller. |
-| `port` | `6680` | IntelliCenter WebSocket port. |
 | `temperatureUnits` | `F` | `F` or `C` for display. |
 | `pollIntervalSeconds` | `30` | How often pump RPM/Watts/GPM (which aren't pushed) are polled. |
 | `metricsPort` | `8080` | Port for the Prometheus `/metrics` endpoint. Expose it from your host/container to scrape it. |

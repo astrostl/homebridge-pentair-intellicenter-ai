@@ -49,7 +49,8 @@ buggy, messy TypeScript/Node implementation. The rework ships as prerelease
 versions on the npm **`beta`** dist-tag (currently `3.0.0-beta.1`), promoted
 from `3.0.0-alpha.11` with no runtime changes and the same pentameter **v0.6.1**.
 Stable users on `latest` are untouched. The beta channel now replaces the older
-`2.14.0-beta.2` line; `alpha` remains on `3.0.0-alpha.11`. It
+`2.14.0-beta.2` line. The npm `alpha` dist-tag was removed on 2026-09-13;
+only `latest` and `beta` channels remain. It
 exists to: clean up the codebase, reduce
 bugs, and **move as much logic as possible into Go** to escape the daily
 npm/Dependabot churn of the JS toolchain.
@@ -207,7 +208,7 @@ make test      # pentameter Go tests (mock IntelliCenter) + shim mock-HAP tests 
 
 - `make build` cross-compiles pentameter from `PENTAMETER_DIR` (default
   `../pentameter`) into `pentameter/<os>-<arch>`; the shim picks the match. The
-  shim passes config via `PENTAMETER_IC_IP` / `PENTAMETER_IC_PORT` /
+  shim fixes `PENTAMETER_IC_PORT` at `6680` and passes config via `PENTAMETER_IC_IP` /
   `PENTAMETER_INTERVAL` / `PENTAMETER_HTTP_PORT`; a blank IP makes pentameter
   auto-discover.
 - Note: mDNS auto-discovery generally does NOT work from inside Docker with
@@ -247,7 +248,7 @@ Gotchas learned the hard way (don't regress):
   and darwin-amd64 are deliberately dropped (see the Makefile `build` comment);
   add a target back there if a user needs it.
 - The shim passes config to the sidecar via env (config field → env var):
-  `ipAddress`→`PENTAMETER_IC_IP`, `port`→`PENTAMETER_IC_PORT`,
+  `ipAddress`→`PENTAMETER_IC_IP`,
   `pollIntervalSeconds`→`PENTAMETER_INTERVAL`, `metricsPort`→`PENTAMETER_HTTP_PORT`.
 - Homebridge on macOS Docker uses bridge networking + mapped ports (8581 UI /
   51826 HAP / 5353 mDNS / 8080 Prometheus metrics). mDNS across the Docker VM can
@@ -388,9 +389,10 @@ Target the same HomeKit surface so existing users see no regression:
   to surface read-only metrics. We additionally surface pump Running, Freeze
   Protection, and controller-online as `OccupancySensor`s.
 - **Our** config surface (this repo's `config.schema.json`, alias
-  `PentairIntelliCenter`): `name`, `ipAddress` (blank = mDNS), `port` (6680),
+  `PentairIntelliCenter`): `name`, `ipAddress` (blank = mDNS),
   `temperatureUnits` (F/C), `pollIntervalSeconds` (30), `metricsPort` (8080).
-  This is a deliberately smaller surface than the legacy plugin's, but it
+  The IntelliCenter WebSocket port is fixed at 6680; legacy `port` config values
+  are ignored. This is a deliberately smaller surface than the legacy plugin's, but it
   **keeps the legacy `PentairIntelliCenter` platform alias** so existing 2.x
   installs upgrade seamlessly (no config edit, no crash). We briefly used a
   distinct `PentairIntelliCenterAI` alias to force a clean config, but that made

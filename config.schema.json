@@ -19,13 +19,6 @@
         "placeholder": "auto-discover via mDNS",
         "description": "Leave blank to auto-discover your IntelliCenter via mDNS (recommended). Set an IP only if discovery doesn't work on your network (e.g. running in Docker with bridge networking)."
       },
-      "port": {
-        "title": "WebSocket Port",
-        "type": "integer",
-        "required": false,
-        "default": 6680,
-        "description": "IntelliCenter WebSocket port. Default 6680."
-      },
       "temperatureUnits": {
         "title": "Temperature Units",
         "type": "string",

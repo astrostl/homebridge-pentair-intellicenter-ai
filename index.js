@@ -106,7 +106,7 @@ class PentairIntelliCenterAI {
     // PENTAMETER_* env vars; a blank IP makes pentameter auto-discover via mDNS.
     const env = Object.assign({}, process.env, {
       PENTAMETER_IC_IP: this.config.ipAddress || '',
-      PENTAMETER_IC_PORT: String(this.config.port || 6680),
+      PENTAMETER_IC_PORT: '6680',
       PENTAMETER_INTERVAL: String(this.config.pollIntervalSeconds || 30),
       // The sidecar always serves Prometheus /metrics for Grafana on this port.
       PENTAMETER_HTTP_PORT: String(this.config.metricsPort || 8080),
